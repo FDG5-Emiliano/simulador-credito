@@ -166,6 +166,7 @@ function App() {
           <InfoCard title="Crédito simple" text="Capital para inversión, operación o crecimiento del negocio." />
           <InfoCard title="Crédito agropecuario" text="Financiamiento para productores, ranchos, maquinaria e insumos." />
           <InfoCard title="Crédito empresarial" text="Soluciones para PyMEs, comercio, transporte y servicios." />
+          <InfoCard title="Fideicomisos" text="Creación y mantenimiento de fideicomisos para protección de activos." />
         </div>
       </Section>
 
@@ -180,28 +181,41 @@ function App() {
 
       <Section id="ubicacion" title="Ubicación">
         <p style={styles.paragraph}>
-          Atendemos clientes del norte del país. Puedes agregar aquí la dirección exacta,
-          mapa, horarios de atención y zonas de cobertura.
+          Atendemos clientes del norte del país. Paseo del Valle 310 Colonia San Patricio Saltillo Coahuila. Para visitas presenciales, recomendamos agendar cita para asegurar atención personalizada. En nuestras oficinas encontrarás asesoría, acceso a simuladores,
+          , Lunes - Viernes de 9:00 AM a 5:00 PM.
         </p>
       </Section>
 
       <Section id="contacto" title="Contacto">
         <div style={styles.contactBox}>
-          <p><b>Teléfono:</b> Agrega aquí tu teléfono</p>
-          <p><b>Correo:</b> contacto@trisal.com</p>
-          <p><b>WhatsApp:</b> Agrega aquí tu número</p>
+          <p><b>Teléfono:</b> 844-102-9900</p>
+          <p><b>Correo:</b> contactofdg5@gmail.com</p>
+          <p><b>WhatsApp:</b> 844-102-9900</p>
         </div>
       </Section>
 
-      <Section id="info" title="Dónde buscar información">
-        <p style={styles.paragraph}>
-          Para consultar información de instituciones financieras en México, puedes revisar
-          registros oficiales como SIPRES de CONDUSEF y publicaciones de la CNBV sobre SOFOMES.
-          CONDUSEF concentra registros como SIPRES, RECA, REUNE y otros con información de
-          instituciones, productos y servicios financieros; la CNBV publica información de
-          SOFOMES reguladas. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
-        </p>
-      </Section>
+<Section id="info" title="Dónde buscar información">
+  <p style={styles.paragraph}>
+    Para consultar información de instituciones financieras en México, puedes revisar
+    registros oficiales como SIPRES de CONDUSEF y publicaciones de la CNBV sobre SOFOMES.
+  </p>
+
+  <div style={styles.contactBox}>
+    <p>
+      <b>CONDUSEF:</b>{" "}
+      <a href="https://www.condusef.gob.mx/" target="_blank">
+        www.condusef.gob.mx
+      </a>
+    </p>
+
+    <p>
+      <b>CNBV:</b>{" "}
+      <a href="https://www.gob.mx/cnbv" target="_blank">
+        www.gob.mx/cnbv
+      </a>
+    </p>
+  </div>
+</Section>
 
       <section id="simulador" style={styles.simulatorSection}>
         <h2 style={styles.sectionTitle}>Simula tu crédito</h2>
