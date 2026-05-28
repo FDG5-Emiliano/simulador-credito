@@ -3,6 +3,7 @@ import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
 import './App.css'
 import { useState } from "react";
+import { Analytics } from '@vercel/analytics/react';
 
 function App() {
   const [monto, setMonto] = useState(250000);
@@ -200,6 +201,7 @@ function App() {
           </tbody>
         </table>
       </div>
+      <Analytics />
     </div>
   );
 }
