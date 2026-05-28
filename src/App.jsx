@@ -22,15 +22,13 @@ function App() {
     const tasaMensual = tasa / 100 / 12;
     let saldo = monto;
     const tabla = [];
-
     let pagoFijo = 0;
 
     if (tipo === "frances") {
       pagoFijo =
         tasaMensual === 0
           ? monto / plazo
-          : (monto * tasaMensual) /
-            (1 - Math.pow(1 + tasaMensual, -plazo));
+          : (monto * tasaMensual) / (1 - Math.pow(1 + tasaMensual, -plazo));
     }
 
     const capitalFijo = monto / plazo;
@@ -38,7 +36,6 @@ function App() {
     for (let i = 1; i <= plazo; i++) {
       const saldoInicial = saldo;
       const interes = saldoInicial * tasaMensual;
-
       let capital = 0;
       let pago = 0;
 
@@ -92,7 +89,6 @@ function App() {
 
     const hoja = XLSX.utils.json_to_sheet(data);
     const libro = XLSX.utils.book_new();
-
     XLSX.utils.book_append_sheet(libro, hoja, "Amortización");
     XLSX.writeFile(libro, "tabla_amortizacion.xlsx");
   };
@@ -130,20 +126,88 @@ function App() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.container}>
-        <header style={styles.header}>
-          <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.logo} />
+      <nav style={styles.nav}>
+        <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.navLogo} />
+        <div style={styles.navLinks}>
+          <a href="#inicio">Inicio</a>
+          <a href="#servicios">Servicios</a>
+          <a href="#productos">Productos</a>
+          <a href="#quienes">Quiénes somos</a>
+          <a href="#ubicacion">Ubicación</a>
+          <a href="#contacto">Contacto</a>
+          <a href="#info">Información</a>
+          <a href="#simulador" style={styles.navButton}>Simula tu crédito</a>
+        </div>
+      </nav>
 
-          <div>
-            <h1 style={styles.title}>Simulador de Crédito</h1>
-            <p style={styles.subtitle}>
-              Calcula pagos, intereses y tabla de amortización.
-            </p>
-          </div>
-        </header>
+      <section id="inicio" style={styles.hero}>
+        <div>
+          <p style={styles.kicker}>SOFOM · Norte de México</p>
+          <h1 style={styles.heroTitle}>Crédito ágil para empresas, campo y crecimiento regional.</h1>
+          <p style={styles.heroText}>
+            En TRISAL apoyamos proyectos productivos con soluciones de financiamiento claras,
+            cercanas y adaptadas a las necesidades del norte del país.
+          </p>
+          <a href="#simulador" style={styles.cta}>Simula tu crédito</a>
+        </div>
+        <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.heroLogo} />
+      </section>
+
+      <Section id="servicios" title="Servicios">
+        <div style={styles.cards3}>
+          <InfoCard title="Análisis de crédito" text="Evaluamos capacidad de pago, flujo y destino del financiamiento." />
+          <InfoCard title="Estructuración financiera" text="Diseñamos pagos, plazos y esquemas según el perfil del cliente." />
+          <InfoCard title="Acompañamiento" text="Atención cercana durante la solicitud, autorización y vida del crédito." />
+        </div>
+      </Section>
+
+      <Section id="productos" title="Productos que ofrecemos">
+        <div style={styles.cards3}>
+          <InfoCard title="Crédito simple" text="Capital para inversión, operación o crecimiento del negocio." />
+          <InfoCard title="Crédito agropecuario" text="Financiamiento para productores, ranchos, maquinaria e insumos." />
+          <InfoCard title="Crédito empresarial" text="Soluciones para PyMEs, comercio, transporte y servicios." />
+        </div>
+      </Section>
+
+      <Section id="quienes" title="Quiénes somos">
+        <p style={styles.paragraph}>
+          Somos una financiera enfocada en crear relaciones de largo plazo con clientes que
+          buscan crecer con orden, transparencia y responsabilidad. Nuestro enfoque combina
+          conocimiento regional, atención personalizada y herramientas digitales para tomar
+          mejores decisiones de crédito.
+        </p>
+      </Section>
+
+      <Section id="ubicacion" title="Ubicación">
+        <p style={styles.paragraph}>
+          Atendemos clientes del norte del país. Puedes agregar aquí la dirección exacta,
+          mapa, horarios de atención y zonas de cobertura.
+        </p>
+      </Section>
+
+      <Section id="contacto" title="Contacto">
+        <div style={styles.contactBox}>
+          <p><b>Teléfono:</b> Agrega aquí tu teléfono</p>
+          <p><b>Correo:</b> contacto@trisal.com</p>
+          <p><b>WhatsApp:</b> Agrega aquí tu número</p>
+        </div>
+      </Section>
+
+      <Section id="info" title="Dónde buscar información">
+        <p style={styles.paragraph}>
+          Para consultar información de instituciones financieras en México, puedes revisar
+          registros oficiales como SIPRES de CONDUSEF y publicaciones de la CNBV sobre SOFOMES.
+          CONDUSEF concentra registros como SIPRES, RECA, REUNE y otros con información de
+          instituciones, productos y servicios financieros; la CNBV publica información de
+          SOFOMES reguladas. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
+        </p>
+      </Section>
+
+      <section id="simulador" style={styles.simulatorSection}>
+        <h2 style={styles.sectionTitle}>Simula tu crédito</h2>
 
         <section style={styles.card}>
-          <h2>Parámetros</h2>
+          <h3>Parámetros</h3>
 
           <div style={styles.grid}>
             <Input label="Monto" value={monto} setValue={setMonto} />
@@ -152,11 +216,7 @@ function App() {
 
             <div>
               <label>Tipo de amortización</label>
-              <select
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value)}
-                style={styles.input}
-              >
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={styles.input}>
                 <option value="frances">Francés / pago fijo</option>
                 <option value="aleman">Alemán / capital fijo</option>
                 <option value="bullet">Bullet / pago final</option>
@@ -165,25 +225,19 @@ function App() {
           </div>
 
           <div style={styles.buttons}>
-            <button onClick={exportarExcel} style={styles.primaryButton}>
-              Exportar Excel
-            </button>
-
-            <button onClick={exportarPDF} style={styles.secondaryButton}>
-              Exportar PDF
-            </button>
+            <button onClick={exportarExcel} style={styles.primaryButton}>Exportar Excel</button>
+            <button onClick={exportarPDF} style={styles.secondaryButton}>Exportar PDF</button>
           </div>
         </section>
 
         <section style={styles.summaryGrid}>
-          <Card title="Pago inicial" value={formato(tabla[0]?.pago || 0)} />
-          <Card title="Total intereses" value={formato(totalInteres)} />
-          <Card title="Total pagado" value={formato(totalPago)} />
+          <MetricCard title="Pago inicial" value={formato(tabla[0]?.pago || 0)} />
+          <MetricCard title="Total intereses" value={formato(totalInteres)} />
+          <MetricCard title="Total pagado" value={formato(totalPago)} />
         </section>
 
         <section style={styles.card}>
-          <h2>Gráfica de saldo</h2>
-
+          <h3>Gráfica de saldo</h3>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={tabla}>
@@ -198,8 +252,7 @@ function App() {
         </section>
 
         <section style={styles.card}>
-          <h2>Tabla de amortización</h2>
-
+          <h3>Tabla de amortización</h3>
           <div style={{ overflowX: "auto" }}>
             <table style={styles.table}>
               <thead>
@@ -212,7 +265,6 @@ function App() {
                   <th>Saldo final</th>
                 </tr>
               </thead>
-
               <tbody>
                 {tabla.map((r) => (
                   <tr key={r.periodo}>
@@ -228,7 +280,25 @@ function App() {
             </table>
           </div>
         </section>
-      </div>
+      </section>
+    </div>
+  );
+}
+
+function Section({ id, title, children }) {
+  return (
+    <section id={id} style={styles.section}>
+      <h2 style={styles.sectionTitle}>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function InfoCard({ title, text }) {
+  return (
+    <div style={styles.infoCard}>
+      <h3>{title}</h3>
+      <p>{text}</p>
     </div>
   );
 }
@@ -237,17 +307,12 @@ function Input({ label, value, setValue }) {
   return (
     <div>
       <label>{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => setValue(Number(e.target.value))}
-        style={styles.input}
-      />
+      <input type="number" value={value} onChange={(e) => setValue(Number(e.target.value))} style={styles.input} />
     </div>
   );
 }
 
-function Card({ title, value }) {
+function MetricCard({ title, value }) {
   return (
     <div style={styles.metricCard}>
       <p>{title}</p>
@@ -259,34 +324,109 @@ function Card({ title, value }) {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#f3f6fb",
-    padding: "30px",
+    background: "#f4f1ea",
     fontFamily: "Arial, sans-serif",
+    color: "#172033",
   },
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-  header: {
+  nav: {
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    background: "#ffffff",
     display: "flex",
     alignItems: "center",
-    gap: "24px",
-    marginBottom: "30px",
+    justifyContent: "space-between",
+    padding: "14px 32px",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
   },
-  logo: {
-    width: "160px",
-    background: "white",
-    padding: "16px",
-    borderRadius: "14px",
+  navLogo: { width: "110px" },
+  navLinks: {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+    flexWrap: "wrap",
   },
-  title: {
-    margin: 0,
+  navButton: {
+    background: "#002b66",
+    color: "white",
+    padding: "10px 14px",
+    borderRadius: "10px",
+    textDecoration: "none",
+  },
+  hero: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "70px 30px",
+    display: "grid",
+    gridTemplateColumns: "1.5fr 0.7fr",
+    gap: "30px",
+    alignItems: "center",
+  },
+  kicker: { color: "#b8792b", fontWeight: "bold" },
+  heroTitle: {
+    fontSize: "48px",
+    lineHeight: "1.05",
+    margin: "10px 0",
     color: "#002b66",
-    fontSize: "36px",
   },
-  subtitle: {
-    color: "#667085",
-    fontSize: "16px",
+  heroText: { fontSize: "18px", color: "#475467", maxWidth: "720px" },
+  cta: {
+    display: "inline-block",
+    marginTop: "18px",
+    background: "#b8792b",
+    color: "white",
+    padding: "14px 20px",
+    borderRadius: "12px",
+    textDecoration: "none",
+    fontWeight: "bold",
+  },
+  heroLogo: {
+    width: "100%",
+    background: "white",
+    padding: "30px",
+    borderRadius: "24px",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.08)",
+  },
+  section: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "42px 30px",
+  },
+  sectionTitle: {
+    color: "#002b66",
+    fontSize: "32px",
+    marginBottom: "20px",
+  },
+  paragraph: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "16px",
+    fontSize: "17px",
+    lineHeight: 1.6,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+  },
+  cards3: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "20px",
+  },
+  infoCard: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "16px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+    borderTop: "5px solid #b8792b",
+  },
+  contactBox: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "16px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+  },
+  simulatorSection: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "42px 30px 80px",
   },
   card: {
     background: "white",
@@ -308,11 +448,7 @@ const styles = {
     border: "1px solid #d0d5dd",
     fontSize: "16px",
   },
-  buttons: {
-    display: "flex",
-    gap: "12px",
-    marginTop: "24px",
-  },
+  buttons: { display: "flex", gap: "12px", marginTop: "24px" },
   primaryButton: {
     background: "#002b66",
     color: "white",
