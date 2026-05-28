@@ -1,36 +1,71 @@
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
 import { useState } from "react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 function App() {
   const [monto, setMonto] = useState(250000);
   const [tasa, setTasa] = useState(18);
   const [plazo, setPlazo] = useState(24);
+  const [tipo, setTipo] = useState("frances");
 
   const calcularTabla = () => {
     const tasaMensual = tasa / 100 / 12;
-
-    const pago =
-      (monto * tasaMensual) /
-      (1 - Math.pow(1 + tasaMensual, -plazo));
-
     let saldo = monto;
-
     const tabla = [];
 
+    let pagoFijo = 0;
+
+    if (tipo === "frances") {
+      pagoFijo =
+        tasaMensual === 0
+          ? monto / plazo
+          : (monto * tasaMensual) /
+            (1 - Math.pow(1 + tasaMensual, -plazo));
+    }
+
+    const capitalFijo = monto / plazo;
+
     for (let i = 1; i <= plazo; i++) {
-      const interes = saldo * tasaMensual;
-      const capital = pago - interes;
-      saldo = saldo - capital;
+      const saldoInicial = saldo;
+      const interes = saldoInicial * tasaMensual;
+
+      let capital = 0;
+      let pago = 0;
+
+      if (tipo === "frances") {
+        pago = pagoFijo;
+        capital = pago - interes;
+      }
+
+      if (tipo === "aleman") {
+        capital = capitalFijo;
+        pago = capital + interes;
+      }
+
+      if (tipo === "bullet") {
+        capital = i === plazo ? saldoInicial : 0;
+        pago = interes + capital;
+      }
+
+      saldo = Math.max(0, saldoInicial - capital);
 
       tabla.push({
         periodo: i,
-        pago: pago,
-        interes: interes,
-        capital: capital,
-        saldo: saldo > 0 ? saldo : 0,
+        saldoInicial,
+        pago,
+        interes,
+        capital,
+        saldo,
       });
     }
 
@@ -39,169 +74,277 @@ function App() {
 
   const tabla = calcularTabla();
 
-  const exportarCSV = () => {
-    let csv =
-      "Periodo,Pago,Interes,Capital,Saldo\\n";
-
-    tabla.forEach((fila) => {
-      csv += `${fila.periodo},${fila.pago.toFixed(
-        2
-      )},${fila.interes.toFixed(
-        2
-      )},${fila.capital.toFixed(
-        2
-      )},${fila.saldo.toFixed(2)}\\n`;
+  const formato = (n) =>
+    n.toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
     });
 
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
+  const exportarExcel = () => {
+    const data = tabla.map((r) => ({
+      Periodo: r.periodo,
+      "Saldo inicial": r.saldoInicial,
+      Pago: r.pago,
+      Interés: r.interes,
+      Capital: r.capital,
+      "Saldo final": r.saldo,
+    }));
 
-    const link = document.createElement("a");
+    const hoja = XLSX.utils.json_to_sheet(data);
+    const libro = XLSX.utils.book_new();
 
-    link.href = URL.createObjectURL(blob);
-
-    link.download = "tabla_amortizacion.csv";
-
-    link.click();
+    XLSX.utils.book_append_sheet(libro, hoja, "Amortización");
+    XLSX.writeFile(libro, "tabla_amortizacion.xlsx");
   };
 
+  const exportarPDF = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.text("Simulador de Crédito TRISAL", 14, 20);
+
+    doc.setFontSize(11);
+    doc.text(`Monto: ${formato(monto)}`, 14, 30);
+    doc.text(`Tasa anual: ${tasa}%`, 14, 37);
+    doc.text(`Plazo: ${plazo} meses`, 14, 44);
+    doc.text(`Tipo: ${tipo}`, 14, 51);
+
+    autoTable(doc, {
+      startY: 60,
+      head: [["Periodo", "Saldo inicial", "Pago", "Interés", "Capital", "Saldo"]],
+      body: tabla.map((r) => [
+        r.periodo,
+        formato(r.saldoInicial),
+        formato(r.pago),
+        formato(r.interes),
+        formato(r.capital),
+        formato(r.saldo),
+      ]),
+    });
+
+    doc.save("tabla_amortizacion.pdf");
+  };
+
+  const totalInteres = tabla.reduce((acc, r) => acc + r.interes, 0);
+  const totalPago = tabla.reduce((acc, r) => acc + r.pago, 0);
+
   return (
-    <div
-      style={{
-        padding: "40px",
-        fontFamily: "Arial",
-        background: "#f4f4f4",
-        minHeight: "100vh",
-      }}
-    >
-      {/* LOGO */}
-      <img
-        src="https://upload.wikimedia.org/wikipedia/commons/2/2a/BBVA_2019.svg"
-        alt="Logo"
-        style={{
-          width: "140px",
-          marginBottom: "20px",
-        }}
-      />
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <header style={styles.header}>
+          <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.logo} />
 
-      <h1>Simulador de Crédito</h1>
+          <div>
+            <h1 style={styles.title}>Simulador de Crédito</h1>
+            <p style={styles.subtitle}>
+              Calcula pagos, intereses y tabla de amortización.
+            </p>
+          </div>
+        </header>
 
-      <div
-        style={{
-          background: "white",
-          padding: "20px",
-          borderRadius: "10px",
-          marginBottom: "30px",
-        }}
-      >
-        <label>Monto:</label>
-        <br />
+        <section style={styles.card}>
+          <h2>Parámetros</h2>
 
-        <input
-          type="number"
-          value={monto}
-          onChange={(e) =>
-            setMonto(Number(e.target.value))
-          }
-        />
+          <div style={styles.grid}>
+            <Input label="Monto" value={monto} setValue={setMonto} />
+            <Input label="Tasa anual (%)" value={tasa} setValue={setTasa} />
+            <Input label="Plazo (meses)" value={plazo} setValue={setPlazo} />
 
-        <br />
-        <br />
+            <div>
+              <label>Tipo de amortización</label>
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value)}
+                style={styles.input}
+              >
+                <option value="frances">Francés / pago fijo</option>
+                <option value="aleman">Alemán / capital fijo</option>
+                <option value="bullet">Bullet / pago final</option>
+              </select>
+            </div>
+          </div>
 
-        <label>Tasa anual (%):</label>
-        <br />
+          <div style={styles.buttons}>
+            <button onClick={exportarExcel} style={styles.primaryButton}>
+              Exportar Excel
+            </button>
 
-        <input
-          type="number"
-          value={tasa}
-          onChange={(e) =>
-            setTasa(Number(e.target.value))
-          }
-        />
+            <button onClick={exportarPDF} style={styles.secondaryButton}>
+              Exportar PDF
+            </button>
+          </div>
+        </section>
 
-        <br />
-        <br />
+        <section style={styles.summaryGrid}>
+          <Card title="Pago inicial" value={formato(tabla[0]?.pago || 0)} />
+          <Card title="Total intereses" value={formato(totalInteres)} />
+          <Card title="Total pagado" value={formato(totalPago)} />
+        </section>
 
-        <label>Plazo (meses):</label>
-        <br />
+        <section style={styles.card}>
+          <h2>Gráfica de saldo</h2>
 
-        <input
-          type="number"
-          value={plazo}
-          onChange={(e) =>
-            setPlazo(Number(e.target.value))
-          }
-        />
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={tabla}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="periodo" />
+                <YAxis />
+                <Tooltip formatter={(value) => formato(value)} />
+                <Line type="monotone" dataKey="saldo" strokeWidth={3} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
 
-        <br />
-        <br />
+        <section style={styles.card}>
+          <h2>Tabla de amortización</h2>
 
-        <button onClick={exportarCSV}>
-          Exportar CSV
-        </button>
-      </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th>Periodo</th>
+                  <th>Saldo inicial</th>
+                  <th>Pago</th>
+                  <th>Interés</th>
+                  <th>Capital</th>
+                  <th>Saldo final</th>
+                </tr>
+              </thead>
 
-      {/* TABLA */}
-      <div
-        style={{
-          background: "white",
-          padding: "20px",
-          borderRadius: "10px",
-          overflowX: "auto",
-        }}
-      >
-        <h2>Tabla de amortización</h2>
-
-        <table
-          border="1"
-          cellPadding="10"
-          style={{
-            borderCollapse: "collapse",
-            width: "100%",
-          }}
-        >
-          <thead>
-            <tr>
-              <th>Periodo</th>
-              <th>Pago</th>
-              <th>Interés</th>
-              <th>Capital</th>
-              <th>Saldo</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {tabla.map((fila) => (
-              <tr key={fila.periodo}>
-                <td>{fila.periodo}</td>
-
-                <td>
-                  $
-                  {fila.pago.toFixed(2)}
-                </td>
-
-                <td>
-                  $
-                  {fila.interes.toFixed(2)}
-                </td>
-
-                <td>
-                  $
-                  {fila.capital.toFixed(2)}
-                </td>
-
-                <td>
-                  $
-                  {fila.saldo.toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              <tbody>
+                {tabla.map((r) => (
+                  <tr key={r.periodo}>
+                    <td>{r.periodo}</td>
+                    <td>{formato(r.saldoInicial)}</td>
+                    <td>{formato(r.pago)}</td>
+                    <td>{formato(r.interes)}</td>
+                    <td>{formato(r.capital)}</td>
+                    <td>{formato(r.saldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </div>
   );
 }
+
+function Input({ label, value, setValue }) {
+  return (
+    <div>
+      <label>{label}</label>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => setValue(Number(e.target.value))}
+        style={styles.input}
+      />
+    </div>
+  );
+}
+
+function Card({ title, value }) {
+  return (
+    <div style={styles.metricCard}>
+      <p>{title}</p>
+      <h3>{value}</h3>
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#f3f6fb",
+    padding: "30px",
+    fontFamily: "Arial, sans-serif",
+  },
+  container: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    gap: "24px",
+    marginBottom: "30px",
+  },
+  logo: {
+    width: "160px",
+    background: "white",
+    padding: "16px",
+    borderRadius: "14px",
+  },
+  title: {
+    margin: 0,
+    color: "#002b66",
+    fontSize: "36px",
+  },
+  subtitle: {
+    color: "#667085",
+    fontSize: "16px",
+  },
+  card: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "16px",
+    marginBottom: "24px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "20px",
+  },
+  input: {
+    width: "100%",
+    padding: "12px",
+    marginTop: "8px",
+    borderRadius: "10px",
+    border: "1px solid #d0d5dd",
+    fontSize: "16px",
+  },
+  buttons: {
+    display: "flex",
+    gap: "12px",
+    marginTop: "24px",
+  },
+  primaryButton: {
+    background: "#002b66",
+    color: "white",
+    border: "none",
+    padding: "12px 20px",
+    borderRadius: "10px",
+    cursor: "pointer",
+  },
+  secondaryButton: {
+    background: "white",
+    color: "#002b66",
+    border: "1px solid #002b66",
+    padding: "12px 20px",
+    borderRadius: "10px",
+    cursor: "pointer",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "20px",
+    marginBottom: "24px",
+  },
+  metricCard: {
+    background: "white",
+    padding: "22px",
+    borderRadius: "16px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+};
 
 export default App;
