@@ -13,12 +13,17 @@ export default function App() {
   const [correoCliente, setCorreoCliente] = useState("");
 
   const empresa = {
-    nombre: "TRISAL",
+    razonSocial: "FDG5 SERVICIOS, S.A. DE C.V. SOFOM ENR",
+    marca: "TRISAL",
     telefono: "8441029900",
     telefonoVisible: "844-102-9900",
     correo: "contactofdg5@gmail.com",
     direccion: "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
+    uneTelefono: "844-102-9900",
+    uneCorreo: "contactofdg5@gmail.com",
   };
+
+  const fechaCalculo = new Date().toLocaleDateString("es-MX");
 
   const numero = (valor) => Number(valor || 0);
 
@@ -90,16 +95,49 @@ export default function App() {
   const totalInteres = tabla.reduce((acc, fila) => acc + fila.interes, 0);
   const totalPago = tabla.reduce((acc, fila) => acc + fila.pago, 0);
 
+  function calcularCAT() {
+    const montoNum = numero(monto);
+    if (!tabla.length || montoNum <= 0) return 0;
+
+    const flujos = [montoNum, ...tabla.map((fila) => -fila.pago)];
+
+    let bajo = 0;
+    let alto = 1;
+
+    function vpn(tasaPeriodo) {
+      return flujos.reduce((acc, flujo, i) => {
+        return acc + flujo / Math.pow(1 + tasaPeriodo, i);
+      }, 0);
+    }
+
+    for (let i = 0; i < 80; i++) {
+      const medio = (bajo + alto) / 2;
+      if (vpn(medio) > 0) {
+        bajo = medio;
+      } else {
+        alto = medio;
+      }
+    }
+
+    const tasaMensualCAT = (bajo + alto) / 2;
+    return (Math.pow(1 + tasaMensualCAT, 12) - 1) * 100;
+  }
+
+  const catEstimado = calcularCAT();
+
   function exportarExcel() {
     const libro = XLSX.utils.book_new();
 
     const resumen = [
-      ["Empresa", empresa.nombre],
+      ["Empresa", empresa.razonSocial],
+      ["Marca", empresa.marca],
       ["Teléfono", empresa.telefonoVisible],
       ["Correo", empresa.correo],
       ["Dirección", empresa.direccion],
       ["Monto solicitado", numero(monto)],
-      ["Tasa anual", tasa + "%"],
+      ["Tasa anual fija", tasa + "%"],
+      ["CAT estimado", catEstimado.toFixed(2) + "%"],
+      ["Fecha de cálculo CAT", fechaCalculo],
       ["Plazo", plazo + " meses"],
       ["Tipo de amortización", tipo],
       ["Pago estimado", tabla[0]?.pago || 0],
@@ -116,18 +154,8 @@ export default function App() {
       "Saldo final": fila.saldo,
     }));
 
-    XLSX.utils.book_append_sheet(
-      libro,
-      XLSX.utils.aoa_to_sheet(resumen),
-      "Resumen"
-    );
-
-    XLSX.utils.book_append_sheet(
-      libro,
-      XLSX.utils.json_to_sheet(detalle),
-      "Amortizacion"
-    );
-
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(detalle), "Amortizacion");
     XLSX.writeFile(libro, "cotizacion_trisal.xlsx");
   }
 
@@ -138,19 +166,21 @@ export default function App() {
     doc.text("Cotización de Crédito TRISAL", 14, 18);
 
     doc.setFontSize(10);
-    doc.text("Teléfono: " + empresa.telefonoVisible, 14, 28);
-    doc.text("Correo: " + empresa.correo, 14, 34);
-    doc.text("Dirección: " + empresa.direccion, 14, 40);
+    doc.text(empresa.razonSocial, 14, 28);
+    doc.text("Teléfono: " + empresa.telefonoVisible, 14, 34);
+    doc.text("Correo: " + empresa.correo, 14, 40);
+    doc.text("Dirección: " + empresa.direccion, 14, 46);
 
     doc.setFontSize(11);
-    doc.text("Monto solicitado: " + formato(monto), 14, 52);
-    doc.text("Tasa anual: " + tasa + "%", 14, 59);
-    doc.text("Plazo: " + plazo + " meses", 14, 66);
-    doc.text("Tipo de amortización: " + tipo, 14, 73);
-    doc.text("Pago estimado: " + formato(tabla[0]?.pago || 0), 14, 80);
+    doc.text("Monto solicitado: " + formato(monto), 14, 58);
+    doc.text("Tasa anual fija: " + tasa + "%", 14, 65);
+    doc.text("CAT estimado: " + catEstimado.toFixed(2) + "%", 14, 72);
+    doc.text("Fecha de cálculo: " + fechaCalculo, 14, 79);
+    doc.text("Plazo: " + plazo + " meses", 14, 86);
+    doc.text("Pago estimado: " + formato(tabla[0]?.pago || 0), 14, 93);
 
     autoTable(doc, {
-      startY: 90,
+      startY: 102,
       head: [["Periodo", "Saldo inicial", "Pago", "Interés", "Capital", "Saldo"]],
       body: tabla.map((fila) => [
         fila.periodo,
@@ -171,7 +201,7 @@ export default function App() {
       return;
     }
 
-    alert("Por ahora puedes descargar el PDF y Excel. El envío automático requiere backend.");
+    alert("Por ahora puedes descargar PDF y Excel. El envío automático requiere backend.");
   }
 
   return (
@@ -187,6 +217,8 @@ export default function App() {
           <button onClick={() => setPagina("productos")} style={botonMenu(pagina === "productos")}>Productos</button>
           <button onClick={() => setPagina("ubicacion")} style={botonMenu(pagina === "ubicacion")}>Ubicación</button>
           <button onClick={() => setPagina("contacto")} style={botonMenu(pagina === "contacto")}>Contacto</button>
+          <button onClick={() => setPagina("normatividad")} style={botonMenu(pagina === "normatividad")}>Normatividad</button>
+          <button onClick={() => setPagina("privacidad")} style={botonMenu(pagina === "privacidad")}>Privacidad</button>
           <button onClick={() => setPagina("simulador")} style={styles.botonDorado}>Simula tu crédito</button>
         </div>
       </nav>
@@ -195,16 +227,15 @@ export default function App() {
         {pagina === "inicio" && (
           <section style={styles.hero}>
             <div>
-              <p style={styles.kicker}>SOFOM · Norte de México</p>
+              <p style={styles.kicker}>SOFOM ENR · Norte de México</p>
               <h1 style={styles.heroTitle}>Financiamiento serio para proyectos productivos.</h1>
               <p style={styles.heroText}>
-                Soluciones de crédito para empresas, productores y negocios que buscan crecer con estructura y claridad.
+                Soluciones de crédito y estructuras fiduciarias para empresas, productores y negocios.
               </p>
               <button onClick={() => setPagina("simulador")} style={styles.cta}>
                 Simula tu crédito
               </button>
             </div>
-
             <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.heroLogo} />
           </section>
         )}
@@ -222,10 +253,26 @@ export default function App() {
         {pagina === "productos" && (
           <Pagina titulo="Productos">
             <div style={styles.cards}>
-              <Tarjeta titulo="Crédito simple" texto="Capital para operación, inversión, inventario o crecimiento." />
-              <Tarjeta titulo="Crédito agropecuario" texto="Financiamiento para productores, ranchos, maquinaria e insumos." />
-              <Tarjeta titulo="Crédito empresarial" texto="Soluciones para PyMEs, comercio, transporte y servicios." />
-              <Tarjeta titulo="Fideicomisos" texto="Estructuras para administración, garantía y protección patrimonial." />
+              <Tarjeta
+                titulo="Crédito simple"
+                texto={`Tasa de interés fija. CAT estimado calculado al ${fechaCalculo}. Requisitos sujetos a evaluación. Incumplir tus obligaciones te puede generar comisiones e intereses moratorios. Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.`}
+              />
+              <Tarjeta
+                titulo="Fideicomiso"
+                texto="Estructuras para administración, garantía y protección patrimonial. Condiciones y requisitos sujetos al tipo de operación."
+              />
+            </div>
+
+            <div style={styles.card}>
+              <h3>Advertencias aplicables</h3>
+              <ul>
+                <li>Incumplir tus obligaciones te puede generar comisiones e intereses moratorios.</li>
+                <li>Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</li>
+                <li>El avalista, obligado solidario o coacreditado responderá como obligado principal por el total del pago frente a la Entidad Financiera.</li>
+              </ul>
+              <p><b>Tasa:</b> fija.</p>
+              <p><b>Comisiones:</b> sujetas al producto contratado y a la carátula correspondiente.</p>
+              <p><b>Requisitos de contratación:</b> pendientes de integrar con la información que nos proporciones.</p>
             </div>
           </Pagina>
         )}
@@ -235,7 +282,6 @@ export default function App() {
             <div style={styles.card}>
               <p><b>Dirección:</b> {empresa.direccion}</p>
               <p><b>Horario:</b> Lunes a viernes de 9:00 AM a 5:00 PM</p>
-
               <a
                 href="https://www.google.com/maps/search/?api=1&query=Paseo+del+Valle+310+San+Patricio+Saltillo+Coahuila"
                 target="_blank"
@@ -244,7 +290,6 @@ export default function App() {
               >
                 Abrir ubicación en Google Maps
               </a>
-
               <iframe
                 title="Mapa TRISAL"
                 src="https://www.google.com/maps?q=Paseo%20del%20Valle%20310%20San%20Patricio%20Saltillo%20Coahuila&output=embed"
@@ -260,13 +305,7 @@ export default function App() {
         {pagina === "contacto" && (
           <Pagina titulo="Contacto">
             <div style={styles.card}>
-              <p>
-                <b>Teléfono:</b>{" "}
-                <a href={"tel:" + empresa.telefono} style={styles.link}>
-                  {empresa.telefonoVisible}
-                </a>
-              </p>
-
+              <p><b>Teléfono:</b> <a href={"tel:" + empresa.telefono} style={styles.link}>{empresa.telefonoVisible}</a></p>
               <p>
                 <b>WhatsApp:</b>{" "}
                 <a
@@ -278,12 +317,64 @@ export default function App() {
                   Enviar mensaje por WhatsApp
                 </a>
               </p>
+              <p><b>Correo:</b> <a href={"mailto:" + empresa.correo} style={styles.link}>{empresa.correo}</a></p>
+              <hr />
+              <p><b>UNE:</b> {empresa.uneTelefono} · {empresa.uneCorreo}</p>
+            </div>
+          </Pagina>
+        )}
+
+        {pagina === "normatividad" && (
+          <Pagina titulo="Normatividad y transparencia">
+            <div style={styles.card}>
+              <h3>Unidad Especializada de Atención a Usuarios</h3>
+              <p><b>Teléfono UNE:</b> {empresa.uneTelefono}</p>
+              <p><b>Correo UNE:</b> {empresa.uneCorreo}</p>
+            </div>
+
+            <div style={styles.card}>
+              <h3>CONDUSEF y Buró de Entidades Financieras</h3>
+              <p><b>CONDUSEF:</b> <a href="https://www.condusef.gob.mx/" target="_blank" rel="noreferrer" style={styles.link}>www.condusef.gob.mx</a></p>
+              <p><b>Buró de Entidades Financieras:</b> <a href="http://www.buro.gob.mx" target="_blank" rel="noreferrer" style={styles.link}>www.buro.gob.mx</a></p>
+
+              <div style={styles.buroBox}>
+                <b>Buró de Entidades Financieras</b>
+              </div>
 
               <p>
-                <b>Correo:</b>{" "}
-                <a href={"mailto:" + empresa.correo} style={styles.link}>
-                  {empresa.correo}
-                </a>
+                El Buró de Entidades Financieras permite conocer información de entidades financieras,
+                productos y servicios, así como comparar y evaluar alternativas. La información mostrada
+                corresponde únicamente a la Entidad Financiera de que se trate; para consultar información
+                del sector correspondiente, accede al sitio oficial.
+              </p>
+            </div>
+
+            <div style={styles.card}>
+              <h3>Despachos de cobranza</h3>
+              <p>
+                Los datos de los despachos de cobranza estarán disponibles para los clientes por medios
+                electrónicos y en sucursales o establecimientos, a fin de que puedan identificarlos y localizarlos.
+              </p>
+            </div>
+          </Pagina>
+        )}
+
+        {pagina === "privacidad" && (
+          <Pagina titulo="Aviso de privacidad">
+            <div style={styles.card}>
+              <p>
+                {empresa.razonSocial}, con domicilio en {empresa.direccion}, es responsable del tratamiento
+                de los datos personales que recabe para fines de identificación, análisis, evaluación,
+                contratación, administración y seguimiento de productos o servicios financieros.
+              </p>
+              <p>
+                Los datos podrán utilizarse para contacto, integración de expediente, cumplimiento normativo,
+                prevención de operaciones ilícitas y atención de solicitudes. El titular podrá ejercer sus
+                derechos ARCO a través del correo {empresa.correo}.
+              </p>
+              <p>
+                Este aviso es una versión base y debe ser revisado por asesor legal antes de publicarse como
+                aviso definitivo.
               </p>
             </div>
           </Pagina>
@@ -293,12 +384,10 @@ export default function App() {
           <Pagina titulo="Simula tu crédito">
             <section style={styles.card}>
               <h3>Parámetros del crédito</h3>
-
               <div style={styles.grid}>
                 <Input label="Monto solicitado" value={monto} setValue={setMonto} />
-                <Input label="Tasa anual (%)" value={tasa} setValue={setTasa} />
+                <Input label="Tasa anual fija (%)" value={tasa} setValue={setTasa} />
                 <Input label="Plazo (meses)" value={plazo} setValue={setPlazo} />
-
                 <div>
                   <label>Tipo de amortización</label>
                   <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={styles.input}>
@@ -312,13 +401,21 @@ export default function App() {
 
             <section style={styles.resumen}>
               <Metrica titulo="Pago mensual estimado" valor={formato(tabla[0]?.pago || 0)} />
+              <Metrica titulo="CAT estimado" valor={catEstimado.toFixed(2) + "%"} />
               <Metrica titulo="Total intereses" valor={formato(totalInteres)} />
               <Metrica titulo="Total pagado" valor={formato(totalPago)} />
             </section>
 
             <section style={styles.card}>
-              <h3>Exportar o enviar cotización</h3>
+              <p>
+                CAT estimado para fines informativos y de comparación. Fecha de cálculo: {fechaCalculo}.
+                Tasa de interés fija. El resultado puede variar conforme al monto, plazo y condiciones finales.
+              </p>
+              <p><b>Advertencia:</b> Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</p>
+            </section>
 
+            <section style={styles.card}>
+              <h3>Exportar o enviar cotización</h3>
               <input
                 type="email"
                 value={correoCliente}
@@ -326,7 +423,6 @@ export default function App() {
                 placeholder="cliente@correo.com"
                 style={styles.input}
               />
-
               <div style={styles.buttons}>
                 <button onClick={exportarExcel} style={styles.primaryButton}>Descargar Excel</button>
                 <button onClick={generarPDF} style={styles.secondaryButton}>Descargar PDF</button>
@@ -336,7 +432,6 @@ export default function App() {
 
             <section style={styles.card}>
               <h3>Tabla de amortización</h3>
-
               <div style={{ overflowX: "auto" }}>
                 <table style={styles.table}>
                   <thead>
@@ -349,7 +444,6 @@ export default function App() {
                       <th>Saldo final</th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {tabla.map((fila) => (
                       <tr key={fila.periodo}>
@@ -368,6 +462,18 @@ export default function App() {
           </Pagina>
         )}
       </main>
+
+      <footer style={styles.footer}>
+        <p>
+          Para la constitución y operación de {empresa.razonSocial} con tal carácter,
+          no requiere de autorización de la Secretaría de Hacienda y Crédito Público.
+        </p>
+        <p>
+          {empresa.razonSocial} se encuentra sujeta a la supervisión de la Comisión Nacional
+          Bancaria y de Valores, únicamente para efectos de lo dispuesto por el artículo 56 de
+          la Ley General de Organizaciones y Actividades Auxiliares del Crédito.
+        </p>
+      </footer>
     </div>
   );
 }
@@ -394,12 +500,7 @@ function Input({ label, value, setValue }) {
   return (
     <div>
       <label>{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        style={styles.input}
-      />
+      <input type="number" value={value} onChange={(e) => setValue(e.target.value)} style={styles.input} />
     </div>
   );
 }
@@ -618,5 +719,21 @@ const styles = {
   link: {
     color: "#111827",
     fontWeight: "bold",
+  },
+  buroBox: {
+    display: "inline-block",
+    background: "#111827",
+    color: "white",
+    padding: "14px 18px",
+    borderRadius: "12px",
+    margin: "12px 0",
+    fontWeight: "bold",
+  },
+  footer: {
+    background: "#111827",
+    color: "white",
+    padding: "24px 36px",
+    fontSize: "13px",
+    lineHeight: 1.5,
   },
 };
