@@ -2,40 +2,57 @@ import { useState } from "react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 
 function App() {
-  const [monto, setMonto] = useState(250000);
-  const [tasa, setTasa] = useState(18);
-  const [plazo, setPlazo] = useState(24);
+  const [pagina, setPagina] = useState("inicio");
+
+  const [monto, setMonto] = useState("250000");
+  const [tasa, setTasa] = useState("18");
+  const [plazo, setPlazo] = useState("24");
   const [tipo, setTipo] = useState("frances");
+  const [correoCliente, setCorreoCliente] = useState("");
+
+  const EMPRESA = {
+    nombre: "TRISAL",
+    telefono: "8441029900",
+    telefonoVisible: "844-102-9900",
+    correo: "contactofdg5@gmail.com",
+    direccion: "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
+  };
+
+  const n = (valor) => Number(valor || 0);
+
+  const formato = (valor) =>
+    n(valor).toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    });
 
   const calcularTabla = () => {
-    const tasaMensual = tasa / 100 / 12;
-    let saldo = monto;
+    const montoNum = n(monto);
+    const tasaMensual = n(tasa) / 100 / 12;
+    const meses = n(plazo);
+    let saldo = montoNum;
     const tabla = [];
+
+    if (montoNum <= 0 || meses <= 0) return [];
+
     let pagoFijo = 0;
 
     if (tipo === "frances") {
       pagoFijo =
         tasaMensual === 0
-          ? monto / plazo
-          : (monto * tasaMensual) / (1 - Math.pow(1 + tasaMensual, -plazo));
+          ? montoNum / meses
+          : (montoNum * tasaMensual) /
+            (1 - Math.pow(1 + tasaMensual, -meses));
     }
 
-    const capitalFijo = monto / plazo;
+    const capitalFijo = montoNum / meses;
 
-    for (let i = 1; i <= plazo; i++) {
+    for (let i = 1; i <= meses; i++) {
       const saldoInicial = saldo;
       const interes = saldoInicial * tasaMensual;
+
       let capital = 0;
       let pago = 0;
 
@@ -50,7 +67,7 @@ function App() {
       }
 
       if (tipo === "bullet") {
-        capital = i === plazo ? saldoInicial : 0;
+        capital = i === meses ? saldoInicial : 0;
         pago = interes + capital;
       }
 
@@ -71,14 +88,27 @@ function App() {
 
   const tabla = calcularTabla();
 
-  const formato = (n) =>
-    n.toLocaleString("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    });
+  const totalInteres = tabla.reduce((acc, r) => acc + r.interes, 0);
+  const totalPago = tabla.reduce((acc, r) => acc + r.pago, 0);
 
   const exportarExcel = () => {
-    const data = tabla.map((r) => ({
+    const libro = XLSX.utils.book_new();
+
+    const resumen = [
+      ["Empresa", EMPRESA.nombre],
+      ["Teléfono", EMPRESA.telefonoVisible],
+      ["Correo", EMPRESA.correo],
+      ["Dirección", EMPRESA.direccion],
+      ["Monto solicitado", n(monto)],
+      ["Tasa anual", `${tasa}%`],
+      ["Plazo", `${plazo} meses`],
+      ["Tipo de amortización", tipo],
+      ["Pago estimado", tabla[0]?.pago || 0],
+      ["Total intereses", totalInteres],
+      ["Total pagado", totalPago],
+    ];
+
+    const detalle = tabla.map((r) => ({
       Periodo: r.periodo,
       "Saldo inicial": r.saldoInicial,
       Pago: r.pago,
@@ -87,26 +117,31 @@ function App() {
       "Saldo final": r.saldo,
     }));
 
-    const hoja = XLSX.utils.json_to_sheet(data);
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Amortización");
-    XLSX.writeFile(libro, "tabla_amortizacion.xlsx");
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(detalle), "Amortización");
+    XLSX.writeFile(libro, "cotizacion_trisal.xlsx");
   };
 
-  const exportarPDF = () => {
+  const generarPDF = () => {
     const doc = new jsPDF();
 
     doc.setFontSize(18);
-    doc.text("Simulador de Crédito TRISAL", 14, 20);
+    doc.text("Cotización de Crédito TRISAL", 14, 18);
+
+    doc.setFontSize(10);
+    doc.text(`Teléfono: ${EMPRESA.telefonoVisible}`, 14, 28);
+    doc.text(`Correo: ${EMPRESA.correo}`, 14, 34);
+    doc.text(`Dirección: ${EMPRESA.direccion}`, 14, 40);
 
     doc.setFontSize(11);
-    doc.text(`Monto: ${formato(monto)}`, 14, 30);
-    doc.text(`Tasa anual: ${tasa}%`, 14, 37);
-    doc.text(`Plazo: ${plazo} meses`, 14, 44);
-    doc.text(`Tipo: ${tipo}`, 14, 51);
+    doc.text(`Monto solicitado: ${formato(monto)}`, 14, 52);
+    doc.text(`Tasa anual: ${tasa}%`, 14, 59);
+    doc.text(`Plazo: ${plazo} meses`, 14, 66);
+    doc.text(`Tipo de amortización: ${tipo}`, 14, 73);
+    doc.text(`Pago estimado: ${formato(tabla[0]?.pago || 0)}`, 14, 80);
 
     autoTable(doc, {
-      startY: 60,
+      startY: 90,
       head: [["Periodo", "Saldo inicial", "Pago", "Interés", "Capital", "Saldo"]],
       body: tabla.map((r) => [
         r.periodo,
@@ -118,193 +153,233 @@ function App() {
       ]),
     });
 
-    doc.save("tabla_amortizacion.pdf");
+    doc.save("cotizacion_trisal.pdf");
   };
 
-  const totalInteres = tabla.reduce((acc, r) => acc + r.interes, 0);
-  const totalPago = tabla.reduce((acc, r) => acc + r.pago, 0);
+  const enviarCotizacion = () => {
+    if (!correoCliente) {
+      alert("Escribe el correo del cliente.");
+      return;
+    }
+
+    alert(
+      "Para enviar PDF y Excel por correo automáticamente necesitamos configurar backend con Vercel + Resend o SendGrid. Por ahora puedes descargar los archivos."
+    );
+  };
 
   return (
     <div style={styles.page}>
       <nav style={styles.nav}>
-        <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.navLogo} />
+        <button onClick={() => setPagina("inicio")} style={styles.logoButton}>
+          <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.navLogo} />
+        </button>
+
         <div style={styles.navLinks}>
-          <a href="#inicio">Inicio</a>
-          <a href="#servicios">Servicios</a>
-          <a href="#productos">Productos</a>
-          <a href="#quienes">Quiénes somos</a>
-          <a href="#ubicacion">Ubicación</a>
-          <a href="#contacto">Contacto</a>
-          <a href="#info">Información</a>
-          <a href="#simulador" style={styles.navButton}>Simula tu crédito</a>
+          <button onClick={() => setPagina("inicio")} style={navStyle(pagina === "inicio")}>Inicio</button>
+          <button onClick={() => setPagina("servicios")} style={navStyle(pagina === "servicios")}>Servicios</button>
+          <button onClick={() => setPagina("productos")} style={navStyle(pagina === "productos")}>Productos</button>
+          <button onClick={() => setPagina("ubicacion")} style={navStyle(pagina === "ubicacion")}>Ubicación</button>
+          <button onClick={() => setPagina("contacto")} style={navStyle(pagina === "contacto")}>Contacto</button>
+          <button onClick={() => setPagina("simulador")} style={styles.navButton}>Simula tu crédito</button>
         </div>
       </nav>
 
-      <section id="inicio" style={styles.hero}>
-        <div>
-          <p style={styles.kicker}>SOFOM · Norte de México</p>
-          <h1 style={styles.heroTitle}>Crédito ágil para empresas, campo y crecimiento regional.</h1>
-          <p style={styles.heroText}>
-            En TRISAL apoyamos proyectos productivos con soluciones de financiamiento claras,
-            cercanas y adaptadas a las necesidades del norte del país.
-          </p>
-          <a href="#simulador" style={styles.cta}>Simula tu crédito</a>
-        </div>
-        <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.heroLogo} />
-      </section>
-
-      <Section id="servicios" title="Servicios">
-        <div style={styles.cards3}>
-          <InfoCard title="Análisis de crédito" text="Evaluamos capacidad de pago, flujo y destino del financiamiento." />
-          <InfoCard title="Estructuración financiera" text="Diseñamos pagos, plazos y esquemas según el perfil del cliente." />
-          <InfoCard title="Acompañamiento" text="Atención cercana durante la solicitud, autorización y vida del crédito." />
-        </div>
-      </Section>
-
-      <Section id="productos" title="Productos que ofrecemos">
-        <div style={styles.cards3}>
-          <InfoCard title="Crédito simple" text="Capital para inversión, operación o crecimiento del negocio." />
-          <InfoCard title="Crédito agropecuario" text="Financiamiento para productores, ranchos, maquinaria e insumos." />
-          <InfoCard title="Crédito empresarial" text="Soluciones para PyMEs, comercio, transporte y servicios." />
-          <InfoCard title="Fideicomisos" text="Creación y mantenimiento de fideicomisos para protección de activos." />
-        </div>
-      </Section>
-
-      <Section id="quienes" title="Quiénes somos">
-        <p style={styles.paragraph}>
-          Somos una financiera enfocada en crear relaciones de largo plazo con clientes que
-          buscan crecer con orden, transparencia y responsabilidad. Nuestro enfoque combina
-          conocimiento regional, atención personalizada y herramientas digitales para tomar
-          mejores decisiones de crédito.
-        </p>
-      </Section>
-
-      <Section id="ubicacion" title="Ubicación">
-        <p style={styles.paragraph}>
-          Atendemos clientes del norte del país. Paseo del Valle 310 Colonia San Patricio Saltillo Coahuila. Para visitas presenciales, recomendamos agendar cita para asegurar atención personalizada. En nuestras oficinas encontrarás asesoría, acceso a simuladores,
-          , Lunes - Viernes de 9:00 AM a 5:00 PM.
-        </p>
-      </Section>
-
-      <Section id="contacto" title="Contacto">
-        <div style={styles.contactBox}>
-          <p><b>Teléfono:</b> 844-102-9900</p>
-          <p><b>Correo:</b> contactofdg5@gmail.com</p>
-          <p><b>WhatsApp:</b> 844-102-9900</p>
-        </div>
-      </Section>
-
-<Section id="info" title="Dónde buscar información">
-  <p style={styles.paragraph}>
-    Para consultar información de instituciones financieras en México, puedes revisar
-    registros oficiales como SIPRES de CONDUSEF y publicaciones de la CNBV sobre SOFOMES.
-  </p>
-
-  <div style={styles.contactBox}>
-    <p>
-      <b>CONDUSEF:</b>{" "}
-      <a href="https://www.condusef.gob.mx/" target="_blank">
-        www.condusef.gob.mx
-      </a>
-    </p>
-
-    <p>
-      <b>CNBV:</b>{" "}
-      <a href="https://www.gob.mx/cnbv" target="_blank">
-        www.gob.mx/cnbv
-      </a>
-    </p>
-  </div>
-</Section>
-
-      <section id="simulador" style={styles.simulatorSection}>
-        <h2 style={styles.sectionTitle}>Simula tu crédito</h2>
-
-        <section style={styles.card}>
-          <h3>Parámetros</h3>
-
-          <div style={styles.grid}>
-            <Input label="Monto" value={monto} setValue={setMonto} />
-            <Input label="Tasa anual (%)" value={tasa} setValue={setTasa} />
-            <Input label="Plazo (meses)" value={plazo} setValue={setPlazo} />
-
+      <main style={styles.main}>
+        {pagina === "inicio" && (
+          <div style={styles.hero}>
             <div>
-              <label>Tipo de amortización</label>
-              <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={styles.input}>
-                <option value="frances">Francés / pago fijo</option>
-                <option value="aleman">Alemán / capital fijo</option>
-                <option value="bullet">Bullet / pago final</option>
-              </select>
+              <p style={styles.kicker}>SOFOM · Norte de México</p>
+              <h1 style={styles.heroTitle}>Financiamiento serio para proyectos productivos.</h1>
+              <p style={styles.heroText}>
+                Soluciones de crédito para empresas, productores y negocios que buscan crecer
+                con estructura, claridad y acompañamiento financiero.
+              </p>
+              <button onClick={() => setPagina("simulador")} style={styles.cta}>
+                Simula tu crédito
+              </button>
             </div>
-          </div>
 
-          <div style={styles.buttons}>
-            <button onClick={exportarExcel} style={styles.primaryButton}>Exportar Excel</button>
-            <button onClick={exportarPDF} style={styles.secondaryButton}>Exportar PDF</button>
+            <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.heroLogo} />
           </div>
-        </section>
+        )}
 
-        <section style={styles.summaryGrid}>
-          <MetricCard title="Pago inicial" value={formato(tabla[0]?.pago || 0)} />
-          <MetricCard title="Total intereses" value={formato(totalInteres)} />
-          <MetricCard title="Total pagado" value={formato(totalPago)} />
-        </section>
+        {pagina === "servicios" && (
+          <Page title="Servicios">
+            <div style={styles.cards3}>
+              <InfoCard title="Análisis de crédito" text="Evaluamos capacidad de pago, flujo, garantías y destino del financiamiento." />
+              <InfoCard title="Estructuración financiera" text="Diseñamos pagos, plazos y condiciones según cada cliente." />
+              <InfoCard title="Acompañamiento" text="Atención durante solicitud, autorización, disposición y seguimiento." />
+            </div>
+          </Page>
+        )}
 
-        <section style={styles.card}>
-          <h3>Gráfica de saldo</h3>
-          <div style={{ height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={tabla}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="periodo" />
-                <YAxis />
-                <Tooltip formatter={(value) => formato(value)} />
-                <Line type="monotone" dataKey="saldo" strokeWidth={3} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
+        {pagina === "productos" && (
+          <Page title="Productos">
+            <div style={styles.cards3}>
+              <InfoCard title="Crédito simple" text="Capital para operación, inversión, inventario o crecimiento." />
+              <InfoCard title="Crédito agropecuario" text="Financiamiento para productores, ranchos, maquinaria e insumos." />
+              <InfoCard title="Crédito empresarial" text="Soluciones para PyMEs, comercio, transporte y servicios." />
+              <InfoCard title="Fideicomisos" text="Estructuras para administración, garantía y protección patrimonial." />
+            </div>
+          </Page>
+        )}
 
-        <section style={styles.card}>
-          <h3>Tabla de amortización</h3>
-          <div style={{ overflowX: "auto" }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>Periodo</th>
-                  <th>Saldo inicial</th>
-                  <th>Pago</th>
-                  <th>Interés</th>
-                  <th>Capital</th>
-                  <th>Saldo final</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tabla.map((r) => (
-                  <tr key={r.periodo}>
-                    <td>{r.periodo}</td>
-                    <td>{formato(r.saldoInicial)}</td>
-                    <td>{formato(r.pago)}</td>
-                    <td>{formato(r.interes)}</td>
-                    <td>{formato(r.capital)}</td>
-                    <td>{formato(r.saldo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </section>
+        {pagina === "ubicacion" && (
+          <Page title="Ubicación">
+            <div style={styles.card}>
+              <p><b>Dirección:</b> {EMPRESA.direccion}</p>
+              <p><b>Horario:</b> Lunes a viernes de 9:00 AM a 5:00 PM</p>
+
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=Paseo+del+Valle+310+San+Patricio+Saltillo+Coahuila"
+                target="_blank"
+                rel="noreferrer"
+                style={styles.mapButton}
+              >
+                Abrir ubicación en Google Maps
+              </a>
+
+              <iframe
+                title="Mapa TRISAL"
+                src="https://www.google.com/maps?q=Paseo%20del%20Valle%20310%20San%20Patricio%20Saltillo%20Coahuila&output=embed"
+                width="100%"
+                height="360"
+                style={styles.map}
+                loading="lazy"
+              />
+            </div>
+          </Page>
+        )}
+
+        {pagina === "contacto" && (
+          <Page title="Contacto">
+            <div style={styles.card}>
+              <p>
+                <b>Teléfono:</b>{" "}
+                <a href={`tel:${EMPRESA.telefono}`} style={styles.link}>
+                  {EMPRESA.telefonoVisible}
+                </a>
+              </p>
+
+              <p>
+                <b>WhatsApp:</b>{" "}
+                <a
+                  href={`https://wa.me/52${EMPRESA.telefono}?text=Hola,%20quiero%20información%20sobre%20un%20crédito.`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={styles.link}
+                >
+                  Enviar mensaje por WhatsApp
+                </a>
+              </p>
+
+              <p>
+                <b>Correo:</b>{" "}
+                <a
+                  href={`mailto:${EMPRESA.correo}?subject=Solicitud%20de%20información%20de%20crédito`}
+                  style={styles.link}
+                >
+                  {EMPRESA.correo}
+                </a>
+              </p>
+            </div>
+          </Page>
+        )}
+
+        {pagina === "simulador" && (
+          <Page title="Simula tu crédito">
+            <section style={styles.card}>
+              <h3>Parámetros del crédito</h3>
+
+              <div style={styles.grid}>
+                <Input label="Monto solicitado" value={monto} setValue={setMonto} />
+                <Input label="Tasa anual (%)" value={tasa} setValue={setTasa} />
+                <Input label="Plazo (meses)" value={plazo} setValue={setPlazo} />
+
+                <div>
+                  <label>Tipo de amortización</label>
+                  <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={styles.input}>
+                    <option value="frances">Francés / pago fijo</option>
+                    <option value="aleman">Alemán / capital fijo</option>
+                    <option value="bullet">Bullet / pago final</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section style={styles.summaryGrid}>
+              <MetricCard title="Pago mensual estimado" value={formato(tabla[0]?.pago || 0)} />
+              <MetricCard title="Total intereses" value={formato(totalInteres)} />
+              <MetricCard title="Total pagado" value={formato(totalPago)} />
+            </section>
+
+            <section style={styles.card}>
+              <h3>Exportar o enviar cotización</h3>
+
+              <div style={styles.grid}>
+                <div>
+                  <label>Correo del cliente</label>
+                  <input
+                    type="email"
+                    value={correoCliente}
+                    onChange={(e) => setCorreoCliente(e.target.value)}
+                    placeholder="cliente@correo.com"
+                    style={styles.input}
+                  />
+                </div>
+              </div>
+
+              <div style={styles.buttons}>
+                <button onClick={exportarExcel} style={styles.primaryButton}>Descargar Excel</button>
+                <button onClick={generarPDF} style={styles.secondaryButton}>Descargar PDF</button>
+                <button onClick={enviarCotizacion} style={styles.goldButton}>Enviar por correo</button>
+              </div>
+            </section>
+
+            <section style={styles.card}>
+              <h3>Tabla de amortización</h3>
+
+              <div style={{ overflowX: "auto" }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Periodo</th>
+                      <th>Saldo inicial</th>
+                      <th>Pago</th>
+                      <th>Interés</th>
+                      <th>Capital</th>
+                      <th>Saldo final</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {tabla.map((r) => (
+                      <tr key={r.periodo}>
+                        <td>{r.periodo}</td>
+                        <td>{formato(r.saldoInicial)}</td>
+                        <td>{formato(r.pago)}</td>
+                        <td>{formato(r.interes)}</td>
+                        <td>{formato(r.capital)}</td>
+                        <td>{formato(r.saldo)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </Page>
+        )}
+      </main>
     </div>
   );
 }
 
-function Section({ id, title, children }) {
+function Page({ title, children }) {
   return (
-    <section id={id} style={styles.section}>
+    <div>
       <h2 style={styles.sectionTitle}>{title}</h2>
       {children}
-    </section>
+    </div>
   );
 }
 
@@ -321,7 +396,12 @@ function Input({ label, value, setValue }) {
   return (
     <div>
       <label>{label}</label>
-      <input type="number" value={value} onChange={(e) => setValue(Number(e.target.value))} style={styles.input} />
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        style={styles.input}
+      />
     </div>
   );
 }
@@ -335,12 +415,25 @@ function MetricCard({ title, value }) {
   );
 }
 
+function navStyle(active) {
+  return {
+    background: active ? "#111827" : "transparent",
+    color: active ? "white" : "#111827",
+    border: "none",
+    padding: "12px 15px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontWeight: "700",
+    fontSize: "17px",
+  };
+}
+
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#f4f1ea",
+    background: "#f5f3ef",
     fontFamily: "Arial, sans-serif",
-    color: "#172033",
+    color: "#111827",
   },
   nav: {
     position: "sticky",
@@ -350,49 +443,74 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "14px 32px",
-    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+    gap: "18px",
+    padding: "16px 36px",
+    boxShadow: "0 4px 18px rgba(0,0,0,0.08)",
+    borderBottom: "1px solid #e5e7eb",
   },
-  navLogo: { width: "110px" },
+  logoButton: {
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+  },
+  navLogo: {
+    width: "115px",
+  },
   navLinks: {
     display: "flex",
     alignItems: "center",
-    gap: "18px",
+    gap: "12px",
     flexWrap: "wrap",
   },
   navButton: {
-    background: "#002b66",
+    background: "#8a6a2f",
     color: "white",
-    padding: "10px 14px",
+    border: "none",
+    padding: "12px 16px",
     borderRadius: "10px",
-    textDecoration: "none",
+    cursor: "pointer",
+    fontWeight: "700",
+    fontSize: "17px",
   },
-  hero: {
+  main: {
     maxWidth: "1200px",
     margin: "0 auto",
-    padding: "70px 30px",
+    padding: "40px 26px 70px",
+  },
+  hero: {
+    minHeight: "72vh",
     display: "grid",
-    gridTemplateColumns: "1.5fr 0.7fr",
-    gap: "30px",
+    gridTemplateColumns: "1.4fr 0.8fr",
+    gap: "34px",
     alignItems: "center",
   },
-  kicker: { color: "#b8792b", fontWeight: "bold" },
+  kicker: {
+    color: "#8a6a2f",
+    fontWeight: "bold",
+    letterSpacing: "0.08em",
+  },
   heroTitle: {
     fontSize: "48px",
     lineHeight: "1.05",
-    margin: "10px 0",
-    color: "#002b66",
+    margin: "12px 0",
+    color: "#111827",
   },
-  heroText: { fontSize: "18px", color: "#475467", maxWidth: "720px" },
+  heroText: {
+    fontSize: "18px",
+    color: "#4b5563",
+    maxWidth: "720px",
+    lineHeight: 1.6,
+  },
   cta: {
-    display: "inline-block",
     marginTop: "18px",
-    background: "#b8792b",
+    background: "#111827",
     color: "white",
     padding: "14px 20px",
     borderRadius: "12px",
-    textDecoration: "none",
+    border: "none",
+    cursor: "pointer",
     fontWeight: "bold",
+    fontSize: "16px",
   },
   heroLogo: {
     width: "100%",
@@ -401,23 +519,10 @@ const styles = {
     borderRadius: "24px",
     boxShadow: "0 12px 30px rgba(0,0,0,0.08)",
   },
-  section: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "42px 30px",
-  },
   sectionTitle: {
-    color: "#002b66",
-    fontSize: "32px",
-    marginBottom: "20px",
-  },
-  paragraph: {
-    background: "white",
-    padding: "24px",
-    borderRadius: "16px",
-    fontSize: "17px",
-    lineHeight: 1.6,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+    color: "#111827",
+    fontSize: "38px",
+    marginBottom: "24px",
   },
   cards3: {
     display: "grid",
@@ -426,28 +531,19 @@ const styles = {
   },
   infoCard: {
     background: "white",
-    padding: "24px",
+    padding: "26px",
     borderRadius: "16px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-    borderTop: "5px solid #b8792b",
-  },
-  contactBox: {
-    background: "white",
-    padding: "24px",
-    borderRadius: "16px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-  },
-  simulatorSection: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "42px 30px 80px",
+    borderTop: "5px solid #8a6a2f",
+    lineHeight: 1.5,
   },
   card: {
     background: "white",
-    padding: "24px",
+    padding: "28px",
     borderRadius: "16px",
     marginBottom: "24px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+    lineHeight: 1.6,
   },
   grid: {
     display: "grid",
@@ -456,28 +552,45 @@ const styles = {
   },
   input: {
     width: "100%",
-    padding: "12px",
+    padding: "13px",
     marginTop: "8px",
     borderRadius: "10px",
-    border: "1px solid #d0d5dd",
+    border: "1px solid #cbd5e1",
     fontSize: "16px",
+    boxSizing: "border-box",
   },
-  buttons: { display: "flex", gap: "12px", marginTop: "24px" },
+  buttons: {
+    display: "flex",
+    gap: "12px",
+    marginTop: "24px",
+    flexWrap: "wrap",
+  },
   primaryButton: {
-    background: "#002b66",
+    background: "#111827",
     color: "white",
     border: "none",
     padding: "12px 20px",
     borderRadius: "10px",
     cursor: "pointer",
+    fontWeight: "bold",
   },
   secondaryButton: {
     background: "white",
-    color: "#002b66",
-    border: "1px solid #002b66",
+    color: "#111827",
+    border: "1px solid #111827",
     padding: "12px 20px",
     borderRadius: "10px",
     cursor: "pointer",
+    fontWeight: "bold",
+  },
+  goldButton: {
+    background: "#8a6a2f",
+    color: "white",
+    border: "none",
+    padding: "12px 20px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
   summaryGrid: {
     display: "grid",
@@ -494,6 +607,25 @@ const styles = {
   table: {
     width: "100%",
     borderCollapse: "collapse",
+  },
+  mapButton: {
+    display: "inline-block",
+    margin: "14px 0",
+    background: "#111827",
+    color: "white",
+    padding: "12px 16px",
+    borderRadius: "10px",
+    textDecoration: "none",
+    fontWeight: "bold",
+  },
+  map: {
+    border: "0",
+    borderRadius: "16px",
+    marginTop: "14px",
+  },
+  link: {
+    color: "#111827",
+    fontWeight: "bold",
   },
 };
 
