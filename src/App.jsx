@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-function App() {
+export default function App() {
   const [pagina, setPagina] = useState("inicio");
 
   const [monto, setMonto] = useState("250000");
@@ -12,7 +12,7 @@ function App() {
   const [tipo, setTipo] = useState("frances");
   const [correoCliente, setCorreoCliente] = useState("");
 
-  const EMPRESA = {
+  const empresa = {
     nombre: "TRISAL",
     telefono: "8441029900",
     telefonoVisible: "844-102-9900",
@@ -20,18 +20,18 @@ function App() {
     direccion: "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
   };
 
-  const n = (valor) => Number(valor || 0);
+  const numero = (valor) => Number(valor || 0);
 
   const formato = (valor) =>
-    n(valor).toLocaleString("es-MX", {
+    numero(valor).toLocaleString("es-MX", {
       style: "currency",
       currency: "MXN",
     });
 
-  const calcularTabla = () => {
-    const montoNum = n(monto);
-    const tasaMensual = n(tasa) / 100 / 12;
-    const meses = n(plazo);
+  function calcularTabla() {
+    const montoNum = numero(monto);
+    const tasaMensual = numero(tasa) / 100 / 12;
+    const meses = numero(plazo);
     let saldo = montoNum;
     const tabla = [];
 
@@ -84,115 +84,121 @@ function App() {
     }
 
     return tabla;
-  };
+  }
 
   const tabla = calcularTabla();
+  const totalInteres = tabla.reduce((acc, fila) => acc + fila.interes, 0);
+  const totalPago = tabla.reduce((acc, fila) => acc + fila.pago, 0);
 
-  const totalInteres = tabla.reduce((acc, r) => acc + r.interes, 0);
-  const totalPago = tabla.reduce((acc, r) => acc + r.pago, 0);
-
-  const exportarExcel = () => {
+  function exportarExcel() {
     const libro = XLSX.utils.book_new();
 
     const resumen = [
-      ["Empresa", EMPRESA.nombre],
-      ["Teléfono", EMPRESA.telefonoVisible],
-      ["Correo", EMPRESA.correo],
-      ["Dirección", EMPRESA.direccion],
-      ["Monto solicitado", n(monto)],
-      ["Tasa anual", `${tasa}%`],
-      ["Plazo", `${plazo} meses`],
+      ["Empresa", empresa.nombre],
+      ["Teléfono", empresa.telefonoVisible],
+      ["Correo", empresa.correo],
+      ["Dirección", empresa.direccion],
+      ["Monto solicitado", numero(monto)],
+      ["Tasa anual", tasa + "%"],
+      ["Plazo", plazo + " meses"],
       ["Tipo de amortización", tipo],
       ["Pago estimado", tabla[0]?.pago || 0],
       ["Total intereses", totalInteres],
       ["Total pagado", totalPago],
     ];
 
-    const detalle = tabla.map((r) => ({
-      Periodo: r.periodo,
-      "Saldo inicial": r.saldoInicial,
-      Pago: r.pago,
-      Interés: r.interes,
-      Capital: r.capital,
-      "Saldo final": r.saldo,
+    const detalle = tabla.map((fila) => ({
+      Periodo: fila.periodo,
+      "Saldo inicial": fila.saldoInicial,
+      Pago: fila.pago,
+      Interes: fila.interes,
+      Capital: fila.capital,
+      "Saldo final": fila.saldo,
     }));
 
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(detalle), "Amortización");
-    XLSX.writeFile(libro, "cotizacion_trisal.xlsx");
-  };
+    XLSX.utils.book_append_sheet(
+      libro,
+      XLSX.utils.aoa_to_sheet(resumen),
+      "Resumen"
+    );
 
-  const generarPDF = () => {
+    XLSX.utils.book_append_sheet(
+      libro,
+      XLSX.utils.json_to_sheet(detalle),
+      "Amortizacion"
+    );
+
+    XLSX.writeFile(libro, "cotizacion_trisal.xlsx");
+  }
+
+  function generarPDF() {
     const doc = new jsPDF();
 
     doc.setFontSize(18);
     doc.text("Cotización de Crédito TRISAL", 14, 18);
 
     doc.setFontSize(10);
-    doc.text(`Teléfono: ${EMPRESA.telefonoVisible}`, 14, 28);
-    doc.text(`Correo: ${EMPRESA.correo}`, 14, 34);
-    doc.text(`Dirección: ${EMPRESA.direccion}`, 14, 40);
+    doc.text("Teléfono: " + empresa.telefonoVisible, 14, 28);
+    doc.text("Correo: " + empresa.correo, 14, 34);
+    doc.text("Dirección: " + empresa.direccion, 14, 40);
 
     doc.setFontSize(11);
-    doc.text(`Monto solicitado: ${formato(monto)}`, 14, 52);
-    doc.text(`Tasa anual: ${tasa}%`, 14, 59);
-    doc.text(`Plazo: ${plazo} meses`, 14, 66);
-    doc.text(`Tipo de amortización: ${tipo}`, 14, 73);
-    doc.text(`Pago estimado: ${formato(tabla[0]?.pago || 0)}`, 14, 80);
+    doc.text("Monto solicitado: " + formato(monto), 14, 52);
+    doc.text("Tasa anual: " + tasa + "%", 14, 59);
+    doc.text("Plazo: " + plazo + " meses", 14, 66);
+    doc.text("Tipo de amortización: " + tipo, 14, 73);
+    doc.text("Pago estimado: " + formato(tabla[0]?.pago || 0), 14, 80);
 
     autoTable(doc, {
       startY: 90,
       head: [["Periodo", "Saldo inicial", "Pago", "Interés", "Capital", "Saldo"]],
-      body: tabla.map((r) => [
-        r.periodo,
-        formato(r.saldoInicial),
-        formato(r.pago),
-        formato(r.interes),
-        formato(r.capital),
-        formato(r.saldo),
+      body: tabla.map((fila) => [
+        fila.periodo,
+        formato(fila.saldoInicial),
+        formato(fila.pago),
+        formato(fila.interes),
+        formato(fila.capital),
+        formato(fila.saldo),
       ]),
     });
 
     doc.save("cotizacion_trisal.pdf");
-  };
+  }
 
-  const enviarCotizacion = () => {
+  function enviarCotizacion() {
     if (!correoCliente) {
       alert("Escribe el correo del cliente.");
       return;
     }
 
-    alert(
-      "Para enviar PDF y Excel por correo automáticamente necesitamos configurar backend con Vercel + Resend o SendGrid. Por ahora puedes descargar los archivos."
-    );
-  };
+    alert("Por ahora puedes descargar el PDF y Excel. El envío automático requiere backend.");
+  }
 
   return (
     <div style={styles.page}>
       <nav style={styles.nav}>
         <button onClick={() => setPagina("inicio")} style={styles.logoButton}>
-          <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.navLogo} />
+          <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.logo} />
         </button>
 
-        <div style={styles.navLinks}>
-          <button onClick={() => setPagina("inicio")} style={navStyle(pagina === "inicio")}>Inicio</button>
-          <button onClick={() => setPagina("servicios")} style={navStyle(pagina === "servicios")}>Servicios</button>
-          <button onClick={() => setPagina("productos")} style={navStyle(pagina === "productos")}>Productos</button>
-          <button onClick={() => setPagina("ubicacion")} style={navStyle(pagina === "ubicacion")}>Ubicación</button>
-          <button onClick={() => setPagina("contacto")} style={navStyle(pagina === "contacto")}>Contacto</button>
-          <button onClick={() => setPagina("simulador")} style={styles.navButton}>Simula tu crédito</button>
+        <div style={styles.menu}>
+          <button onClick={() => setPagina("inicio")} style={botonMenu(pagina === "inicio")}>Inicio</button>
+          <button onClick={() => setPagina("servicios")} style={botonMenu(pagina === "servicios")}>Servicios</button>
+          <button onClick={() => setPagina("productos")} style={botonMenu(pagina === "productos")}>Productos</button>
+          <button onClick={() => setPagina("ubicacion")} style={botonMenu(pagina === "ubicacion")}>Ubicación</button>
+          <button onClick={() => setPagina("contacto")} style={botonMenu(pagina === "contacto")}>Contacto</button>
+          <button onClick={() => setPagina("simulador")} style={styles.botonDorado}>Simula tu crédito</button>
         </div>
       </nav>
 
       <main style={styles.main}>
         {pagina === "inicio" && (
-          <div style={styles.hero}>
+          <section style={styles.hero}>
             <div>
               <p style={styles.kicker}>SOFOM · Norte de México</p>
               <h1 style={styles.heroTitle}>Financiamiento serio para proyectos productivos.</h1>
               <p style={styles.heroText}>
-                Soluciones de crédito para empresas, productores y negocios que buscan crecer
-                con estructura, claridad y acompañamiento financiero.
+                Soluciones de crédito para empresas, productores y negocios que buscan crecer con estructura y claridad.
               </p>
               <button onClick={() => setPagina("simulador")} style={styles.cta}>
                 Simula tu crédito
@@ -200,34 +206,34 @@ function App() {
             </div>
 
             <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.heroLogo} />
-          </div>
+          </section>
         )}
 
         {pagina === "servicios" && (
-          <Page title="Servicios">
-            <div style={styles.cards3}>
-              <InfoCard title="Análisis de crédito" text="Evaluamos capacidad de pago, flujo, garantías y destino del financiamiento." />
-              <InfoCard title="Estructuración financiera" text="Diseñamos pagos, plazos y condiciones según cada cliente." />
-              <InfoCard title="Acompañamiento" text="Atención durante solicitud, autorización, disposición y seguimiento." />
+          <Pagina titulo="Servicios">
+            <div style={styles.cards}>
+              <Tarjeta titulo="Análisis de crédito" texto="Evaluamos capacidad de pago, flujo, garantías y destino del financiamiento." />
+              <Tarjeta titulo="Estructuración financiera" texto="Diseñamos pagos, plazos y condiciones según cada cliente." />
+              <Tarjeta titulo="Acompañamiento" texto="Atención durante solicitud, autorización, disposición y seguimiento." />
             </div>
-          </Page>
+          </Pagina>
         )}
 
         {pagina === "productos" && (
-          <Page title="Productos">
-            <div style={styles.cards3}>
-              <InfoCard title="Crédito simple" text="Capital para operación, inversión, inventario o crecimiento." />
-              <InfoCard title="Crédito agropecuario" text="Financiamiento para productores, ranchos, maquinaria e insumos." />
-              <InfoCard title="Crédito empresarial" text="Soluciones para PyMEs, comercio, transporte y servicios." />
-              <InfoCard title="Fideicomisos" text="Estructuras para administración, garantía y protección patrimonial." />
+          <Pagina titulo="Productos">
+            <div style={styles.cards}>
+              <Tarjeta titulo="Crédito simple" texto="Capital para operación, inversión, inventario o crecimiento." />
+              <Tarjeta titulo="Crédito agropecuario" texto="Financiamiento para productores, ranchos, maquinaria e insumos." />
+              <Tarjeta titulo="Crédito empresarial" texto="Soluciones para PyMEs, comercio, transporte y servicios." />
+              <Tarjeta titulo="Fideicomisos" texto="Estructuras para administración, garantía y protección patrimonial." />
             </div>
-          </Page>
+          </Pagina>
         )}
 
         {pagina === "ubicacion" && (
-          <Page title="Ubicación">
+          <Pagina titulo="Ubicación">
             <div style={styles.card}>
-              <p><b>Dirección:</b> {EMPRESA.direccion}</p>
+              <p><b>Dirección:</b> {empresa.direccion}</p>
               <p><b>Horario:</b> Lunes a viernes de 9:00 AM a 5:00 PM</p>
 
               <a
@@ -246,25 +252,25 @@ function App() {
                 height="360"
                 style={styles.map}
                 loading="lazy"
-              />
+              ></iframe>
             </div>
-          </Page>
+          </Pagina>
         )}
 
         {pagina === "contacto" && (
-          <Page title="Contacto">
+          <Pagina titulo="Contacto">
             <div style={styles.card}>
               <p>
                 <b>Teléfono:</b>{" "}
-                <a href={`tel:${EMPRESA.telefono}`} style={styles.link}>
-                  {EMPRESA.telefonoVisible}
+                <a href={"tel:" + empresa.telefono} style={styles.link}>
+                  {empresa.telefonoVisible}
                 </a>
               </p>
 
               <p>
                 <b>WhatsApp:</b>{" "}
                 <a
-                  href={`https://wa.me/52${EMPRESA.telefono}?text=Hola,%20quiero%20información%20sobre%20un%20crédito.`}
+                  href={"https://wa.me/52" + empresa.telefono + "?text=Hola,%20quiero%20información%20sobre%20un%20crédito."}
                   target="_blank"
                   rel="noreferrer"
                   style={styles.link}
@@ -275,19 +281,16 @@ function App() {
 
               <p>
                 <b>Correo:</b>{" "}
-                <a
-                  href={`mailto:${EMPRESA.correo}?subject=Solicitud%20de%20información%20de%20crédito`}
-                  style={styles.link}
-                >
-                  {EMPRESA.correo}
+                <a href={"mailto:" + empresa.correo} style={styles.link}>
+                  {empresa.correo}
                 </a>
               </p>
             </div>
-          </Page>
+          </Pagina>
         )}
 
         {pagina === "simulador" && (
-          <Page title="Simula tu crédito">
+          <Pagina titulo="Simula tu crédito">
             <section style={styles.card}>
               <h3>Parámetros del crédito</h3>
 
@@ -307,27 +310,22 @@ function App() {
               </div>
             </section>
 
-            <section style={styles.summaryGrid}>
-              <MetricCard title="Pago mensual estimado" value={formato(tabla[0]?.pago || 0)} />
-              <MetricCard title="Total intereses" value={formato(totalInteres)} />
-              <MetricCard title="Total pagado" value={formato(totalPago)} />
+            <section style={styles.resumen}>
+              <Metrica titulo="Pago mensual estimado" valor={formato(tabla[0]?.pago || 0)} />
+              <Metrica titulo="Total intereses" valor={formato(totalInteres)} />
+              <Metrica titulo="Total pagado" valor={formato(totalPago)} />
             </section>
 
             <section style={styles.card}>
               <h3>Exportar o enviar cotización</h3>
 
-              <div style={styles.grid}>
-                <div>
-                  <label>Correo del cliente</label>
-                  <input
-                    type="email"
-                    value={correoCliente}
-                    onChange={(e) => setCorreoCliente(e.target.value)}
-                    placeholder="cliente@correo.com"
-                    style={styles.input}
-                  />
-                </div>
-              </div>
+              <input
+                type="email"
+                value={correoCliente}
+                onChange={(e) => setCorreoCliente(e.target.value)}
+                placeholder="cliente@correo.com"
+                style={styles.input}
+              />
 
               <div style={styles.buttons}>
                 <button onClick={exportarExcel} style={styles.primaryButton}>Descargar Excel</button>
@@ -353,41 +351,41 @@ function App() {
                   </thead>
 
                   <tbody>
-                    {tabla.map((r) => (
-                      <tr key={r.periodo}>
-                        <td>{r.periodo}</td>
-                        <td>{formato(r.saldoInicial)}</td>
-                        <td>{formato(r.pago)}</td>
-                        <td>{formato(r.interes)}</td>
-                        <td>{formato(r.capital)}</td>
-                        <td>{formato(r.saldo)}</td>
+                    {tabla.map((fila) => (
+                      <tr key={fila.periodo}>
+                        <td>{fila.periodo}</td>
+                        <td>{formato(fila.saldoInicial)}</td>
+                        <td>{formato(fila.pago)}</td>
+                        <td>{formato(fila.interes)}</td>
+                        <td>{formato(fila.capital)}</td>
+                        <td>{formato(fila.saldo)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </section>
-          </Page>
+          </Pagina>
         )}
       </main>
     </div>
   );
 }
 
-function Page({ title, children }) {
+function Pagina({ titulo, children }) {
   return (
     <div>
-      <h2 style={styles.sectionTitle}>{title}</h2>
+      <h2 style={styles.sectionTitle}>{titulo}</h2>
       {children}
     </div>
   );
 }
 
-function InfoCard({ title, text }) {
+function Tarjeta({ titulo, texto }) {
   return (
     <div style={styles.infoCard}>
-      <h3>{title}</h3>
-      <p>{text}</p>
+      <h3>{titulo}</h3>
+      <p>{texto}</p>
     </div>
   );
 }
@@ -406,19 +404,19 @@ function Input({ label, value, setValue }) {
   );
 }
 
-function MetricCard({ title, value }) {
+function Metrica({ titulo, valor }) {
   return (
     <div style={styles.metricCard}>
-      <p>{title}</p>
-      <h3>{value}</h3>
+      <p>{titulo}</p>
+      <h3>{valor}</h3>
     </div>
   );
 }
 
-function navStyle(active) {
+function botonMenu(activo) {
   return {
-    background: active ? "#111827" : "transparent",
-    color: active ? "white" : "#111827",
+    background: activo ? "#111827" : "transparent",
+    color: activo ? "white" : "#111827",
     border: "none",
     padding: "12px 15px",
     borderRadius: "10px",
@@ -446,23 +444,22 @@ const styles = {
     gap: "18px",
     padding: "16px 36px",
     boxShadow: "0 4px 18px rgba(0,0,0,0.08)",
-    borderBottom: "1px solid #e5e7eb",
   },
   logoButton: {
     border: "none",
     background: "transparent",
     cursor: "pointer",
   },
-  navLogo: {
+  logo: {
     width: "115px",
   },
-  navLinks: {
+  menu: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
     flexWrap: "wrap",
   },
-  navButton: {
+  botonDorado: {
     background: "#8a6a2f",
     color: "white",
     border: "none",
@@ -487,18 +484,15 @@ const styles = {
   kicker: {
     color: "#8a6a2f",
     fontWeight: "bold",
-    letterSpacing: "0.08em",
   },
   heroTitle: {
     fontSize: "48px",
     lineHeight: "1.05",
-    margin: "12px 0",
     color: "#111827",
   },
   heroText: {
     fontSize: "18px",
     color: "#4b5563",
-    maxWidth: "720px",
     lineHeight: 1.6,
   },
   cta: {
@@ -524,7 +518,7 @@ const styles = {
     fontSize: "38px",
     marginBottom: "24px",
   },
-  cards3: {
+  cards: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: "20px",
@@ -535,7 +529,6 @@ const styles = {
     borderRadius: "16px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
     borderTop: "5px solid #8a6a2f",
-    lineHeight: 1.5,
   },
   card: {
     background: "white",
@@ -543,7 +536,6 @@ const styles = {
     borderRadius: "16px",
     marginBottom: "24px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-    lineHeight: 1.6,
   },
   grid: {
     display: "grid",
@@ -558,6 +550,18 @@ const styles = {
     border: "1px solid #cbd5e1",
     fontSize: "16px",
     boxSizing: "border-box",
+  },
+  resumen: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "20px",
+    marginBottom: "24px",
+  },
+  metricCard: {
+    background: "white",
+    padding: "22px",
+    borderRadius: "16px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
   },
   buttons: {
     display: "flex",
@@ -592,18 +596,6 @@ const styles = {
     cursor: "pointer",
     fontWeight: "bold",
   },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "20px",
-    marginBottom: "24px",
-  },
-  metricCard: {
-    background: "white",
-    padding: "22px",
-    borderRadius: "16px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-  },
   table: {
     width: "100%",
     borderCollapse: "collapse",
@@ -628,5 +620,3 @@ const styles = {
     fontWeight: "bold",
   },
 };
-
-export default App;
