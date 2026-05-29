@@ -6,11 +6,14 @@ import autoTable from "jspdf-autotable";
 export default function App() {
   const [pagina, setPagina] = useState("inicio");
 
-  const [monto, setMonto] = useState("250000");
-  const [tasa, setTasa] = useState("18");
-  const [plazo, setPlazo] = useState("24");
+  const [monto, setMonto] = useState("10000");
+  const [tasa, setTasa] = useState("49");
+  const [plazo, setPlazo] = useState("6");
   const [tipo, setTipo] = useState("frances");
   const [correoCliente, setCorreoCliente] = useState("");
+
+  const comisionApertura = 3;
+  const iva = 0.16;
 
   const empresa = {
     razonSocial: "FDG5 SERVICIOS, S.A. DE C.V. SOFOM ENR",
@@ -19,8 +22,8 @@ export default function App() {
     telefonoVisible: "844-102-9900",
     correo: "contactofdg5@gmail.com",
     direccion: "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
-    uneTelefono: "844-102-9900",
-    uneCorreo: "contactofdg5@gmail.com",
+    uneTelefono: "TELÉFONO UNE PENDIENTE",
+    uneCorreo: "CORREO UNE PENDIENTE",
   };
 
   const fechaCalculo = new Date().toLocaleDateString("es-MX");
@@ -92,14 +95,16 @@ export default function App() {
   }
 
   const tabla = calcularTabla();
-  const totalInteres = tabla.reduce((acc, fila) => acc + fila.interes, 0);
-  const totalPago = tabla.reduce((acc, fila) => acc + fila.pago, 0);
 
   function calcularCAT() {
     const montoNum = numero(monto);
     if (!tabla.length || montoNum <= 0) return 0;
 
-    const flujos = [montoNum, ...tabla.map((fila) => -fila.pago)];
+    const comisionAperturaMonto = montoNum * (comisionApertura / 100);
+    const ivaComision = comisionAperturaMonto * iva;
+    const montoNetoCliente = montoNum - comisionAperturaMonto - ivaComision;
+
+    const flujos = [montoNetoCliente, ...tabla.map((fila) => -fila.pago)];
 
     let bajo = 0;
     let alto = 1;
@@ -110,8 +115,13 @@ export default function App() {
       }, 0);
     }
 
-    for (let i = 0; i < 80; i++) {
+    while (vpn(alto) > 0 && alto < 10) {
+      alto = alto * 2;
+    }
+
+    for (let i = 0; i < 100; i++) {
       const medio = (bajo + alto) / 2;
+
       if (vpn(medio) > 0) {
         bajo = medio;
       } else {
@@ -136,13 +146,12 @@ export default function App() {
       ["Dirección", empresa.direccion],
       ["Monto solicitado", numero(monto)],
       ["Tasa anual fija", tasa + "%"],
+      ["Comisión por apertura", comisionApertura + "% + IVA"],
       ["CAT estimado", catEstimado.toFixed(2) + "%"],
       ["Fecha de cálculo CAT", fechaCalculo],
       ["Plazo", plazo + " meses"],
       ["Tipo de amortización", tipo],
       ["Pago estimado", tabla[0]?.pago || 0],
-      ["Total intereses", totalInteres],
-      ["Total pagado", totalPago],
     ];
 
     const detalle = tabla.map((fila) => ({
@@ -174,13 +183,14 @@ export default function App() {
     doc.setFontSize(11);
     doc.text("Monto solicitado: " + formato(monto), 14, 58);
     doc.text("Tasa anual fija: " + tasa + "%", 14, 65);
-    doc.text("CAT estimado: " + catEstimado.toFixed(2) + "%", 14, 72);
-    doc.text("Fecha de cálculo: " + fechaCalculo, 14, 79);
-    doc.text("Plazo: " + plazo + " meses", 14, 86);
-    doc.text("Pago estimado: " + formato(tabla[0]?.pago || 0), 14, 93);
+    doc.text("Comisión por apertura: " + comisionApertura + "% + IVA", 14, 72);
+    doc.text("CAT estimado: " + catEstimado.toFixed(2) + "%", 14, 79);
+    doc.text("Fecha de cálculo: " + fechaCalculo, 14, 86);
+    doc.text("Plazo: " + plazo + " meses", 14, 93);
+    doc.text("Pago estimado: " + formato(tabla[0]?.pago || 0), 14, 100);
 
     autoTable(doc, {
-      startY: 102,
+      startY: 108,
       head: [["Periodo", "Saldo inicial", "Pago", "Interés", "Capital", "Saldo"]],
       body: tabla.map((fila) => [
         fila.periodo,
@@ -255,7 +265,7 @@ export default function App() {
             <div style={styles.cards}>
               <Tarjeta
                 titulo="Crédito simple"
-                texto={`Tasa de interés fija. CAT estimado calculado al ${fechaCalculo}. Requisitos sujetos a evaluación. Incumplir tus obligaciones te puede generar comisiones e intereses moratorios. Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.`}
+                texto={`Tasa de interés fija. CAT estimado calculado al ${fechaCalculo}. Comisión por apertura de ${comisionApertura}% más IVA. Requisitos sujetos a evaluación.`}
               />
               <Tarjeta
                 titulo="Fideicomiso"
@@ -271,7 +281,7 @@ export default function App() {
                 <li>El avalista, obligado solidario o coacreditado responderá como obligado principal por el total del pago frente a la Entidad Financiera.</li>
               </ul>
               <p><b>Tasa:</b> fija.</p>
-              <p><b>Comisiones:</b> sujetas al producto contratado y a la carátula correspondiente.</p>
+              <p><b>Comisiones:</b> comisión por apertura de {comisionApertura}% más IVA, sujeta a autorización y condiciones finales.</p>
               <p><b>Requisitos de contratación:</b> pendientes de integrar con la información que nos proporciones.</p>
             </div>
           </Pagina>
@@ -318,8 +328,6 @@ export default function App() {
                 </a>
               </p>
               <p><b>Correo:</b> <a href={"mailto:" + empresa.correo} style={styles.link}>{empresa.correo}</a></p>
-              <hr />
-              <p><b>UNE:</b> {empresa.uneTelefono} · {empresa.uneCorreo}</p>
             </div>
           </Pagina>
         )}
@@ -338,7 +346,7 @@ export default function App() {
               <p><b>Buró de Entidades Financieras:</b> <a href="http://www.buro.gob.mx" target="_blank" rel="noreferrer" style={styles.link}>www.buro.gob.mx</a></p>
 
               <div style={styles.buroBox}>
-                <b>Buró de Entidades Financieras</b>
+                Buró de Entidades Financieras
               </div>
 
               <p>
@@ -402,14 +410,13 @@ export default function App() {
             <section style={styles.resumen}>
               <Metrica titulo="Pago mensual estimado" valor={formato(tabla[0]?.pago || 0)} />
               <Metrica titulo="CAT estimado" valor={catEstimado.toFixed(2) + "%"} />
-              <Metrica titulo="Total intereses" valor={formato(totalInteres)} />
-              <Metrica titulo="Total pagado" valor={formato(totalPago)} />
             </section>
 
             <section style={styles.card}>
               <p>
                 CAT estimado para fines informativos y de comparación. Fecha de cálculo: {fechaCalculo}.
-                Tasa de interés fija. El resultado puede variar conforme al monto, plazo y condiciones finales.
+                Tasa de interés fija. Comisión por apertura considerada: {comisionApertura}% más IVA.
+                El resultado puede variar conforme al monto, plazo y condiciones finales.
               </p>
               <p><b>Advertencia:</b> Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</p>
             </section>
