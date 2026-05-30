@@ -409,14 +409,13 @@ export default function App() {
 
             <section style={styles.resumen}>
               <Metrica titulo="Pago mensual estimado" valor={formato(tabla[0]?.pago || 0)} />
-              <Metrica titulo="CAT estimado" valor={catEstimado.toFixed(2) + "%"} />
             </section>
 
             <section style={styles.card}>
               <p>
-                CAT estimado para fines informativos y de comparación. Fecha de cálculo: {fechaCalculo}.
-                Tasa de interés fija. Comisión por apertura considerada: {comisionApertura}% más IVA.
-                El resultado puede variar conforme al monto, plazo y condiciones finales.
+                CAT estimado para fines informativos y de comparación: {catEstimado.toFixed(2)}%.
+                Fecha de cálculo: {fechaCalculo}. Tasa de interés fija. Comisión por apertura considerada:
+                {comisionApertura}% más IVA. El resultado puede variar conforme al monto, plazo y condiciones finales.
               </p>
               <p><b>Advertencia:</b> Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</p>
             </section>
