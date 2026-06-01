@@ -425,8 +425,7 @@ export default function App() {
 
             <section className="card slideUp delay2">
               <p>
-                CAT estimado para fines informativos y de comparación: {catEstimado.toFixed(2)}%.
-                Fecha de cálculo: {fechaCalculo}. Tasa de interés fija. Comisión por apertura considerada:
+                Tasa de interés fija. Comisión por apertura considerada:
                 {comisionApertura}% más IVA.
               </p>
               <p><b>Advertencia:</b> Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</p>
