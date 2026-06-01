@@ -5,6 +5,7 @@ import autoTable from "jspdf-autotable";
 
 export default function App() {
   const [pagina, setPagina] = useState("inicio");
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   const [monto, setMonto] = useState("10000");
   const [tasa, setTasa] = useState("49");
@@ -35,6 +36,12 @@ export default function App() {
       style: "currency",
       currency: "MXN",
     });
+
+  function cambiarPagina(nuevaPagina) {
+    setPagina(nuevaPagina);
+    setMenuAbierto(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function calcularTabla() {
     const montoNum = numero(monto);
@@ -215,44 +222,52 @@ export default function App() {
   }
 
   return (
-    <div style={styles.page}>
-      <nav style={styles.nav}>
-        <button onClick={() => setPagina("inicio")} style={styles.logoButton}>
-          <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.logo} />
+    <div className="page">
+      <style>{css}</style>
+
+      <nav className="nav">
+        <button onClick={() => cambiarPagina("inicio")} className="logoButton">
+          <img src="/logo-trisal.jpeg" alt="TRISAL" className="logo" />
         </button>
 
-        <div style={styles.menu}>
-          <button onClick={() => setPagina("inicio")} style={botonMenu(pagina === "inicio")}>Inicio</button>
-          <button onClick={() => setPagina("servicios")} style={botonMenu(pagina === "servicios")}>Servicios</button>
-          <button onClick={() => setPagina("productos")} style={botonMenu(pagina === "productos")}>Productos</button>
-          <button onClick={() => setPagina("ubicacion")} style={botonMenu(pagina === "ubicacion")}>Ubicación</button>
-          <button onClick={() => setPagina("contacto")} style={botonMenu(pagina === "contacto")}>Contacto</button>
-          <button onClick={() => setPagina("normatividad")} style={botonMenu(pagina === "normatividad")}>Normatividad</button>
-          <button onClick={() => setPagina("privacidad")} style={botonMenu(pagina === "privacidad")}>Privacidad</button>
-          <button onClick={() => setPagina("simulador")} style={styles.botonDorado}>Simula tu crédito</button>
+        <button onClick={() => setMenuAbierto(!menuAbierto)} className="mobileMenuButton">
+          {menuAbierto ? "Cerrar" : "Menú"}
+        </button>
+
+        <div className={menuAbierto ? "menu menuOpen" : "menu"}>
+          <MenuButton texto="Inicio" activo={pagina === "inicio"} onClick={() => cambiarPagina("inicio")} />
+          <MenuButton texto="Servicios" activo={pagina === "servicios"} onClick={() => cambiarPagina("servicios")} />
+          <MenuButton texto="Productos" activo={pagina === "productos"} onClick={() => cambiarPagina("productos")} />
+          <MenuButton texto="Ubicación" activo={pagina === "ubicacion"} onClick={() => cambiarPagina("ubicacion")} />
+          <MenuButton texto="Contacto" activo={pagina === "contacto"} onClick={() => cambiarPagina("contacto")} />
+          <MenuButton texto="Normatividad" activo={pagina === "normatividad"} onClick={() => cambiarPagina("normatividad")} />
+          <MenuButton texto="Privacidad" activo={pagina === "privacidad"} onClick={() => cambiarPagina("privacidad")} />
+          <button onClick={() => cambiarPagina("simulador")} className="goldButton">
+            Simula tu crédito
+          </button>
         </div>
       </nav>
 
-      <main style={styles.main}>
+      <main className="main">
         {pagina === "inicio" && (
-          <section style={styles.hero}>
-            <div>
-              <p style={styles.kicker}>SOFOM ENR · Norte de México</p>
-              <h1 style={styles.heroTitle}>Financiamiento serio para proyectos productivos.</h1>
-              <p style={styles.heroText}>
+          <section className="hero animatedPage">
+            <div className="slideUp">
+              <p className="kicker">SOFOM ENR · Norte de México</p>
+              <h1 className="heroTitle">Financiamiento serio para proyectos productivos.</h1>
+              <p className="heroText">
                 Soluciones de crédito y estructuras fiduciarias para empresas, productores y negocios.
               </p>
-              <button onClick={() => setPagina("simulador")} style={styles.cta}>
+              <button onClick={() => cambiarPagina("simulador")} className="cta">
                 Simula tu crédito
               </button>
             </div>
-            <img src="/logo-trisal.jpeg" alt="TRISAL" style={styles.heroLogo} />
+            <img src="/logo-trisal.jpeg" alt="TRISAL" className="heroLogo slideUp delay1" />
           </section>
         )}
 
         {pagina === "servicios" && (
           <Pagina titulo="Servicios">
-            <div style={styles.cards}>
+            <div className="cards">
               <Tarjeta titulo="Análisis de crédito" texto="Evaluamos capacidad de pago, flujo, garantías y destino del financiamiento." />
               <Tarjeta titulo="Estructuración financiera" texto="Diseñamos pagos, plazos y condiciones según cada cliente." />
               <Tarjeta titulo="Acompañamiento" texto="Atención durante solicitud, autorización, disposición y seguimiento." />
@@ -262,7 +277,7 @@ export default function App() {
 
         {pagina === "productos" && (
           <Pagina titulo="Productos">
-            <div style={styles.cards}>
+            <div className="cards">
               <Tarjeta
                 titulo="Crédito simple"
                 texto={`Tasa de interés fija. CAT estimado calculado al ${fechaCalculo}. Comisión por apertura de ${comisionApertura}% más IVA. Requisitos sujetos a evaluación.`}
@@ -273,7 +288,7 @@ export default function App() {
               />
             </div>
 
-            <div style={styles.card}>
+            <div className="card advertenciasCard slideUp delay2">
               <h3>Advertencias aplicables</h3>
               <ul>
                 <li>Incumplir tus obligaciones te puede generar comisiones e intereses moratorios.</li>
@@ -289,14 +304,14 @@ export default function App() {
 
         {pagina === "ubicacion" && (
           <Pagina titulo="Ubicación">
-            <div style={styles.card}>
+            <div className="card slideUp">
               <p><b>Dirección:</b> {empresa.direccion}</p>
               <p><b>Horario:</b> Lunes a viernes de 9:00 AM a 5:00 PM</p>
               <a
                 href="https://www.google.com/maps/search/?api=1&query=Paseo+del+Valle+310+San+Patricio+Saltillo+Coahuila"
                 target="_blank"
                 rel="noreferrer"
-                style={styles.mapButton}
+                className="mapButton"
               >
                 Abrir ubicación en Google Maps
               </a>
@@ -305,7 +320,7 @@ export default function App() {
                 src="https://www.google.com/maps?q=Paseo%20del%20Valle%20310%20San%20Patricio%20Saltillo%20Coahuila&output=embed"
                 width="100%"
                 height="360"
-                style={styles.map}
+                className="map"
                 loading="lazy"
               ></iframe>
             </div>
@@ -314,54 +329,51 @@ export default function App() {
 
         {pagina === "contacto" && (
           <Pagina titulo="Contacto">
-            <div style={styles.card}>
-              <p><b>Teléfono:</b> <a href={"tel:" + empresa.telefono} style={styles.link}>{empresa.telefonoVisible}</a></p>
+            <div className="card slideUp">
+              <p><b>Teléfono:</b> <a href={"tel:" + empresa.telefono} className="link">{empresa.telefonoVisible}</a></p>
               <p>
                 <b>WhatsApp:</b>{" "}
                 <a
                   href={"https://wa.me/52" + empresa.telefono + "?text=Hola,%20quiero%20información%20sobre%20un%20crédito."}
                   target="_blank"
                   rel="noreferrer"
-                  style={styles.link}
+                  className="link"
                 >
                   Enviar mensaje por WhatsApp
                 </a>
               </p>
-              <p><b>Correo:</b> <a href={"mailto:" + empresa.correo} style={styles.link}>{empresa.correo}</a></p>
+              <p><b>Correo:</b> <a href={"mailto:" + empresa.correo} className="link">{empresa.correo}</a></p>
             </div>
           </Pagina>
         )}
 
         {pagina === "normatividad" && (
           <Pagina titulo="Normatividad y transparencia">
-            <div style={styles.card}>
+            <div className="card slideUp">
               <h3>Unidad Especializada de Atención a Usuarios</h3>
               <p><b>Teléfono UNE:</b> {empresa.uneTelefono}</p>
               <p><b>Correo UNE:</b> {empresa.uneCorreo}</p>
             </div>
 
-            <div style={styles.card}>
+            <div className="card slideUp delay1">
               <h3>CONDUSEF y Buró de Entidades Financieras</h3>
-              <p><b>CONDUSEF:</b> <a href="https://www.condusef.gob.mx/" target="_blank" rel="noreferrer" style={styles.link}>www.condusef.gob.mx</a></p>
-              <p><b>Buró de Entidades Financieras:</b> <a href="http://www.buro.gob.mx" target="_blank" rel="noreferrer" style={styles.link}>www.buro.gob.mx</a></p>
+              <p><b>CONDUSEF:</b> <a href="https://www.condusef.gob.mx/" target="_blank" rel="noreferrer" className="link">www.condusef.gob.mx</a></p>
+              <p><b>Buró de Entidades Financieras:</b> <a href="http://www.buro.gob.mx" target="_blank" rel="noreferrer" className="link">www.buro.gob.mx</a></p>
 
-              <div style={styles.buroBox}>
-                Buró de Entidades Financieras
-              </div>
+              <div className="buroBox">Buró de Entidades Financieras</div>
 
               <p>
                 El Buró de Entidades Financieras permite conocer información de entidades financieras,
                 productos y servicios, así como comparar y evaluar alternativas. La información mostrada
-                corresponde únicamente a la Entidad Financiera de que se trate; para consultar información
-                del sector correspondiente, accede al sitio oficial.
+                corresponde únicamente a la Entidad Financiera de que se trate.
               </p>
             </div>
 
-            <div style={styles.card}>
+            <div className="card slideUp delay2">
               <h3>Despachos de cobranza</h3>
               <p>
                 Los datos de los despachos de cobranza estarán disponibles para los clientes por medios
-                electrónicos y en sucursales o establecimientos, a fin de que puedan identificarlos y localizarlos.
+                electrónicos y en sucursales o establecimientos.
               </p>
             </div>
           </Pagina>
@@ -369,7 +381,7 @@ export default function App() {
 
         {pagina === "privacidad" && (
           <Pagina titulo="Aviso de privacidad">
-            <div style={styles.card}>
+            <div className="card slideUp">
               <p>
                 {empresa.razonSocial}, con domicilio en {empresa.direccion}, es responsable del tratamiento
                 de los datos personales que recabe para fines de identificación, análisis, evaluación,
@@ -390,15 +402,15 @@ export default function App() {
 
         {pagina === "simulador" && (
           <Pagina titulo="Simula tu crédito">
-            <section style={styles.card}>
+            <section className="card slideUp">
               <h3>Parámetros del crédito</h3>
-              <div style={styles.grid}>
+              <div className="grid">
                 <Input label="Monto solicitado" value={monto} setValue={setMonto} />
                 <Input label="Tasa anual fija (%)" value={tasa} setValue={setTasa} />
                 <Input label="Plazo (meses)" value={plazo} setValue={setPlazo} />
                 <div>
                   <label>Tipo de amortización</label>
-                  <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={styles.input}>
+                  <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="input">
                     <option value="frances">Francés / pago fijo</option>
                     <option value="aleman">Alemán / capital fijo</option>
                     <option value="bullet">Bullet / pago final</option>
@@ -407,38 +419,39 @@ export default function App() {
               </div>
             </section>
 
-            <section style={styles.resumen}>
+            <section className="resumen slideUp delay1">
               <Metrica titulo="Pago mensual estimado" valor={formato(tabla[0]?.pago || 0)} />
             </section>
 
-            <section style={styles.card}>
+            <section className="card slideUp delay2">
               <p>
-                Tasa de interés fija. Comisión por apertura considerada:
-                {comisionApertura}% más IVA. El resultado puede variar conforme al monto, plazo y condiciones finales.
+                CAT estimado para fines informativos y de comparación: {catEstimado.toFixed(2)}%.
+                Fecha de cálculo: {fechaCalculo}. Tasa de interés fija. Comisión por apertura considerada:
+                {comisionApertura}% más IVA.
               </p>
               <p><b>Advertencia:</b> Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</p>
             </section>
 
-            <section style={styles.card}>
+            <section className="card slideUp delay3">
               <h3>Exportar o enviar cotización</h3>
               <input
                 type="email"
                 value={correoCliente}
                 onChange={(e) => setCorreoCliente(e.target.value)}
                 placeholder="cliente@correo.com"
-                style={styles.input}
+                className="input"
               />
-              <div style={styles.buttons}>
-                <button onClick={exportarExcel} style={styles.primaryButton}>Descargar Excel</button>
-                <button onClick={generarPDF} style={styles.secondaryButton}>Descargar PDF</button>
-                <button onClick={enviarCotizacion} style={styles.goldButton}>Enviar por correo</button>
+              <div className="buttons">
+                <button onClick={exportarExcel} className="primaryButton">Descargar Excel</button>
+                <button onClick={generarPDF} className="secondaryButton">Descargar PDF</button>
+                <button onClick={enviarCotizacion} className="goldSmallButton">Enviar por correo</button>
               </div>
             </section>
 
-            <section style={styles.card}>
+            <section className="card slideUp delay4">
               <h3>Tabla de amortización</h3>
               <div style={{ overflowX: "auto" }}>
-                <table style={styles.table}>
+                <table className="table">
                   <thead>
                     <tr>
                       <th>Periodo</th>
@@ -468,7 +481,7 @@ export default function App() {
         )}
       </main>
 
-      <footer style={styles.footer}>
+      <footer className="footer">
         <p>
           Para la constitución y operación de {empresa.razonSocial} con tal carácter,
           no requiere de autorización de la Secretaría de Hacienda y Crédito Público.
@@ -485,16 +498,24 @@ export default function App() {
 
 function Pagina({ titulo, children }) {
   return (
-    <div>
-      <h2 style={styles.sectionTitle}>{titulo}</h2>
+    <div className="animatedPage">
+      <h2 className="sectionTitle slideUp">{titulo}</h2>
       {children}
     </div>
   );
 }
 
+function MenuButton({ texto, activo, onClick }) {
+  return (
+    <button onClick={onClick} className={activo ? "menuButton activeMenuButton" : "menuButton"}>
+      {texto}
+    </button>
+  );
+}
+
 function Tarjeta({ titulo, texto }) {
   return (
-    <div style={styles.infoCard}>
+    <div className="infoCard slideUp">
       <h3>{titulo}</h3>
       <p>{texto}</p>
     </div>
@@ -505,240 +526,458 @@ function Input({ label, value, setValue }) {
   return (
     <div>
       <label>{label}</label>
-      <input type="number" value={value} onChange={(e) => setValue(e.target.value)} style={styles.input} />
+      <input type="number" value={value} onChange={(e) => setValue(e.target.value)} className="input" />
     </div>
   );
 }
 
 function Metrica({ titulo, valor }) {
   return (
-    <div style={styles.metricCard}>
+    <div className="metricCard">
       <p>{titulo}</p>
       <h3>{valor}</h3>
     </div>
   );
 }
 
-function botonMenu(activo) {
-  return {
-    background: activo ? "#111827" : "transparent",
-    color: activo ? "white" : "#111827",
-    border: "none",
-    padding: "12px 15px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: "700",
-    fontSize: "17px",
-  };
+const css = `
+* {
+  box-sizing: border-box;
 }
 
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#f5f3ef",
-    fontFamily: "Arial, sans-serif",
-    color: "#111827",
-  },
-  nav: {
-    position: "sticky",
-    top: 0,
-    zIndex: 10,
-    background: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "18px",
-    padding: "16px 36px",
-    boxShadow: "0 4px 18px rgba(0,0,0,0.08)",
-  },
-  logoButton: {
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-  },
-  logo: {
-    width: "115px",
-  },
-  menu: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    flexWrap: "wrap",
-  },
-  botonDorado: {
-    background: "#8a6a2f",
-    color: "white",
-    border: "none",
-    padding: "12px 16px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: "700",
-    fontSize: "17px",
-  },
-  main: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "40px 26px 70px",
-  },
-  hero: {
-    minHeight: "72vh",
-    display: "grid",
-    gridTemplateColumns: "1.4fr 0.8fr",
-    gap: "34px",
-    alignItems: "center",
-  },
-  kicker: {
-    color: "#8a6a2f",
-    fontWeight: "bold",
-  },
-  heroTitle: {
-    fontSize: "48px",
-    lineHeight: "1.05",
-    color: "#111827",
-  },
-  heroText: {
-    fontSize: "18px",
-    color: "#4b5563",
-    lineHeight: 1.6,
-  },
-  cta: {
-    marginTop: "18px",
-    background: "#111827",
-    color: "white",
-    padding: "14px 20px",
-    borderRadius: "12px",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: "bold",
-    fontSize: "16px",
-  },
-  heroLogo: {
-    width: "100%",
-    background: "white",
-    padding: "30px",
-    borderRadius: "24px",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.08)",
-  },
-  sectionTitle: {
-    color: "#111827",
-    fontSize: "38px",
-    marginBottom: "24px",
-  },
-  cards: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: "20px",
-  },
-  infoCard: {
-    background: "white",
-    padding: "26px",
-    borderRadius: "16px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-    borderTop: "5px solid #8a6a2f",
-  },
-  card: {
-    background: "white",
-    padding: "28px",
-    borderRadius: "16px",
-    marginBottom: "24px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "20px",
-  },
-  input: {
-    width: "100%",
-    padding: "13px",
-    marginTop: "8px",
-    borderRadius: "10px",
-    border: "1px solid #cbd5e1",
-    fontSize: "16px",
-    boxSizing: "border-box",
-  },
-  resumen: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "20px",
-    marginBottom: "24px",
-  },
-  metricCard: {
-    background: "white",
-    padding: "22px",
-    borderRadius: "16px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-  },
-  buttons: {
-    display: "flex",
-    gap: "12px",
-    marginTop: "24px",
-    flexWrap: "wrap",
-  },
-  primaryButton: {
-    background: "#111827",
-    color: "white",
-    border: "none",
-    padding: "12px 20px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  secondaryButton: {
-    background: "white",
-    color: "#111827",
-    border: "1px solid #111827",
-    padding: "12px 20px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  goldButton: {
-    background: "#8a6a2f",
-    color: "white",
-    border: "none",
-    padding: "12px 20px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  mapButton: {
-    display: "inline-block",
-    margin: "14px 0",
-    background: "#111827",
-    color: "white",
-    padding: "12px 16px",
-    borderRadius: "10px",
-    textDecoration: "none",
-    fontWeight: "bold",
-  },
-  map: {
-    border: "0",
-    borderRadius: "16px",
-    marginTop: "14px",
-  },
-  link: {
-    color: "#111827",
-    fontWeight: "bold",
-  },
-  buroBox: {
-    display: "inline-block",
-    background: "#111827",
-    color: "white",
-    padding: "14px 18px",
-    borderRadius: "12px",
-    margin: "12px 0",
-    fontWeight: "bold",
-  },
-  footer: {
-    background: "#111827",
-    color: "white",
-    padding: "24px 36px",
-    fontSize: "13px",
-    lineHeight: 1.5,
-  },
-};
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  min-height: 100vh;
+  background: #f5f3ef;
+  font-family: Arial, sans-serif;
+  color: #111827;
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 36px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+}
+
+.logoButton {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.logo {
+  width: 115px;
+  display: block;
+}
+
+.menu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mobileMenuButton {
+  display: none;
+  background: #111827;
+  color: white;
+  border: none;
+  padding: 11px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.menuButton {
+  background: transparent;
+  color: #111827;
+  border: none;
+  padding: 12px 15px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 17px;
+  transition: all 0.25s ease;
+}
+
+.menuButton:hover {
+  transform: translateY(-2px);
+  background: #f2f2f2;
+}
+
+.activeMenuButton {
+  background: #111827;
+  color: white;
+}
+
+.goldButton {
+  background: #8a6a2f;
+  color: white;
+  border: none;
+  padding: 12px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 17px;
+  transition: all 0.25s ease;
+}
+
+.goldButton:hover,
+.cta:hover,
+.primaryButton:hover,
+.secondaryButton:hover,
+.goldSmallButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.16);
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 26px 70px;
+}
+
+.animatedPage {
+  animation: pageFade 0.45s ease both;
+}
+
+.slideUp {
+  animation: slideUp 0.7s ease both;
+}
+
+.delay1 {
+  animation-delay: 0.12s;
+}
+
+.delay2 {
+  animation-delay: 0.22s;
+}
+
+.delay3 {
+  animation-delay: 0.32s;
+}
+
+.delay4 {
+  animation-delay: 0.42s;
+}
+
+@keyframes pageFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero {
+  min-height: 72vh;
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  gap: 34px;
+  align-items: center;
+}
+
+.kicker {
+  color: #8a6a2f;
+  font-weight: bold;
+}
+
+.heroTitle {
+  font-size: 48px;
+  line-height: 1.05;
+  color: #111827;
+}
+
+.heroText {
+  font-size: 18px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.cta {
+  margin-top: 18px;
+  background: #111827;
+  color: white;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 16px;
+  transition: all 0.25s ease;
+}
+
+.heroLogo {
+  width: 100%;
+  background: white;
+  padding: 30px;
+  border-radius: 24px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+}
+
+.sectionTitle {
+  color: #111827;
+  font-size: 38px;
+  margin-bottom: 24px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.infoCard {
+  background: white;
+  padding: 26px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  border-top: 5px solid #8a6a2f;
+}
+
+.card {
+  background: white;
+  padding: 28px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.advertenciasCard {
+  margin-top: 42px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.input {
+  width: 100%;
+  padding: 13px;
+  margin-top: 8px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 16px;
+}
+
+.resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.metricCard {
+  background: white;
+  padding: 22px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.primaryButton {
+  background: #111827;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.25s ease;
+}
+
+.secondaryButton {
+  background: white;
+  color: #111827;
+  border: 1px solid #111827;
+  padding: 12px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.25s ease;
+}
+
+.goldSmallButton {
+  background: #8a6a2f;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.25s ease;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.mapButton {
+  display: inline-block;
+  margin: 14px 0;
+  background: #111827;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.map {
+  border: 0;
+  border-radius: 16px;
+  margin-top: 14px;
+}
+
+.link {
+  color: #111827;
+  font-weight: bold;
+}
+
+.buroBox {
+  display: inline-block;
+  background: #111827;
+  color: white;
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin: 12px 0;
+  font-weight: bold;
+}
+
+.footer {
+  background: #111827;
+  color: white;
+  padding: 24px 36px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .nav {
+    padding: 12px 18px;
+  }
+
+  .logo {
+    width: 92px;
+  }
+
+  .mobileMenuButton {
+    display: block;
+  }
+
+  .menu {
+    display: none;
+  }
+
+  .menuOpen {
+    display: flex;
+    position: absolute;
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    background: white;
+    padding: 18px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.16);
+    border-radius: 18px;
+    animation: mobileMenuIn 0.25s ease both;
+  }
+
+  @keyframes mobileMenuIn {
+    from {
+      opacity: 0;
+      transform: translateY(-14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .menuButton,
+  .goldButton {
+    width: 100%;
+    text-align: center;
+    font-size: 16px;
+  }
+
+  .main {
+    padding: 28px 18px 60px;
+  }
+
+  .hero {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    text-align: center;
+    padding-top: 24px;
+  }
+
+  .heroTitle {
+    font-size: 42px;
+  }
+
+  .heroText {
+    font-size: 17px;
+  }
+
+  .heroLogo {
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .sectionTitle {
+    font-size: 34px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+}
+`;
