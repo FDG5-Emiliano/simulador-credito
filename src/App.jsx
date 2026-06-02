@@ -371,13 +371,6 @@ export default function App() {
               </p>
             </div>
 
-            <div className="card slideUp delay2">
-              <h3>Despachos de cobranza</h3>
-              <p>
-                Los datos de los despachos de cobranza estarán disponibles para los clientes por medios
-                electrónicos y en sucursales o establecimientos.
-              </p>
-            </div>
           </Pagina>
         )}
 
