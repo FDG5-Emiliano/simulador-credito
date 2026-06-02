@@ -23,8 +23,8 @@ export default function App() {
     telefonoVisible: "844-102-9900",
     correo: "contactofdg5@gmail.com",
     direccion: "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
-    uneTelefono: "TELÉFONO UNE PENDIENTE",
-    uneCorreo: "CORREO UNE PENDIENTE",
+    uneTelefono: "844-102-9900",
+    uneCorreo: "contactofdg5@gmail.com",
   };
 
   const fechaCalculo = new Date().toLocaleDateString("es-MX");
@@ -280,11 +280,13 @@ export default function App() {
             <div className="cards">
               <Tarjeta
                 titulo="Crédito simple"
-                texto={`Tasa de interés fija. CAT estimado calculado al ${fechaCalculo}. Comisión por apertura de ${comisionApertura}% más IVA. Requisitos sujetos a evaluación.`}
+                texto={`Tasa de interés fija.  Comisión por apertura de ${comisionApertura}% más IVA. 
+                Requisitos sujetos a evaluación.`}
               />
               <Tarjeta
                 titulo="Fideicomiso"
-                texto="Estructuras para administración, garantía y protección patrimonial. Condiciones y requisitos sujetos al tipo de operación."
+                texto="Estructuras para administración, garantía y protección patrimonial. 
+                Condiciones y requisitos sujetos al tipo de operación."
               />
             </div>
 
