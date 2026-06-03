@@ -23,8 +23,8 @@ export default function App() {
     telefonoVisible: "844-102-9900",
     correo: "contactofdg5@gmail.com",
     direccion: "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
-    uneTelefono: "844-102-9900",
-    uneCorreo: "contactofdg5@gmail.com",
+    uneTelefono: "TELÉFONO UNE PENDIENTE",
+    uneCorreo: "CORREO UNE PENDIENTE",
   };
 
   const fechaCalculo = new Date().toLocaleDateString("es-MX");
@@ -105,39 +105,49 @@ export default function App() {
 
   function calcularCAT() {
     const montoNum = numero(monto);
+
     if (!tabla.length || montoNum <= 0) return 0;
 
     const comisionAperturaMonto = montoNum * (comisionApertura / 100);
     const ivaComision = comisionAperturaMonto * iva;
+
     const montoNetoCliente = montoNum - comisionAperturaMonto - ivaComision;
 
-    const flujos = [montoNetoCliente, ...tabla.map((fila) => -fila.pago)];
+    if (montoNetoCliente <= 0) return 0;
+
+    function vpn(tasaMensual) {
+      let valor = montoNetoCliente;
+
+      tabla.forEach((fila, index) => {
+        valor -= fila.pago / Math.pow(1 + tasaMensual, index + 1);
+      });
+
+      return valor;
+    }
 
     let bajo = 0;
     let alto = 1;
 
-    function vpn(tasaPeriodo) {
-      return flujos.reduce((acc, flujo, i) => {
-        return acc + flujo / Math.pow(1 + tasaPeriodo, i);
-      }, 0);
-    }
-
-    while (vpn(alto) > 0 && alto < 10) {
+    while (vpn(alto) < 0 && alto < 100) {
       alto = alto * 2;
     }
+
+    if (alto >= 100) return 0;
 
     for (let i = 0; i < 100; i++) {
       const medio = (bajo + alto) / 2;
 
       if (vpn(medio) > 0) {
-        bajo = medio;
-      } else {
         alto = medio;
+      } else {
+        bajo = medio;
       }
     }
 
     const tasaMensualCAT = (bajo + alto) / 2;
-    return (Math.pow(1 + tasaMensualCAT, 12) - 1) * 100;
+    const cat = (Math.pow(1 + tasaMensualCAT, 12) - 1) * 100;
+
+    return Number.isFinite(cat) ? cat : 0;
   }
 
   const catEstimado = calcularCAT();
@@ -280,13 +290,11 @@ export default function App() {
             <div className="cards">
               <Tarjeta
                 titulo="Crédito simple"
-                texto={`Tasa de interés fija.  Comisión por apertura de ${comisionApertura}% más IVA. 
-                Requisitos sujetos a evaluación.`}
+                texto={`Tasa de interés fija. CAT estimado calculado al ${fechaCalculo}. Comisión por apertura de ${comisionApertura}% más IVA. Requisitos sujetos a evaluación.`}
               />
               <Tarjeta
                 titulo="Fideicomiso"
-                texto="Estructuras para administración, garantía y protección patrimonial. 
-                Condiciones y requisitos sujetos al tipo de operación."
+                texto="Estructuras para administración, garantía y protección patrimonial. Condiciones y requisitos sujetos al tipo de operación."
               />
             </div>
 
@@ -371,6 +379,13 @@ export default function App() {
               </p>
             </div>
 
+            <div className="card slideUp delay2">
+              <h3>Despachos de cobranza</h3>
+              <p>
+                Los datos de los despachos de cobranza estarán disponibles para los clientes por medios
+                electrónicos y en sucursales o establecimientos.
+              </p>
+            </div>
           </Pagina>
         )}
 
@@ -419,14 +434,6 @@ export default function App() {
             </section>
 
             <section className="card slideUp delay2">
-              <p>
-                Tasa de interés fija. Comisión por apertura considerada:
-                {comisionApertura}% más IVA.
-              </p>
-              <p><b>Advertencia:</b> Contratar créditos que excedan tu capacidad de pago afecta tu historial crediticio.</p>
-            </section>
-
-            <section className="card slideUp delay3">
               <h3>Exportar o enviar cotización</h3>
               <input
                 type="email"
@@ -442,7 +449,7 @@ export default function App() {
               </div>
             </section>
 
-            <section className="card slideUp delay4">
+            <section className="card slideUp delay3">
               <h3>Tabla de amortización</h3>
               <div style={{ overflowX: "auto" }}>
                 <table className="table">
@@ -655,29 +662,13 @@ body {
   animation: slideUp 0.7s ease both;
 }
 
-.delay1 {
-  animation-delay: 0.12s;
-}
-
-.delay2 {
-  animation-delay: 0.22s;
-}
-
-.delay3 {
-  animation-delay: 0.32s;
-}
-
-.delay4 {
-  animation-delay: 0.42s;
-}
+.delay1 { animation-delay: 0.12s; }
+.delay2 { animation-delay: 0.22s; }
+.delay3 { animation-delay: 0.32s; }
 
 @keyframes pageFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideUp {
@@ -749,20 +740,21 @@ body {
   gap: 20px;
 }
 
-.infoCard {
+.infoCard,
+.card,
+.metricCard {
   background: white;
   padding: 26px;
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.infoCard {
   border-top: 5px solid #8a6a2f;
 }
 
 .card {
-  background: white;
-  padding: 28px;
-  border-radius: 16px;
   margin-bottom: 24px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
 }
 
 .advertenciasCard {
@@ -789,13 +781,6 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 20px;
   margin-bottom: 24px;
-}
-
-.metricCard {
-  background: white;
-  padding: 22px;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
 }
 
 .buttons {
