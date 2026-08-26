@@ -1,55 +1,105 @@
 import { useState } from "react";
+import { supabase } from "./lib/supabase";
 
 export default function App() {
-  const [modo, setModo] = useState("cliente");
   const [pantalla, setPantalla] = useState("inicio");
+  const [menuMovil, setMenuMovil] = useState(false);
   const [legalAbierto, setLegalAbierto] = useState(false);
+
+  const [mensajeError, setMensajeError] = useState("");
+  const [mensajeInfo, setMensajeInfo] = useState("");
+  const [folio, setFolio] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const [archivos, setArchivos] = useState({});
+
+  const [consentimientos, setConsentimientos] = useState({
+    privacidad: false,
+    buro: false,
+    tratamiento: false,
+    identidad: false,
+  });
 
   const [datos, setDatos] = useState({
     montoSolicitado: "10000",
     plazoSolicitado: "6",
+    destino: "",
+
+    tipoPersona: "",
 
     celular: "",
     correo: "",
+    password: "",
+
+    /* PERSONA FÍSICA */
+
     nombre: "",
     apellidoPaterno: "",
     apellidoMaterno: "",
     curp: "",
     rfc: "",
     nacimiento: "",
+    estadoCivil: "",
+    regimenMatrimonial: "",
+    dependientes: "",
+
+    conyugeNombre: "",
+    conyugeCurp: "",
+    conyugeRfc: "",
+
+    /* PERSONA MORAL */
+
+    razonSocial: "",
+    rfcEmpresa: "",
+    fechaConstitucion: "",
+    actividadEconomica: "",
+    giroMercantil: "",
+    nacionalidadEmpresa: "Mexicana",
+
+    representanteLegal: "",
+    rfcRepresentante: "",
+    curpRepresentante: "",
+
+    propietarioReal: "",
+    rfcPropietarioReal: "",
+
+    /* DOMICILIO */
 
     calle: "",
+    numeroExterior: "",
     colonia: "",
     cp: "",
     municipio: "",
     estado: "",
 
+    /* INGRESOS */
+
     ocupacion: "",
-    empresa: "",
+    empresaActividad: "",
     antiguedad: "",
     ingreso: "",
-    destino: "",
+    ventasMensuales: "",
+    frecuenciaPago: "",
+
+    /* GARANTÍA */
 
     tipoCredito: "",
     tipoGarantia: "",
+    descripcionGarantia: "",
+    valorGarantia: "",
 
     garanteNombre: "",
     garanteTelefono: "",
     garanteCorreo: "",
+    garanteRfc: "",
 
-    descripcionGarantia: "",
-    valorGarantia: "",
+    /* BANCO */
 
     clabe: "",
 
     /*
-      ESTOS DATOS NO LOS DEFINE EL CLIENTE.
-
-      En producción serán determinados por:
-      - Motor de decisión
-      - Mesa de Crédito
-      - Políticas vigentes
-      - Cálculo regulatorio correspondiente
+      ESTOS VALORES LOS DEFINIRÁ MESA DE CRÉDITO.
+      NO SE MUESTRAN AL CLIENTE ANTES DE LA OFERTA.
     */
 
     montoAprobado: "10000",
@@ -58,14 +108,10 @@ export default function App() {
     comisionAprobada: "3",
 
     /*
-      IMPORTANTE:
-      Este CAT sigue siendo MOCK para el prototipo.
-
-      En producción NO debe capturarse manualmente.
-      Debe calcularse conforme a las condiciones
-      aprobadas y a la metodología aplicable.
+      PROTOTIPO.
+      Posteriormente deberá calcularse automáticamente.
     */
-    catAprobado: "68.50",
+    catAprobado: "68.5",
   });
 
   const empresa = {
@@ -81,8 +127,8 @@ export default function App() {
       "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
 
     /*
-      SUSTITUIR POR LOS DATOS REALES DE LA UNE
-      ANTES DE PUBLICAR.
+      SUSTITUIR POR INFORMACIÓN OFICIAL
+      ANTES DE PRODUCCIÓN.
     */
     uneTelefono: "PENDIENTE",
     uneCorreo: "PENDIENTE",
@@ -91,16 +137,81 @@ export default function App() {
     condusefCorreo: "asesoria@condusef.gob.mx",
   };
 
+  /*
+    DATOS GENERALES DEL PRODUCTO.
+
+    Posteriormente moveremos estos valores
+    a Supabase para que sean configurables.
+  */
+
+  const producto = {
+    nombre: "Crédito Simple TRISAL",
+
+    tipo:
+      "Crédito simple con tasa de interés fija.",
+
+    mercadoObjetivo:
+      "Personas físicas con actividad empresarial, profesionistas, comerciantes y personas morales que requieran financiamiento para capital de trabajo, inventario, adquisición de equipo, liquidez u otros destinos autorizados.",
+
+    montoMinimo: 10000,
+    montoMaximo: null,
+
+    plazoMinimo: 3,
+    plazoMaximo: 12,
+
+    tasaTipo: "Fija",
+
+    /*
+      NO INVENTAR.
+      Capturar valores definitivos antes de producción.
+    */
+    tasaMaxima: null,
+    catPromedio: null,
+    fechaCalculoCat: null,
+
+    metodologiaCat:
+      "Calculado conforme a la metodología, fórmula, componentes y supuestos aplicables establecidos por Banco de México.",
+  };
+
+  /* =====================================================
+     FUNCIONES GENERALES
+  ===================================================== */
+
   function actualizar(campo, valor) {
     setDatos((prev) => ({
       ...prev,
       [campo]: valor,
     }));
+
+    setMensajeError("");
+  }
+
+  function actualizarConsentimiento(campo, valor) {
+    setConsentimientos((prev) => ({
+      ...prev,
+      [campo]: valor,
+    }));
+
+    setMensajeError("");
+  }
+
+  function seleccionarArchivo(campo, file) {
+    setArchivos((prev) => ({
+      ...prev,
+      [campo]: file || null,
+    }));
+
+    setMensajeError("");
   }
 
   function ir(nuevaPantalla) {
     setPantalla(nuevaPantalla);
+
     setLegalAbierto(false);
+    setMenuMovil(false);
+
+    setMensajeError("");
+    setMensajeInfo("");
 
     window.scrollTo({
       top: 0,
@@ -108,467 +219,1024 @@ export default function App() {
     });
   }
 
-  function entrarCliente() {
-    setModo("cliente");
-    ir("inicio");
+  function mostrarError(texto) {
+    setMensajeError(texto);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }
 
-  function entrarBackoffice() {
-    setModo("backoffice");
-    ir("backofficeLogin");
+  function emailValido(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function numeroPositivo(valor) {
+    return Number(valor) > 0;
+  }
+
+  function documentoExiste(nombre) {
+    return Boolean(archivos[nombre]);
+  }
+
+  /* =====================================================
+     VALIDACIONES
+  ===================================================== */
+
+  function validarSimulacion() {
+    if (!numeroPositivo(datos.montoSolicitado)) {
+      mostrarError(
+        "Ingresa un monto solicitado mayor a cero."
+      );
+      return;
+    }
+
+    if (!datos.plazoSolicitado) {
+      mostrarError("Selecciona un plazo.");
+      return;
+    }
+
+    ir("tipoPersona");
+  }
+
+  function validarTipoPersona() {
+    if (!datos.tipoPersona) {
+      mostrarError(
+        "Selecciona si la solicitud corresponde a Persona Física o Persona Moral."
+      );
+      return;
+    }
+
+    ir("registro");
+  }
+
+  async function crearCuenta() {
+    setMensajeError("");
+    setMensajeInfo("");
+
+    if (
+      !datos.celular.trim() ||
+      !datos.correo.trim() ||
+      !datos.password
+    ) {
+      mostrarError(
+        "Completa celular, correo y contraseña."
+      );
+      return;
+    }
+
+    if (!emailValido(datos.correo)) {
+      mostrarError(
+        "Ingresa un correo electrónico válido."
+      );
+      return;
+    }
+
+    if (datos.password.length < 8) {
+      mostrarError(
+        "La contraseña debe tener al menos 8 caracteres."
+      );
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: datos.correo,
+        password: datos.password,
+      });
+
+      if (error) {
+        setMensajeInfo(
+          `Supabase respondió: ${error.message}`
+        );
+      } else if (data?.session) {
+        setMensajeInfo(
+          "Cuenta creada y sesión iniciada."
+        );
+      } else {
+        setMensajeInfo(
+          "Cuenta creada. Revisa tu correo si Supabase solicita confirmación."
+        );
+      }
+
+      ir("otp");
+    } catch (e) {
+      console.error(e);
+
+      mostrarError(
+        "No se pudo crear la cuenta en este momento."
+      );
+    }
+  }
+
+  function validarConsentimientos() {
+    const completos = Object.values(
+      consentimientos
+    ).every(Boolean);
+
+    if (!completos) {
+      mostrarError(
+        "Debes aceptar todas las autorizaciones obligatorias."
+      );
+      return;
+    }
+
+    ir("datosSolicitante");
+  }
+
+  function validarDatosSolicitante() {
+    if (datos.tipoPersona === "fisica") {
+      if (
+        !datos.nombre.trim() ||
+        !datos.apellidoPaterno.trim() ||
+        !datos.curp.trim() ||
+        !datos.rfc.trim() ||
+        !datos.nacimiento ||
+        !datos.estadoCivil
+      ) {
+        mostrarError(
+          "Completa todos los datos obligatorios de la Persona Física."
+        );
+        return;
+      }
+
+      if (
+        datos.estadoCivil === "Casado" &&
+        !datos.regimenMatrimonial
+      ) {
+        mostrarError(
+          "Selecciona el régimen matrimonial."
+        );
+        return;
+      }
+
+      if (
+        datos.estadoCivil === "Casado" &&
+        datos.regimenMatrimonial ===
+          "Sociedad conyugal" &&
+        (!datos.conyugeNombre.trim() ||
+          !datos.conyugeCurp.trim() ||
+          !datos.conyugeRfc.trim())
+      ) {
+        mostrarError(
+          "Completa la información del cónyuge."
+        );
+        return;
+      }
+    }
+
+    if (datos.tipoPersona === "moral") {
+      if (
+        !datos.razonSocial.trim() ||
+        !datos.rfcEmpresa.trim() ||
+        !datos.fechaConstitucion ||
+        !datos.actividadEconomica.trim() ||
+        !datos.representanteLegal.trim() ||
+        !datos.propietarioReal.trim()
+      ) {
+        mostrarError(
+          "Completa todos los datos obligatorios de la Persona Moral."
+        );
+        return;
+      }
+    }
+
+    ir("documentosIdentidad");
+  }
+
+  function validarDocumentosIdentidad() {
+    if (datos.tipoPersona === "fisica") {
+      const requeridos = [
+        "pfIneFrente",
+        "pfIneReverso",
+        "pfComprobanteDomicilio",
+        "pfCsf",
+        "pfCaratulaBancaria",
+        "pfSolicitudKyc",
+        "pfAutorizacionBuro",
+      ];
+
+      if (
+        requeridos.some(
+          (nombre) => !documentoExiste(nombre)
+        )
+      ) {
+        mostrarError(
+          "Carga todos los documentos obligatorios de Persona Física."
+        );
+        return;
+      }
+
+      if (
+        datos.estadoCivil === "Casado" &&
+        datos.regimenMatrimonial ===
+          "Sociedad conyugal" &&
+        (!documentoExiste("conyugeIne") ||
+          !documentoExiste("conyugeCsf"))
+      ) {
+        mostrarError(
+          "Carga los documentos obligatorios del cónyuge."
+        );
+        return;
+      }
+    }
+
+    if (datos.tipoPersona === "moral") {
+      const requeridos = [
+        "pmActaConstitutiva",
+        "pmPoderes",
+        "pmComprobanteDomicilio",
+        "pmCaratulaBancaria",
+        "pmIdRepresentante",
+        "pmCsfRepresentante",
+        "pmIdPropietario",
+        "pmCsfPropietario",
+      ];
+
+      if (
+        requeridos.some(
+          (nombre) => !documentoExiste(nombre)
+        )
+      ) {
+        mostrarError(
+          "Carga todos los documentos obligatorios de Persona Moral."
+        );
+        return;
+      }
+    }
+
+    ir("domicilio");
+  }
+
+  function validarDomicilio() {
+    if (
+      !datos.calle.trim() ||
+      !datos.numeroExterior.trim() ||
+      !datos.colonia.trim() ||
+      !datos.cp.trim() ||
+      !datos.municipio.trim() ||
+      !datos.estado.trim()
+    ) {
+      mostrarError(
+        "Completa todos los datos del domicilio."
+      );
+      return;
+    }
+
+    if (!/^\d{5}$/.test(datos.cp)) {
+      mostrarError(
+        "El código postal debe contener 5 dígitos."
+      );
+      return;
+    }
+
+    ir("ingresos");
+  }
+
+  function validarIngresos() {
+    if (datos.tipoPersona === "fisica") {
+      if (
+        !datos.ocupacion ||
+        !datos.empresaActividad.trim() ||
+        !datos.antiguedad.trim() ||
+        !numeroPositivo(datos.ingreso)
+      ) {
+        mostrarError(
+          "Completa la información de actividad e ingresos."
+        );
+        return;
+      }
+    }
+
+    if (
+      datos.tipoPersona === "moral" &&
+      !numeroPositivo(datos.ventasMensuales)
+    ) {
+      mostrarError(
+        "Ingresa las ventas mensuales aproximadas."
+      );
+      return;
+    }
+
+    ir("documentosFinancieros");
+  }
+
+  function validarDocumentosFinancieros() {
+    if (!documentoExiste("estadosCuenta")) {
+      mostrarError(
+        "Carga los estados de cuenta para continuar."
+      );
+      return;
+    }
+
+    if (
+      datos.tipoPersona === "moral" &&
+      !documentoExiste("estadosFinancieros")
+    ) {
+      mostrarError(
+        "Carga los estados financieros de la empresa."
+      );
+      return;
+    }
+
+    ir("solicitud");
+  }
+
+  function validarSolicitud() {
+    if (
+      !numeroPositivo(datos.montoSolicitado) ||
+      !datos.plazoSolicitado ||
+      !datos.destino
+    ) {
+      mostrarError(
+        "Completa monto, plazo y destino del crédito."
+      );
+      return;
+    }
+
+    ir("tipoCredito");
+  }
+
+  function validarTipoCredito() {
+    if (!datos.tipoCredito) {
+      mostrarError(
+        "Selecciona la estructura de la operación."
+      );
+      return;
+    }
+
+    if (datos.tipoCredito === "con") {
+      ir("garantia");
+      return;
+    }
+
+    ir("revision");
+  }
+
+  function validarGarantia() {
+    if (!datos.tipoGarantia) {
+      mostrarError(
+        "Selecciona el tipo de garantía."
+      );
+      return;
+    }
+
+    if (
+      datos.tipoGarantia ===
+      "Obligado solidario"
+    ) {
+      ir("obligado");
+      return;
+    }
+
+    if (
+      !datos.descripcionGarantia.trim() ||
+      !numeroPositivo(datos.valorGarantia)
+    ) {
+      mostrarError(
+        "Completa la descripción y valor de la garantía."
+      );
+      return;
+    }
+
+    if (
+      !documentoExiste(
+        "garantiaDocumentacion"
+      )
+    ) {
+      mostrarError(
+        "Carga documentación de la garantía."
+      );
+      return;
+    }
+
+    ir("garantiaStatus");
+  }
+
+  function validarObligado() {
+    if (
+      !datos.garanteNombre.trim() ||
+      !datos.garanteRfc.trim() ||
+      !datos.garanteTelefono.trim() ||
+      !datos.garanteCorreo.trim()
+    ) {
+      mostrarError(
+        "Completa la información del obligado solidario."
+      );
+      return;
+    }
+
+    if (!emailValido(datos.garanteCorreo)) {
+      mostrarError(
+        "Ingresa un correo válido para el obligado solidario."
+      );
+      return;
+    }
+
+    ir("garantiaStatus");
+  }
+
+  /* =====================================================
+     SUPABASE — GUARDAR SOLICITUD
+  ===================================================== */
+
+  async function guardarSolicitudSupabase() {
+    setMensajeError("");
+    setGuardando(true);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        mostrarError(
+          "Necesitas una sesión activa para enviar la solicitud. Revisa si debes confirmar tu correo."
+        );
+
+        setGuardando(false);
+        return;
+      }
+
+      const nuevoFolio =
+        "TRI-" +
+        Math.floor(
+          100000 + Math.random() * 900000
+        );
+
+      const nombreSolicitud =
+        datos.tipoPersona === "fisica"
+          ? `${datos.nombre} ${datos.apellidoPaterno} ${datos.apellidoMaterno}`.trim()
+          : datos.razonSocial;
+
+      /*
+        ESTA VERSIÓN GUARDA ÚNICAMENTE
+        LOS CAMPOS QUE YA ESTAMOS PREPARANDO
+        EN LA TABLA "Aplicaciones".
+
+        Después crearemos tablas específicas
+        para expediente, documentos, garantías,
+        decisiones, etc.
+      */
+
+      const payload = {
+        folio: nuevoFolio,
+
+        nombre: nombreSolicitud,
+
+        correo: datos.correo,
+
+        celular: datos.celular,
+
+        monto: Number(
+          datos.montoSolicitado
+        ),
+
+        plazo: Number(
+          datos.plazoSolicitado
+        ),
+
+        ingreso:
+          datos.tipoPersona === "fisica"
+            ? Number(datos.ingreso || 0)
+            : Number(
+                datos.ventasMensuales || 0
+              ),
+
+        tipo_credito:
+          datos.tipoCredito,
+
+        tipo_garantia:
+          datos.tipoGarantia || null,
+
+        estado: "SUBMITTED",
+
+        user_id: session.user.id,
+      };
+
+      const { error } = await supabase
+        .from("Aplicaciones")
+        .insert([payload]);
+
+      if (error) {
+        console.error(error);
+
+        mostrarError(
+          `No se pudo guardar la solicitud: ${error.message}`
+        );
+
+        setGuardando(false);
+        return;
+      }
+
+      setFolio(nuevoFolio);
+      setGuardando(false);
+
+      ir("enRevision");
+    } catch (e) {
+      console.error(e);
+
+      mostrarError(
+        "Ocurrió un error al enviar la solicitud."
+      );
+
+      setGuardando(false);
+    }
   }
 
   const pagoOferta = calcularPago(
-    Number(datos.montoAprobado || 0),
-    Number(datos.tasaAprobada || 0),
-    Number(datos.plazoAprobado || 1)
+    Number(datos.montoAprobado),
+    Number(datos.tasaAprobada),
+    Number(datos.plazoAprobado)
   );
 
   return (
     <div className="app">
       <style>{css}</style>
 
-      {/* ==============================
-          HEADER
-      ============================== */}
-
-      <header className="header">
-        <button
-          className="logoButton"
-          onClick={entrarCliente}
-        >
-          <img
-            src="/logo-trisal.jpeg"
-            alt="TRISAL"
-            className="logo"
-          />
-        </button>
-
-        <div className="topActions">
-          <button
-            className={
-              modo === "cliente"
-                ? "topButton selected"
-                : "topButton"
-            }
-            onClick={entrarCliente}
-          >
-            Portal cliente
-          </button>
-
-          <div className="legalDropdown">
-            <button
-              className="topButton"
-              onClick={() =>
-                setLegalAbierto(!legalAbierto)
-              }
-            >
-              Información legal
-            </button>
-
-            {legalAbierto && (
-              <div className="legalMenu">
-                <button
-                  onClick={() => {
-                    setModo("cliente");
-                    ir("une");
-                  }}
-                >
-                  UNE
-                </button>
-
-                <button
-                  onClick={() => {
-                    setModo("cliente");
-                    ir("normatividad");
-                  }}
-                >
-                  Normatividad
-                </button>
-
-                <button
-                  onClick={() => {
-                    setModo("cliente");
-                    ir("buro");
-                  }}
-                >
-                  Buró de Entidades Financieras
-                </button>
-
-                <button
-                  onClick={() => {
-                    setModo("cliente");
-                    ir("privacidad");
-                  }}
-                >
-                  Aviso de privacidad
-                </button>
-              </div>
-            )}
-          </div>
-
-          <button
-            className={
-              modo === "backoffice"
-                ? "topButton selected"
-                : "topButton"
-            }
-            onClick={entrarBackoffice}
-          >
-            Backoffice
-          </button>
-        </div>
-      </header>
+      <Header
+        ir={ir}
+        menuMovil={menuMovil}
+        setMenuMovil={setMenuMovil}
+        legalAbierto={legalAbierto}
+        setLegalAbierto={setLegalAbierto}
+      />
 
       <main className="container">
-        {/* ==============================
-            PORTAL CLIENTE
-        ============================== */}
+        {mensajeError && (
+          <div className="globalError">
+            <strong>
+              Revisa la información
+            </strong>
 
-        {modo === "cliente" && (
-          <>
-            {pantalla === "inicio" && (
-              <Inicio ir={ir} />
-            )}
-
-            {pantalla === "comoFunciona" && (
-              <ComoFunciona ir={ir} />
-            )}
-
-            {pantalla === "simulacion" && (
-              <Simulacion
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "registro" && (
-              <Registro
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "otp" && (
-              <OTP
-                datos={datos}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "consentimientos" && (
-              <Consentimientos ir={ir} />
-            )}
-
-            {pantalla === "personales" && (
-              <Personales
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "identidad" && (
-              <Identidad ir={ir} />
-            )}
-
-            {pantalla === "domicilio" && (
-              <Domicilio
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "ingresos" && (
-              <Ingresos
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla ===
-              "documentosFinancieros" && (
-              <DocumentosFinancieros ir={ir} />
-            )}
-
-            {pantalla === "solicitud" && (
-              <Solicitud
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "tipoCredito" && (
-              <TipoCredito
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "garantia" && (
-              <Garantia
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "obligado" && (
-              <Obligado
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "garantiaStatus" && (
-              <GarantiaStatus
-                datos={datos}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "revision" && (
-              <Revision
-                datos={datos}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "enRevision" && (
-              <EnRevision
-                datos={datos}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "oferta" && (
-              <Oferta
-                datos={datos}
-                pagoOferta={pagoOferta}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "cuentaBanco" && (
-              <CuentaBanco
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "contratos" && (
-              <Contratos ir={ir} />
-            )}
-
-            {pantalla === "firma" && (
-              <Firma
-                datos={datos}
-                ir={ir}
-              />
-            )}
-
-            {pantalla === "tesoreriaCliente" && (
-              <TesoreriaCliente ir={ir} />
-            )}
-
-            {pantalla === "dispersado" && (
-              <Dispersado ir={ir} />
-            )}
-
-            {pantalla === "creditoActivo" && (
-              <CreditoActivo
-                datos={datos}
-                pagoOferta={pagoOferta}
-              />
-            )}
-
-            {/* REGULATORIO */}
-
-            {pantalla === "une" && (
-              <UNE empresa={empresa} />
-            )}
-
-            {pantalla === "normatividad" && (
-              <Normatividad empresa={empresa} />
-            )}
-
-            {pantalla === "buro" && (
-              <Buro />
-            )}
-
-            {pantalla === "privacidad" && (
-              <Privacidad empresa={empresa} />
-            )}
-          </>
+            <span>
+              {mensajeError}
+            </span>
+          </div>
         )}
 
-        {/* ==============================
-            BACKOFFICE
-        ============================== */}
+        {mensajeInfo && (
+          <div className="globalInfo">
+            {mensajeInfo}
+          </div>
+        )}
 
-        {modo === "backoffice" && (
-          <>
-            {pantalla === "backofficeLogin" && (
-              <BackofficeLogin ir={ir} />
-            )}
+        {pantalla === "inicio" && (
+          <Inicio
+            ir={ir}
+            producto={producto}
+          />
+        )}
 
-            {pantalla === "dashboard" && (
-              <Dashboard ir={ir} />
-            )}
+        {pantalla === "producto" && (
+          <Producto
+            producto={producto}
+            ir={ir}
+          />
+        )}
 
-            {pantalla === "bandeja" && (
-              <Bandeja ir={ir} />
-            )}
+        {pantalla === "comoFunciona" && (
+          <ComoFunciona ir={ir} />
+        )}
 
-            {pantalla === "expediente" && (
-              <Expediente
-                datos={datos}
-                ir={ir}
-              />
-            )}
+        {pantalla === "simulacion" && (
+          <Simulacion
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarSimulacion}
+          />
+        )}
 
-            {pantalla === "mesaCredito" && (
-              <MesaCredito
-                datos={datos}
-                actualizar={actualizar}
-                ir={ir}
-              />
-            )}
+        {pantalla === "tipoPersona" && (
+          <TipoPersona
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarTipoPersona}
+          />
+        )}
 
-            {pantalla === "tesoreria" && (
-              <Tesoreria />
-            )}
+        {pantalla === "registro" && (
+          <Registro
+            datos={datos}
+            actualizar={actualizar}
+            crearCuenta={crearCuenta}
+            ir={ir}
+          />
+        )}
 
-            {pantalla === "cobranza" && (
-              <Cobranza />
-            )}
-          </>
+        {pantalla === "otp" && (
+          <OTP
+            datos={datos}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "consentimientos" && (
+          <Consentimientos
+            consentimientos={
+              consentimientos
+            }
+            actualizar={
+              actualizarConsentimiento
+            }
+            continuar={
+              validarConsentimientos
+            }
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "datosSolicitante" && (
+          <DatosSolicitante
+            datos={datos}
+            actualizar={actualizar}
+            continuar={
+              validarDatosSolicitante
+            }
+            ir={ir}
+          />
+        )}
+
+        {pantalla ===
+          "documentosIdentidad" && (
+          <DocumentosIdentidad
+            datos={datos}
+            archivos={archivos}
+            seleccionarArchivo={
+              seleccionarArchivo
+            }
+            continuar={
+              validarDocumentosIdentidad
+            }
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "domicilio" && (
+          <Domicilio
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarDomicilio}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "ingresos" && (
+          <Ingresos
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarIngresos}
+            ir={ir}
+          />
+        )}
+
+        {pantalla ===
+          "documentosFinancieros" && (
+          <DocumentosFinancieros
+            datos={datos}
+            archivos={archivos}
+            seleccionarArchivo={
+              seleccionarArchivo
+            }
+            continuar={
+              validarDocumentosFinancieros
+            }
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "solicitud" && (
+          <Solicitud
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarSolicitud}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "tipoCredito" && (
+          <TipoCredito
+            datos={datos}
+            actualizar={actualizar}
+            continuar={
+              validarTipoCredito
+            }
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "garantia" && (
+          <Garantia
+            datos={datos}
+            actualizar={actualizar}
+            archivos={archivos}
+            seleccionarArchivo={
+              seleccionarArchivo
+            }
+            continuar={validarGarantia}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "obligado" && (
+          <Obligado
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarObligado}
+            ir={ir}
+          />
+        )}
+
+        {pantalla ===
+          "garantiaStatus" && (
+          <GarantiaStatus
+            datos={datos}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "revision" && (
+          <Revision
+            datos={datos}
+            guardar={
+              guardarSolicitudSupabase
+            }
+            guardando={guardando}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "enRevision" && (
+          <EnRevision
+            datos={datos}
+            folio={folio}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "oferta" && (
+          <Oferta
+            datos={datos}
+            pagoOferta={pagoOferta}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "cuentaBanco" && (
+          <CuentaBanco
+            datos={datos}
+            actualizar={actualizar}
+            ir={ir}
+          />
+        )}
+
+        {pantalla === "contratos" && (
+          <Contratos ir={ir} />
+        )}
+
+        {pantalla === "firma" && (
+          <Firma
+            datos={datos}
+            ir={ir}
+          />
+        )}
+
+        {pantalla ===
+          "tesoreriaCliente" && (
+          <TesoreriaCliente ir={ir} />
+        )}
+
+        {pantalla === "dispersado" && (
+          <Dispersado ir={ir} />
+        )}
+
+        {pantalla === "creditoActivo" && (
+          <CreditoActivo
+            datos={datos}
+            pagoOferta={pagoOferta}
+          />
+        )}
+
+        {pantalla === "une" && (
+          <UNE empresa={empresa} />
+        )}
+
+        {pantalla === "normatividad" && (
+          <Normatividad
+            empresa={empresa}
+          />
+        )}
+
+        {pantalla === "buro" && (
+          <Buro />
+        )}
+
+        {pantalla === "privacidad" && (
+          <Privacidad
+            empresa={empresa}
+          />
         )}
       </main>
 
-      {/* ==============================
-          FOOTER REGULATORIO
-      ============================== */}
-
-      <footer className="legalFooter">
-        <div className="footerContent">
-          <div>
-            <img
-              src="/logo-trisal.jpeg"
-              alt="TRISAL"
-              className="footerLogo"
-            />
-          </div>
-
-          <div className="footerLegal">
-            <p>
-              Para la constitución y operación de{" "}
-              {empresa.razonSocial} con tal carácter,
-              no requiere de autorización de la
-              Secretaría de Hacienda y Crédito Público.
-            </p>
-
-            <p>
-              {empresa.razonSocial} se encuentra sujeta
-              a la supervisión de la Comisión Nacional
-              Bancaria y de Valores, únicamente para
-              efectos de lo dispuesto por el artículo
-              56 de la Ley General de Organizaciones y
-              Actividades Auxiliares del Crédito.
-            </p>
-          </div>
-
-          <div className="footerLinks">
-            <button
-              onClick={() => {
-                setModo("cliente");
-                ir("une");
-              }}
-            >
-              UNE
-            </button>
-
-            <button
-              onClick={() => {
-                setModo("cliente");
-                ir("normatividad");
-              }}
-            >
-              Normatividad
-            </button>
-
-            <button
-              onClick={() => {
-                setModo("cliente");
-                ir("buro");
-              }}
-            >
-              Buró de Entidades Financieras
-            </button>
-
-            <button
-              onClick={() => {
-                setModo("cliente");
-                ir("privacidad");
-              }}
-            >
-              Aviso de privacidad
-            </button>
-          </div>
-        </div>
-      </footer>
+      <Footer
+        empresa={empresa}
+        ir={ir}
+      />
     </div>
   );
 }
 
 /* =====================================================
-   LANDING
+   HEADER PÚBLICO
+   NO CONTIENE BACKOFFICE
 ===================================================== */
 
-function Inicio({ ir }) {
+function Header({
+  ir,
+  menuMovil,
+  setMenuMovil,
+  legalAbierto,
+  setLegalAbierto,
+}) {
+  return (
+    <header className="header">
+      <button
+        className="logoButton"
+        onClick={() => ir("inicio")}
+      >
+        <img
+          src="/logo-trisal.jpeg"
+          alt="TRISAL"
+          className="logo"
+        />
+      </button>
+
+      <button
+        className="hamburger"
+        onClick={() =>
+          setMenuMovil(!menuMovil)
+        }
+      >
+        {menuMovil ? "Cerrar" : "Menú"}
+      </button>
+
+      <nav
+        className={
+          menuMovil
+            ? "desktopNav mobileNavOpen"
+            : "desktopNav"
+        }
+      >
+        <button
+          className="navButton"
+          onClick={() => ir("inicio")}
+        >
+          Inicio
+        </button>
+
+        <button
+          className="navButton"
+          onClick={() => ir("producto")}
+        >
+          Producto
+        </button>
+
+        <button
+          className="navButton"
+          onClick={() =>
+            ir("comoFunciona")
+          }
+        >
+          Cómo funciona
+        </button>
+
+        <div className="legalDropdown">
+          <button
+            className="navButton"
+            onClick={() =>
+              setLegalAbierto(
+                !legalAbierto
+              )
+            }
+          >
+            Información legal
+          </button>
+
+          {legalAbierto && (
+            <div className="legalMenu">
+              <button
+                onClick={() => ir("une")}
+              >
+                UNE
+              </button>
+
+              <button
+                onClick={() =>
+                  ir("normatividad")
+                }
+              >
+                Normatividad
+              </button>
+
+              <button
+                onClick={() => ir("buro")}
+              >
+                Buró de Entidades
+                Financieras
+              </button>
+
+              <button
+                onClick={() =>
+                  ir("privacidad")
+                }
+              >
+                Aviso de privacidad
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          className="navCta"
+          onClick={() =>
+            ir("simulacion")
+          }
+        >
+          Solicita tu crédito
+        </button>
+      </nav>
+    </header>
+  );
+}
+
+/* =====================================================
+   INICIO
+===================================================== */
+
+function Inicio({
+  ir,
+  producto,
+}) {
   return (
     <section className="hero fadeUp">
-      <div>
+      <div className="heroContent">
         <p className="eyebrow">
           CRÉDITO DIGITAL TRISAL
         </p>
 
         <h1>
-          El impulso que necesitas para seguir creciendo.
+          Financiamiento sencillo para
+          seguir creciendo.
         </h1>
 
         <p className="heroText">
-          Solicita tu crédito de forma sencilla y conoce
-          el avance de tu solicitud en todo momento.
+          Inicia tu solicitud, completa
+          tu expediente digital y conoce
+          el avance de tu crédito en todo
+          momento.
         </p>
 
         <div className="buttonRow">
           <button
             className="primary"
-            onClick={() => ir("simulacion")}
+            onClick={() =>
+              ir("simulacion")
+            }
           >
             Solicita tu crédito
           </button>
 
           <button
             className="secondary"
-            onClick={() => ir("comoFunciona")}
+            onClick={() =>
+              ir("comoFunciona")
+            }
           >
-            ¿Cómo funciona?
+            Ver cómo funciona
           </button>
         </div>
+
+        <button
+          className="textLinkButton"
+          onClick={() =>
+            ir("producto")
+          }
+        >
+          Conocer características del
+          producto →
+        </button>
       </div>
 
       <div className="heroCard">
-        <h3>Un proceso sencillo</h3>
+        <p className="cardEyebrow">
+          PROCESO
+        </p>
+
+        <h2>
+          Una solicitud clara y
+          sencilla.
+        </h2>
 
         <MiniStep
           numero="1"
@@ -577,20 +1245,212 @@ function Inicio({ ir }) {
 
         <MiniStep
           numero="2"
-          texto="Completa tu solicitud"
+          texto="Completa tu expediente"
         />
 
         <MiniStep
           numero="3"
-          texto="Recibe una oferta"
+          texto="Analizamos tu solicitud"
         />
 
         <MiniStep
           numero="4"
-          texto="Firma y recibe tu dinero"
+          texto="Recibe tu oferta"
         />
+
+        <MiniStep
+          numero="5"
+          texto="Firma y recibe"
+        />
+
+        <div className="heroProductTag">
+          {producto.nombre}
+        </div>
       </div>
     </section>
+  );
+}
+
+/* =====================================================
+   PRODUCTO
+===================================================== */
+
+function Producto({
+  producto,
+  ir,
+}) {
+  const tasaMaxima =
+    producto.tasaMaxima === null
+      ? "Pendiente de configurar"
+      : `${Number(
+          producto.tasaMaxima
+        ).toFixed(1)}%`;
+
+  const catPromedio =
+    producto.catPromedio === null
+      ? "Pendiente de cálculo"
+      : `${Number(
+          producto.catPromedio
+        ).toFixed(1)}% Sin IVA`;
+
+  return (
+    <Pagina
+      titulo="Crédito Simple TRISAL"
+      subtitulo="Conoce las características generales del producto antes de iniciar tu solicitud."
+    >
+      <section className="productHero">
+        <div className="productHeroText">
+          <p className="productKicker">
+            CRÉDITO SIMPLE
+          </p>
+
+          <h2>
+            Financiamiento para
+            necesidades productivas y de
+            liquidez.
+          </h2>
+
+          <p>
+            {producto.mercadoObjetivo}
+          </p>
+        </div>
+
+        <div className="productHeroAction">
+          <button
+            className="goldButton"
+            onClick={() =>
+              ir("simulacion")
+            }
+          >
+            Iniciar solicitud
+          </button>
+        </div>
+      </section>
+
+      <div className="productDataGrid">
+        <ProductData
+          titulo="Tipo de crédito"
+          valor={producto.tipo}
+        />
+
+        <ProductData
+          titulo="Tipo de tasa"
+          valor={producto.tasaTipo}
+        />
+
+        <ProductData
+          titulo="Monto mínimo"
+          valor={moneda(
+            producto.montoMinimo
+          )}
+        />
+
+        <ProductData
+          titulo="Monto máximo"
+          valor={
+            producto.montoMaximo
+              ? moneda(
+                  producto.montoMaximo
+                )
+              : "Pendiente de configurar"
+          }
+        />
+
+        <ProductData
+          titulo="Plazos"
+          valor={`${producto.plazoMinimo} a ${producto.plazoMaximo} meses`}
+        />
+
+        <ProductData
+          titulo="Tasa anual máxima"
+          valor={tasaMaxima}
+        />
+      </div>
+
+      <div className="catPublicCard">
+        <div>
+          <span className="catLabel">
+            CAT PROMEDIO
+          </span>
+
+          <strong>
+            {catPromedio}
+          </strong>
+        </div>
+
+        <div className="catMeta">
+          <span>
+            Fecha de cálculo
+          </span>
+
+          <strong>
+            {producto.fechaCalculoCat ||
+              "Pendiente"}
+          </strong>
+        </div>
+
+        <p>
+          {producto.metodologiaCat}
+        </p>
+      </div>
+
+      <div className="requirementsGrid">
+        <div className="card">
+          <p className="cardEyebrow">
+            PERSONA FÍSICA
+          </p>
+
+          <h2>
+            Requisitos principales
+          </h2>
+
+          <RequirementList
+            items={[
+              "INE vigente.",
+              "Comprobante de domicilio no mayor a 3 meses.",
+              "Constancia de Situación Fiscal actualizada.",
+              "Carátula bancaria.",
+              "Solicitud de crédito con KYC.",
+              "Autorización de consulta de Buró de Crédito.",
+              "Estados de cuenta e información de ingresos.",
+              "Información del cónyuge u obligado solidario cuando corresponda.",
+            ]}
+          />
+        </div>
+
+        <div className="card">
+          <p className="cardEyebrow">
+            PERSONA MORAL
+          </p>
+
+          <h2>
+            Requisitos principales
+          </h2>
+
+          <RequirementList
+            items={[
+              "Acta constitutiva.",
+              "Poderes del representante legal.",
+              "Comprobante de domicilio.",
+              "Carátula bancaria.",
+              "Identificación y CSF del representante legal.",
+              "Identificación y CSF del propietario real.",
+              "Estados de cuenta.",
+              "Estados financieros.",
+              "Documentación de garantía u obligado solidario cuando corresponda.",
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="importantNotice">
+        Las condiciones específicas de
+        cada crédito —incluyendo monto
+        aprobado, tasa, CAT, comisión y
+        pago— se determinan después del
+        análisis de la solicitud.
+      </div>
+    </Pagina>
   );
 }
 
@@ -601,37 +1461,37 @@ function Inicio({ ir }) {
 function ComoFunciona({ ir }) {
   const pasos = [
     {
-      numero: 1,
       titulo: "Simula",
       texto:
         "Elige cuánto necesitas y el plazo que prefieres.",
     },
+
     {
-      numero: 2,
-      titulo: "Completa tu solicitud",
+      titulo:
+        "Completa tu solicitud",
       texto:
-        "Cuéntanos sobre ti, tus ingresos y tu actividad.",
+        "Selecciona Persona Física o Persona Moral y completa tu expediente.",
     },
+
     {
-      numero: 3,
       titulo: "Garantía",
       texto:
-        "Si tu operación requiere garantía, te indicaremos qué necesitamos.",
+        "Si la operación la requiere, te indicaremos la información necesaria.",
     },
+
     {
-      numero: 4,
-      titulo: "Revisamos tu solicitud",
+      titulo: "Revisión",
       texto:
         "TRISAL analiza tu información y capacidad de pago.",
     },
+
     {
-      numero: 5,
-      titulo: "Recibe tu oferta",
+      titulo: "Oferta",
       texto:
-        "Conoce monto aprobado, plazo, tasa, CAT y pago.",
+        "Si la solicitud es aprobada, conocerás las condiciones del crédito.",
     },
+
     {
-      numero: 6,
       titulo: "Firma y recibe",
       texto:
         "Acepta las condiciones, firma y recibe tu crédito.",
@@ -641,93 +1501,204 @@ function ComoFunciona({ ir }) {
   return (
     <Pagina
       titulo="Solicitar tu crédito es sencillo"
-      subtitulo="Te acompañamos durante todo el proceso."
+      subtitulo="Puedes conocer en todo momento la etapa en la que se encuentra tu solicitud."
     >
       <div className="simpleFlow">
-        {pasos.map((paso) => (
-          <div
-            className="simpleFlowCard"
-            key={paso.numero}
-          >
-            <div className="stepCircle">
-              {paso.numero}
-            </div>
+        {pasos.map(
+          (paso, index) => (
+            <div
+              className="simpleFlowCard"
+              key={paso.titulo}
+            >
+              <div className="stepCircle">
+                {index + 1}
+              </div>
 
-            <div>
-              <h3>{paso.titulo}</h3>
-              <p>{paso.texto}</p>
+              <h3>
+                {paso.titulo}
+              </h3>
+
+              <p>
+                {paso.texto}
+              </p>
             </div>
-          </div>
-        ))}
+          )
+        )}
       </div>
 
-      <button
-        className="primary centerButton"
-        onClick={() => ir("simulacion")}
-      >
-        Comenzar solicitud
-      </button>
+      <div className="bottomAction">
+        <button
+          className="primary"
+          onClick={() =>
+            ir("simulacion")
+          }
+        >
+          Comenzar solicitud
+        </button>
+      </div>
     </Pagina>
   );
 }
 
 /* =====================================================
-   PASO 1 - SIMULACIÓN
+   SIMULACIÓN
 ===================================================== */
 
 function Simulacion({
   datos,
   actualizar,
-  ir,
+  continuar,
 }) {
   return (
     <Pagina
       titulo="¿Cuánto necesitas?"
-      subtitulo="Elige el monto y plazo que te gustaría solicitar."
+      subtitulo="Elige monto y plazo. Las condiciones financieras se determinarán después del análisis."
     >
       <Tracker paso={1} />
 
-      <div className="card">
+      <div className="card formCard">
         <Campo
-          label="Monto solicitado"
-          value={datos.montoSolicitado}
+          label="Monto solicitado *"
           type="number"
+          value={
+            datos.montoSolicitado
+          }
           onChange={(v) =>
-            actualizar("montoSolicitado", v)
+            actualizar(
+              "montoSolicitado",
+              v
+            )
           }
         />
 
         <label className="label">
-          ¿En cuánto tiempo quieres pagarlo?
+          Plazo solicitado *
         </label>
 
         <div className="optionRow">
-          {["3", "6", "9", "12"].map((mes) => (
-            <button
-              key={mes}
-              className={
-                datos.plazoSolicitado === mes
-                  ? "optionButton selectedOption"
-                  : "optionButton"
-              }
-              onClick={() =>
-                actualizar("plazoSolicitado", mes)
-              }
-            >
-              {mes} meses
-            </button>
-          ))}
+          {["3", "6", "9", "12"].map(
+            (mes) => (
+              <button
+                key={mes}
+                type="button"
+                className={
+                  datos.plazoSolicitado ===
+                  mes
+                    ? "optionButton selectedOption"
+                    : "optionButton"
+                }
+                onClick={() =>
+                  actualizar(
+                    "plazoSolicitado",
+                    mes
+                  )
+                }
+              >
+                {mes} meses
+              </button>
+            )
+          )}
         </div>
 
         <div className="notice">
-          Las condiciones finales, incluyendo tasa,
-          CAT, comisión y pago, se determinarán
-          después de analizar tu solicitud.
+          La tasa, CAT, comisión y pago
+          definitivo no se muestran en
+          esta etapa. Las condiciones
+          dependerán del análisis de
+          crédito.
         </div>
 
+        <div className="formAction">
+          <button
+            className="primary"
+            onClick={continuar}
+          >
+            Continuar
+          </button>
+        </div>
+      </div>
+    </Pagina>
+  );
+}
+
+/* =====================================================
+   TIPO PERSONA
+===================================================== */
+
+function TipoPersona({
+  datos,
+  actualizar,
+  continuar,
+}) {
+  return (
+    <Pagina
+      titulo="¿Quién solicita el crédito?"
+      subtitulo="Selecciona una opción para mostrar únicamente la información y documentos que corresponden."
+    >
+      <Tracker paso={2} />
+
+      <div className="choiceGrid">
         <button
-          className="primary full"
-          onClick={() => ir("registro")}
+          className={
+            datos.tipoPersona ===
+            "fisica"
+              ? "bigChoice chosen"
+              : "bigChoice"
+          }
+          onClick={() =>
+            actualizar(
+              "tipoPersona",
+              "fisica"
+            )
+          }
+        >
+          <span className="choiceIcon">
+            PF
+          </span>
+
+          <h2>
+            Persona Física
+          </h2>
+
+          <p>
+            Crédito solicitado a nombre
+            propio.
+          </p>
+        </button>
+
+        <button
+          className={
+            datos.tipoPersona ===
+            "moral"
+              ? "bigChoice chosen"
+              : "bigChoice"
+          }
+          onClick={() =>
+            actualizar(
+              "tipoPersona",
+              "moral"
+            )
+          }
+        >
+          <span className="choiceIcon">
+            PM
+          </span>
+
+          <h2>
+            Persona Moral
+          </h2>
+
+          <p>
+            Crédito solicitado por una
+            empresa o sociedad.
+          </p>
+        </button>
+      </div>
+
+      <div className="bottomAction">
+        <button
+          className="primary"
+          onClick={continuar}
         >
           Continuar
         </button>
@@ -737,139 +1708,391 @@ function Simulacion({
 }
 
 /* =====================================================
-   PASO 2 - SOLICITUD
+   REGISTRO
 ===================================================== */
 
 function Registro({
   datos,
   actualizar,
+  crearCuenta,
   ir,
 }) {
   return (
     <Pagina
-      titulo="Comencemos"
-      subtitulo="Crea tu cuenta para guardar tu avance."
+      titulo="Crea tu cuenta"
+      subtitulo="Tu cuenta nos permitirá guardar el avance de tu solicitud."
     >
       <Tracker paso={2} />
 
-      <div className="card narrow">
+      <div className="card formCard">
         <Campo
-          label="Celular"
+          label="Celular *"
           value={datos.celular}
+          placeholder="844 000 0000"
           onChange={(v) =>
             actualizar("celular", v)
           }
-          placeholder="844 000 0000"
         />
 
         <Campo
-          label="Correo electrónico"
+          label="Correo electrónico *"
           value={datos.correo}
+          type="email"
+          placeholder="correo@ejemplo.com"
           onChange={(v) =>
             actualizar("correo", v)
           }
-          type="email"
-          placeholder="correo@ejemplo.com"
         />
 
         <Campo
-          label="Contraseña"
+          label="Contraseña *"
           type="password"
-          placeholder="Crea una contraseña"
+          value={datos.password}
+          placeholder="Mínimo 8 caracteres"
+          onChange={(v) =>
+            actualizar(
+              "password",
+              v
+            )
+          }
         />
 
-        <Navegacion
-          atras={() => ir("simulacion")}
-          continuar={() => ir("otp")}
+        <NavButtons
+          atras={() =>
+            ir("tipoPersona")
+          }
+          continuar={crearCuenta}
+          textoContinuar="Crear cuenta y continuar"
         />
       </div>
     </Pagina>
   );
 }
 
-function OTP({ datos, ir }) {
+function OTP({
+  datos,
+  ir,
+}) {
   return (
     <Pagina
-      titulo="Verifica tu celular"
-      subtitulo={
-        datos.celular
-          ? `Enviamos un código a ${datos.celular}`
-          : "Ingresa el código que enviamos a tu celular."
-      }
+      titulo="Verifica tu cuenta"
+      subtitulo={`Continuaremos con la solicitud asociada a ${datos.correo || "tu correo"}.`}
     >
       <Tracker paso={2} />
 
-      <div className="card narrow">
+      <div className="card formCard">
+        <div className="notice">
+          La verificación OTP sigue como
+          simulación en este prototipo.
+          Posteriormente conectaremos el
+          servicio real de SMS.
+        </div>
+
         <Campo
           label="Código de verificación"
           placeholder="000000"
         />
 
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("consentimientos")
-          }
-        >
-          Validar
-        </button>
+        <div className="formAction">
+          <button
+            className="primary"
+            onClick={() =>
+              ir("consentimientos")
+            }
+          >
+            Validar y continuar
+          </button>
+        </div>
       </div>
     </Pagina>
   );
 }
 
-function Consentimientos({ ir }) {
-  return (
-    <Pagina
-      titulo="Antes de continuar"
-      subtitulo="Necesitamos algunas autorizaciones."
-    >
-      <Tracker paso={2} />
+/* =====================================================
+   CONSENTIMIENTOS
+===================================================== */
 
-      <div className="card">
-        <Check
-          texto="He leído y acepto el aviso de privacidad."
-        />
-
-        <Check
-          texto="Autorizo la consulta de información crediticia."
-        />
-
-        <Check
-          texto="Autorizo el tratamiento de mi información para evaluar la solicitud."
-        />
-
-        <Check
-          texto="Autorizo validaciones de identidad y geolocalización cuando correspondan."
-        />
-
-        <Navegacion
-          atras={() => ir("otp")}
-          continuar={() =>
-            ir("personales")
-          }
-        />
-      </div>
-    </Pagina>
-  );
-}
-
-function Personales({
-  datos,
+function Consentimientos({
+  consentimientos,
   actualizar,
+  continuar,
   ir,
 }) {
   return (
     <Pagina
-      titulo="Cuéntanos sobre ti"
-      subtitulo="Información básica del solicitante."
+      titulo="Autorizaciones"
+      subtitulo="Necesitamos estas autorizaciones para continuar con la evaluación."
     >
       <Tracker paso={2} />
 
       <div className="card">
+        <CheckControl
+          texto="He leído y acepto el Aviso de Privacidad. *"
+          checked={
+            consentimientos.privacidad
+          }
+          onChange={(v) =>
+            actualizar(
+              "privacidad",
+              v
+            )
+          }
+        />
+
+        <CheckControl
+          texto="Autorizo la consulta de información crediticia. *"
+          checked={
+            consentimientos.buro
+          }
+          onChange={(v) =>
+            actualizar("buro", v)
+          }
+        />
+
+        <CheckControl
+          texto="Autorizo el tratamiento de mi información para evaluar la solicitud. *"
+          checked={
+            consentimientos.tratamiento
+          }
+          onChange={(v) =>
+            actualizar(
+              "tratamiento",
+              v
+            )
+          }
+        />
+
+        <CheckControl
+          texto="Autorizo las validaciones de identidad y geolocalización que correspondan. *"
+          checked={
+            consentimientos.identidad
+          }
+          onChange={(v) =>
+            actualizar(
+              "identidad",
+              v
+            )
+          }
+        />
+
+        <NavButtons
+          atras={() => ir("otp")}
+          continuar={continuar}
+        />
+      </div>
+    </Pagina>
+  );
+}
+
+/* =====================================================
+   DATOS SOLICITANTE
+===================================================== */
+
+function DatosSolicitante({
+  datos,
+  actualizar,
+  continuar,
+  ir,
+}) {
+  if (
+    datos.tipoPersona === "moral"
+  ) {
+    return (
+      <Pagina
+        titulo="Datos de la empresa"
+        subtitulo="Completa la información de la Persona Moral, representante legal y propietario real."
+      >
+        <Tracker paso={2} />
+
+        <div className="card">
+          <SectionDivider
+            titulo="Empresa"
+          />
+
+          <div className="grid2">
+            <Campo
+              label="Razón social *"
+              value={
+                datos.razonSocial
+              }
+              onChange={(v) =>
+                actualizar(
+                  "razonSocial",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="RFC *"
+              value={
+                datos.rfcEmpresa
+              }
+              onChange={(v) =>
+                actualizar(
+                  "rfcEmpresa",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="Fecha de constitución *"
+              type="date"
+              value={
+                datos.fechaConstitucion
+              }
+              onChange={(v) =>
+                actualizar(
+                  "fechaConstitucion",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="Actividad económica *"
+              value={
+                datos.actividadEconomica
+              }
+              onChange={(v) =>
+                actualizar(
+                  "actividadEconomica",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="Giro / objeto social"
+              value={
+                datos.giroMercantil
+              }
+              onChange={(v) =>
+                actualizar(
+                  "giroMercantil",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="Nacionalidad"
+              value={
+                datos.nacionalidadEmpresa
+              }
+              onChange={(v) =>
+                actualizar(
+                  "nacionalidadEmpresa",
+                  v
+                )
+              }
+            />
+          </div>
+
+          <SectionDivider
+            titulo="Representante legal"
+          />
+
+          <div className="grid2">
+            <Campo
+              label="Nombre completo *"
+              value={
+                datos.representanteLegal
+              }
+              onChange={(v) =>
+                actualizar(
+                  "representanteLegal",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="RFC"
+              value={
+                datos.rfcRepresentante
+              }
+              onChange={(v) =>
+                actualizar(
+                  "rfcRepresentante",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="CURP"
+              value={
+                datos.curpRepresentante
+              }
+              onChange={(v) =>
+                actualizar(
+                  "curpRepresentante",
+                  v
+                )
+              }
+            />
+          </div>
+
+          <SectionDivider
+            titulo="Propietario real / beneficiario controlador"
+          />
+
+          <div className="grid2">
+            <Campo
+              label="Nombre *"
+              value={
+                datos.propietarioReal
+              }
+              onChange={(v) =>
+                actualizar(
+                  "propietarioReal",
+                  v
+                )
+              }
+            />
+
+            <Campo
+              label="RFC"
+              value={
+                datos.rfcPropietarioReal
+              }
+              onChange={(v) =>
+                actualizar(
+                  "rfcPropietarioReal",
+                  v
+                )
+              }
+            />
+          </div>
+
+          <NavButtons
+            atras={() =>
+              ir("consentimientos")
+            }
+            continuar={continuar}
+          />
+        </div>
+      </Pagina>
+    );
+  }
+
+  return (
+    <Pagina
+      titulo="Cuéntanos sobre ti"
+      subtitulo="Completa los datos de la Persona Física solicitante."
+    >
+      <Tracker paso={2} />
+
+      <div className="card">
+        <SectionDivider
+          titulo="Datos personales"
+        />
+
         <div className="grid2">
           <Campo
-            label="Nombre"
+            label="Nombre *"
             value={datos.nombre}
             onChange={(v) =>
               actualizar("nombre", v)
@@ -877,8 +2100,10 @@ function Personales({
           />
 
           <Campo
-            label="Apellido paterno"
-            value={datos.apellidoPaterno}
+            label="Apellido paterno *"
+            value={
+              datos.apellidoPaterno
+            }
             onChange={(v) =>
               actualizar(
                 "apellidoPaterno",
@@ -889,7 +2114,9 @@ function Personales({
 
           <Campo
             label="Apellido materno"
-            value={datos.apellidoMaterno}
+            value={
+              datos.apellidoMaterno
+            }
             onChange={(v) =>
               actualizar(
                 "apellidoMaterno",
@@ -899,7 +2126,7 @@ function Personales({
           />
 
           <Campo
-            label="CURP"
+            label="CURP *"
             value={datos.curp}
             onChange={(v) =>
               actualizar("curp", v)
@@ -907,7 +2134,7 @@ function Personales({
           />
 
           <Campo
-            label="RFC"
+            label="RFC *"
             value={datos.rfc}
             onChange={(v) =>
               actualizar("rfc", v)
@@ -915,9 +2142,11 @@ function Personales({
           />
 
           <Campo
-            label="Fecha de nacimiento"
+            label="Fecha de nacimiento *"
             type="date"
-            value={datos.nacimiento}
+            value={
+              datos.nacimiento
+            }
             onChange={(v) =>
               actualizar(
                 "nacimiento",
@@ -925,72 +2154,487 @@ function Personales({
               )
             }
           />
+
+          <Select
+            label="Estado civil *"
+            value={
+              datos.estadoCivil
+            }
+            onChange={(v) =>
+              actualizar(
+                "estadoCivil",
+                v
+              )
+            }
+            opciones={[
+              "",
+              "Soltero",
+              "Casado",
+              "Unión libre",
+              "Divorciado",
+              "Viudo",
+            ]}
+          />
+
+          <Campo
+            label="Dependientes económicos"
+            type="number"
+            value={
+              datos.dependientes
+            }
+            onChange={(v) =>
+              actualizar(
+                "dependientes",
+                v
+              )
+            }
+          />
         </div>
 
-        <Navegacion
+        {datos.estadoCivil ===
+          "Casado" && (
+          <>
+            <SectionDivider
+              titulo="Información matrimonial"
+            />
+
+            <Select
+              label="Régimen matrimonial *"
+              value={
+                datos.regimenMatrimonial
+              }
+              onChange={(v) =>
+                actualizar(
+                  "regimenMatrimonial",
+                  v
+                )
+              }
+              opciones={[
+                "",
+                "Separación de bienes",
+                "Sociedad conyugal",
+              ]}
+            />
+          </>
+        )}
+
+        {datos.estadoCivil ===
+          "Casado" &&
+          datos.regimenMatrimonial ===
+            "Sociedad conyugal" && (
+            <>
+              <div className="importantNotice">
+                Necesitamos información
+                adicional del cónyuge por
+                tratarse de sociedad
+                conyugal.
+              </div>
+
+              <div className="grid2">
+                <Campo
+                  label="Nombre del cónyuge *"
+                  value={
+                    datos.conyugeNombre
+                  }
+                  onChange={(v) =>
+                    actualizar(
+                      "conyugeNombre",
+                      v
+                    )
+                  }
+                />
+
+                <Campo
+                  label="CURP *"
+                  value={
+                    datos.conyugeCurp
+                  }
+                  onChange={(v) =>
+                    actualizar(
+                      "conyugeCurp",
+                      v
+                    )
+                  }
+                />
+
+                <Campo
+                  label="RFC *"
+                  value={
+                    datos.conyugeRfc
+                  }
+                  onChange={(v) =>
+                    actualizar(
+                      "conyugeRfc",
+                      v
+                    )
+                  }
+                />
+              </div>
+            </>
+          )}
+
+        <NavButtons
           atras={() =>
             ir("consentimientos")
           }
-          continuar={() =>
-            ir("identidad")
-          }
+          continuar={continuar}
         />
       </div>
     </Pagina>
   );
 }
 
-function Identidad({ ir }) {
+/* =====================================================
+   DOCUMENTOS
+===================================================== */
+
+function DocumentosIdentidad({
+  datos,
+  archivos,
+  seleccionarArchivo,
+  continuar,
+  ir,
+}) {
+  if (
+    datos.tipoPersona === "moral"
+  ) {
+    return (
+      <Pagina
+        titulo="Documentos de la empresa"
+        subtitulo="Carga los documentos necesarios para integrar el expediente de la Persona Moral."
+      >
+        <Tracker paso={2} />
+
+        <div className="card">
+          <SectionDivider
+            titulo="Empresa"
+          />
+
+          <Upload
+            titulo="Acta constitutiva *"
+            archivo={
+              archivos.pmActaConstitutiva
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmActaConstitutiva",
+                f
+              )
+            }
+          />
+
+          <Upload
+            titulo="Poderes del representante legal *"
+            archivo={
+              archivos.pmPoderes
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmPoderes",
+                f
+              )
+            }
+          />
+
+          <Upload
+            titulo="Asambleas o reformas aplicables"
+            archivo={
+              archivos.pmAsambleas
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmAsambleas",
+                f
+              )
+            }
+          />
+
+          <Upload
+            titulo="Comprobante de domicilio *"
+            archivo={
+              archivos.pmComprobanteDomicilio
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmComprobanteDomicilio",
+                f
+              )
+            }
+          />
+
+          <Upload
+            titulo="Carátula bancaria *"
+            archivo={
+              archivos.pmCaratulaBancaria
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmCaratulaBancaria",
+                f
+              )
+            }
+          />
+
+          <SectionDivider
+            titulo="Representante legal"
+          />
+
+          <Upload
+            titulo="Identificación oficial *"
+            archivo={
+              archivos.pmIdRepresentante
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmIdRepresentante",
+                f
+              )
+            }
+          />
+
+          <Upload
+            titulo="Constancia de Situación Fiscal *"
+            archivo={
+              archivos.pmCsfRepresentante
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmCsfRepresentante",
+                f
+              )
+            }
+          />
+
+          <SectionDivider
+            titulo="Propietario real"
+          />
+
+          <Upload
+            titulo="Identificación oficial *"
+            archivo={
+              archivos.pmIdPropietario
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmIdPropietario",
+                f
+              )
+            }
+          />
+
+          <Upload
+            titulo="Constancia de Situación Fiscal *"
+            archivo={
+              archivos.pmCsfPropietario
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "pmCsfPropietario",
+                f
+              )
+            }
+          />
+
+          <NavButtons
+            atras={() =>
+              ir("datosSolicitante")
+            }
+            continuar={continuar}
+          />
+        </div>
+      </Pagina>
+    );
+  }
+
   return (
     <Pagina
-      titulo="Verifica tu identidad"
-      subtitulo="Necesitamos confirmar que eres tú."
+      titulo="Tus documentos"
+      subtitulo="Carga los documentos necesarios para integrar tu expediente."
     >
       <Tracker paso={2} />
 
       <div className="card">
-        <Upload
-          titulo="INE - frente"
-          descripcion="Toma una fotografía clara."
+        <SectionDivider
+          titulo="Solicitante"
         />
 
         <Upload
-          titulo="INE - reverso"
-          descripcion="Asegúrate de que toda la información sea visible."
-        />
-
-        <Upload
-          titulo="Selfie"
-          descripcion="Utilizaremos esta fotografía para validar tu identidad."
-        />
-
-        <Navegacion
-          atras={() => ir("personales")}
-          continuar={() =>
-            ir("domicilio")
+          titulo="INE vigente — frente *"
+          archivo={
+            archivos.pfIneFrente
           }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfIneFrente",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="INE vigente — reverso *"
+          archivo={
+            archivos.pfIneReverso
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfIneReverso",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="Comprobante de domicilio no mayor a 3 meses *"
+          archivo={
+            archivos.pfComprobanteDomicilio
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfComprobanteDomicilio",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="Constancia de Situación Fiscal actualizada *"
+          archivo={
+            archivos.pfCsf
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfCsf",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="Carátula bancaria *"
+          archivo={
+            archivos.pfCaratulaBancaria
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfCaratulaBancaria",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="Solicitud de crédito / KYC *"
+          archivo={
+            archivos.pfSolicitudKyc
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfSolicitudKyc",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="Autorización de consulta de Buró *"
+          archivo={
+            archivos.pfAutorizacionBuro
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfAutorizacionBuro",
+              f
+            )
+          }
+        />
+
+        <Upload
+          titulo="Selfie / validación de identidad"
+          archivo={
+            archivos.pfSelfie
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "pfSelfie",
+              f
+            )
+          }
+        />
+
+        {datos.estadoCivil ===
+          "Casado" &&
+          datos.regimenMatrimonial ===
+            "Sociedad conyugal" && (
+            <>
+              <SectionDivider
+                titulo="Cónyuge"
+              />
+
+              <Upload
+                titulo="INE del cónyuge *"
+                archivo={
+                  archivos.conyugeIne
+                }
+                onChange={(f) =>
+                  seleccionarArchivo(
+                    "conyugeIne",
+                    f
+                  )
+                }
+              />
+
+              <Upload
+                titulo="CSF del cónyuge *"
+                archivo={
+                  archivos.conyugeCsf
+                }
+                onChange={(f) =>
+                  seleccionarArchivo(
+                    "conyugeCsf",
+                    f
+                  )
+                }
+              />
+            </>
+          )}
+
+        <NavButtons
+          atras={() =>
+            ir("datosSolicitante")
+          }
+          continuar={continuar}
         />
       </div>
     </Pagina>
   );
 }
 
+/* =====================================================
+   DOMICILIO
+===================================================== */
+
 function Domicilio({
   datos,
   actualizar,
+  continuar,
   ir,
 }) {
   return (
     <Pagina
-      titulo="¿Dónde vives?"
-      subtitulo="Ingresa tu domicilio actual."
+      titulo="Domicilio"
+      subtitulo={
+        datos.tipoPersona === "moral"
+          ? "Ingresa el domicilio fiscal u operativo de la empresa."
+          : "Ingresa el domicilio actual del solicitante."
+      }
     >
       <Tracker paso={2} />
 
       <div className="card">
         <div className="grid2">
           <Campo
-            label="Calle"
+            label="Calle *"
             value={datos.calle}
             onChange={(v) =>
               actualizar("calle", v)
@@ -998,7 +2642,20 @@ function Domicilio({
           />
 
           <Campo
-            label="Colonia"
+            label="Número exterior *"
+            value={
+              datos.numeroExterior
+            }
+            onChange={(v) =>
+              actualizar(
+                "numeroExterior",
+                v
+              )
+            }
+          />
+
+          <Campo
+            label="Colonia *"
             value={datos.colonia}
             onChange={(v) =>
               actualizar("colonia", v)
@@ -1006,7 +2663,7 @@ function Domicilio({
           />
 
           <Campo
-            label="Código postal"
+            label="Código postal *"
             value={datos.cp}
             onChange={(v) =>
               actualizar("cp", v)
@@ -1014,7 +2671,7 @@ function Domicilio({
           />
 
           <Campo
-            label="Municipio"
+            label="Municipio *"
             value={datos.municipio}
             onChange={(v) =>
               actualizar(
@@ -1025,7 +2682,7 @@ function Domicilio({
           />
 
           <Campo
-            label="Estado"
+            label="Estado *"
             value={datos.estado}
             onChange={(v) =>
               actualizar("estado", v)
@@ -1033,155 +2690,284 @@ function Domicilio({
           />
         </div>
 
-        <Upload
-          titulo="Comprobante de domicilio"
-          descripcion="Sube un comprobante reciente."
-        />
-
-        <Navegacion
+        <NavButtons
           atras={() =>
-            ir("identidad")
+            ir(
+              "documentosIdentidad"
+            )
           }
-          continuar={() =>
-            ir("ingresos")
-          }
+          continuar={continuar}
         />
       </div>
     </Pagina>
   );
 }
 
+/* =====================================================
+   INGRESOS
+===================================================== */
+
 function Ingresos({
   datos,
   actualizar,
+  continuar,
   ir,
 }) {
-  return (
-    <Pagina
-      titulo="¿A qué te dedicas?"
-      subtitulo="Esta información nos ayuda a evaluar tu capacidad de pago."
-    >
-      <Tracker paso={2} />
+  if (
+    datos.tipoPersona === "moral"
+  ) {
+    return (
+      <Pagina
+        titulo="Información financiera"
+        subtitulo="Ayúdanos a conocer la capacidad financiera de la empresa."
+      >
+        <Tracker paso={2} />
 
-      <div className="card">
-        <Select
-          label="Actividad"
-          value={datos.ocupacion}
-          onChange={(v) =>
-            actualizar(
-              "ocupacion",
-              v
-            )
-          }
-          opciones={[
-            "",
-            "Empleado",
-            "Independiente",
-            "Negocio propio",
-          ]}
-        />
-
-        <div className="grid2">
+        <div className="card formCard">
           <Campo
-            label="Empresa o actividad"
-            value={datos.empresa}
+            label="Ventas mensuales aproximadas *"
+            type="number"
+            value={
+              datos.ventasMensuales
+            }
             onChange={(v) =>
-              actualizar("empresa", v)
+              actualizar(
+                "ventasMensuales",
+                v
+              )
             }
           />
 
           <Campo
-            label="Antigüedad"
-            value={datos.antiguedad}
+            label="Antigüedad de la empresa"
+            value={
+              datos.antiguedad
+            }
+            placeholder="Ej. 5 años"
             onChange={(v) =>
               actualizar(
                 "antiguedad",
                 v
               )
             }
-            placeholder="Ej. 2 años"
+          />
+
+          <NavButtons
+            atras={() =>
+              ir("domicilio")
+            }
+            continuar={continuar}
+          />
+        </div>
+      </Pagina>
+    );
+  }
+
+  return (
+    <Pagina
+      titulo="Trabajo e ingresos"
+      subtitulo="Esta información nos ayuda a evaluar tu capacidad de pago."
+    >
+      <Tracker paso={2} />
+
+      <div className="card">
+        <div className="grid2">
+          <Select
+            label="Actividad *"
+            value={datos.ocupacion}
+            onChange={(v) =>
+              actualizar(
+                "ocupacion",
+                v
+              )
+            }
+            opciones={[
+              "",
+              "Empleado",
+              "Independiente",
+              "Negocio propio",
+            ]}
           />
 
           <Campo
-            label="Ingreso mensual"
-            value={datos.ingreso}
+            label="Empresa o actividad *"
+            value={
+              datos.empresaActividad
+            }
+            onChange={(v) =>
+              actualizar(
+                "empresaActividad",
+                v
+              )
+            }
+          />
+
+          <Campo
+            label="Antigüedad *"
+            value={
+              datos.antiguedad
+            }
+            placeholder="Ej. 2 años"
+            onChange={(v) =>
+              actualizar(
+                "antiguedad",
+                v
+              )
+            }
+          />
+
+          <Campo
+            label="Ingreso mensual *"
             type="number"
+            value={datos.ingreso}
             onChange={(v) =>
               actualizar("ingreso", v)
             }
           />
+
+          <Select
+            label="Frecuencia de ingreso"
+            value={
+              datos.frecuenciaPago
+            }
+            onChange={(v) =>
+              actualizar(
+                "frecuenciaPago",
+                v
+              )
+            }
+            opciones={[
+              "",
+              "Semanal",
+              "Quincenal",
+              "Mensual",
+              "Variable",
+            ]}
+          />
         </div>
 
-        <Navegacion
+        <NavButtons
           atras={() =>
             ir("domicilio")
           }
-          continuar={() =>
-            ir(
-              "documentosFinancieros"
-            )
-          }
+          continuar={continuar}
         />
       </div>
     </Pagina>
   );
 }
 
+/* =====================================================
+   FINANCIEROS
+===================================================== */
+
 function DocumentosFinancieros({
+  datos,
+  archivos,
+  seleccionarArchivo,
+  continuar,
   ir,
 }) {
   return (
     <Pagina
-      titulo="Comprueba tus ingresos"
-      subtitulo="Sube la información disponible."
+      titulo="Información financiera"
+      subtitulo="Carga la documentación financiera disponible."
     >
       <Tracker paso={2} />
 
       <div className="card">
         <Upload
-          titulo="Estados de cuenta"
-          descripcion="Preferentemente los últimos tres meses."
+          titulo="Estados de cuenta — últimos meses *"
+          archivo={
+            archivos.estadosCuenta
+          }
+          onChange={(f) =>
+            seleccionarArchivo(
+              "estadosCuenta",
+              f
+            )
+          }
         />
 
-        <Upload
-          titulo="Recibos de nómina"
-          descripcion="Cuando corresponda."
-        />
+        {datos.tipoPersona ===
+          "fisica" && (
+          <>
+            <Upload
+              titulo="Recibos de nómina / comprobantes de ingresos"
+              archivo={
+                archivos.comprobanteIngresos
+              }
+              onChange={(f) =>
+                seleccionarArchivo(
+                  "comprobanteIngresos",
+                  f
+                )
+              }
+            />
 
-        <Upload
-          titulo="Otro comprobante"
-          descripcion="Opcional."
-        />
+            <Upload
+              titulo="Declaraciones fiscales"
+              archivo={
+                archivos.declaraciones
+              }
+              onChange={(f) =>
+                seleccionarArchivo(
+                  "declaraciones",
+                  f
+                )
+              }
+            />
+          </>
+        )}
 
-        <Navegacion
+        {datos.tipoPersona ===
+          "moral" && (
+          <Upload
+            titulo="Estados financieros *"
+            archivo={
+              archivos.estadosFinancieros
+            }
+            onChange={(f) =>
+              seleccionarArchivo(
+                "estadosFinancieros",
+                f
+              )
+            }
+          />
+        )}
+
+        <NavButtons
           atras={() =>
             ir("ingresos")
           }
-          continuar={() =>
-            ir("solicitud")
-          }
+          continuar={continuar}
         />
       </div>
     </Pagina>
   );
 }
 
+/* =====================================================
+   CONFIRMAR SOLICITUD
+===================================================== */
+
 function Solicitud({
   datos,
   actualizar,
+  continuar,
   ir,
 }) {
   return (
     <Pagina
       titulo="Confirma lo que necesitas"
-      subtitulo="Puedes modificar monto, plazo y destino."
+      subtitulo="Estas son las condiciones solicitadas. Todavía no representan una oferta de crédito."
     >
       <Tracker paso={2} />
 
       <div className="card">
         <div className="grid2">
           <Campo
-            label="Monto"
+            label="Monto solicitado *"
             type="number"
             value={
               datos.montoSolicitado
@@ -1195,7 +2981,7 @@ function Solicitud({
           />
 
           <Select
-            label="Plazo"
+            label="Plazo solicitado *"
             value={
               datos.plazoSolicitado
             }
@@ -1214,7 +3000,7 @@ function Solicitud({
           />
 
           <Select
-            label="Destino del crédito"
+            label="Destino del crédito *"
             value={datos.destino}
             onChange={(v) =>
               actualizar("destino", v)
@@ -1224,22 +3010,26 @@ function Solicitud({
               "Capital de trabajo",
               "Inventario",
               "Equipo o maquinaria",
-              "Gastos personales",
-              "Emergencia",
+              "Liquidez",
+              "Proyecto productivo",
               "Otro",
             ]}
           />
         </div>
 
-        <Navegacion
+        <div className="notice">
+          La tasa, CAT, comisión y pago
+          serán determinados después del
+          análisis de la solicitud.
+        </div>
+
+        <NavButtons
           atras={() =>
             ir(
               "documentosFinancieros"
             )
           }
-          continuar={() =>
-            ir("tipoCredito")
-          }
+          continuar={continuar}
         />
       </div>
     </Pagina>
@@ -1247,26 +3037,26 @@ function Solicitud({
 }
 
 /* =====================================================
-   PASO 3 - GARANTÍA
+   GARANTÍA
 ===================================================== */
 
 function TipoCredito({
   datos,
   actualizar,
+  continuar,
   ir,
 }) {
   return (
     <Pagina
-      titulo="Estructura de tu solicitud"
-      subtitulo="Selecciona la modalidad para esta demostración."
+      titulo="Estructura de la operación"
+      subtitulo="Para esta demostración puedes visualizar las dos posibles rutas."
     >
       <Tracker paso={3} />
 
       <div className="choiceGrid">
         <button
           className={
-            datos.tipoCredito ===
-            "sin"
+            datos.tipoCredito === "sin"
               ? "bigChoice chosen"
               : "bigChoice"
           }
@@ -1278,24 +3068,23 @@ function TipoCredito({
           }
         >
           <span className="choiceIcon">
-            ○
+            SG
           </span>
 
-          <h3>
-            Crédito sin garantía
-          </h3>
+          <h2>
+            Sin garantía
+          </h2>
 
           <p>
-            La evaluación se basará
-            principalmente en tu perfil
+            La evaluación se concentra
+            principalmente en el perfil
             y capacidad de pago.
           </p>
         </button>
 
         <button
           className={
-            datos.tipoCredito ===
-            "con"
+            datos.tipoCredito === "con"
               ? "bigChoice chosen"
               : "bigChoice"
           }
@@ -1307,34 +3096,27 @@ function TipoCredito({
           }
         >
           <span className="choiceIcon">
-            ◇
+            CG
           </span>
 
-          <h3>
-            Crédito con garantía
-          </h3>
+          <h2>
+            Con garantía
+          </h2>
 
           <p>
-            La operación tendrá una
+            La operación incorpora una
             garantía adicional como
             respaldo.
           </p>
         </button>
       </div>
 
-      {datos.tipoCredito && (
-        <button
-          className="primary full"
-          onClick={() =>
-            datos.tipoCredito ===
-            "con"
-              ? ir("garantia")
-              : ir("revision")
-          }
-        >
-          Continuar
-        </button>
-      )}
+      <NavButtons
+        atras={() =>
+          ir("solicitud")
+        }
+        continuar={continuar}
+      />
     </Pagina>
   );
 }
@@ -1342,30 +3124,24 @@ function TipoCredito({
 function Garantia({
   datos,
   actualizar,
+  archivos,
+  seleccionarArchivo,
+  continuar,
   ir,
 }) {
-  function siguiente() {
-    if (
-      datos.tipoGarantia ===
-      "Obligado solidario"
-    ) {
-      ir("obligado");
-    } else {
-      ir("garantiaStatus");
-    }
-  }
-
   return (
     <Pagina
-      titulo="Garantía del crédito"
-      subtitulo="Selecciona el tipo de garantía."
+      titulo="Garantía"
+      subtitulo="Indica cómo se respaldará la operación."
     >
       <Tracker paso={3} />
 
       <div className="card">
         <Select
-          label="Tipo de garantía"
-          value={datos.tipoGarantia}
+          label="Tipo de garantía *"
+          value={
+            datos.tipoGarantia
+          }
           onChange={(v) =>
             actualizar(
               "tipoGarantia",
@@ -1387,7 +3163,7 @@ function Garantia({
             "Obligado solidario" && (
             <>
               <Campo
-                label="Descripción"
+                label="Descripción *"
                 value={
                   datos.descripcionGarantia
                 }
@@ -1400,7 +3176,7 @@ function Garantia({
               />
 
               <Campo
-                label="Valor estimado"
+                label="Valor estimado *"
                 type="number"
                 value={
                   datos.valorGarantia
@@ -1414,20 +3190,26 @@ function Garantia({
               />
 
               <Upload
-                titulo="Documentación"
-                descripcion="Sube los documentos disponibles de la garantía."
+                titulo="Documentación de la garantía *"
+                archivo={
+                  archivos.garantiaDocumentacion
+                }
+                onChange={(f) =>
+                  seleccionarArchivo(
+                    "garantiaDocumentacion",
+                    f
+                  )
+                }
               />
             </>
           )}
 
-        {datos.tipoGarantia && (
-          <button
-            className="primary full"
-            onClick={siguiente}
-          >
-            Continuar
-          </button>
-        )}
+        <NavButtons
+          atras={() =>
+            ir("tipoCredito")
+          }
+          continuar={continuar}
+        />
       </div>
     </Pagina>
   );
@@ -1436,18 +3218,19 @@ function Garantia({
 function Obligado({
   datos,
   actualizar,
+  continuar,
   ir,
 }) {
   return (
     <Pagina
-      titulo="Invita a tu obligado solidario"
-      subtitulo="Realizará su proceso de forma independiente."
+      titulo="Obligado solidario"
+      subtitulo="El obligado solidario tendrá posteriormente un expediente independiente."
     >
       <Tracker paso={3} />
 
-      <div className="card narrow">
+      <div className="card formCard">
         <Campo
-          label="Nombre completo"
+          label="Nombre completo *"
           value={
             datos.garanteNombre
           }
@@ -1460,7 +3243,20 @@ function Obligado({
         />
 
         <Campo
-          label="Celular"
+          label="RFC *"
+          value={
+            datos.garanteRfc
+          }
+          onChange={(v) =>
+            actualizar(
+              "garanteRfc",
+              v
+            )
+          }
+        />
+
+        <Campo
+          label="Celular *"
           value={
             datos.garanteTelefono
           }
@@ -1473,7 +3269,7 @@ function Obligado({
         />
 
         <Campo
-          label="Correo"
+          label="Correo *"
           type="email"
           value={
             datos.garanteCorreo
@@ -1486,14 +3282,12 @@ function Obligado({
           }
         />
 
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("garantiaStatus")
+        <NavButtons
+          atras={() =>
+            ir("garantia")
           }
-        >
-          Enviar invitación
-        </button>
+          continuar={continuar}
+        />
       </div>
     </Pagina>
   );
@@ -1505,23 +3299,21 @@ function GarantiaStatus({
 }) {
   return (
     <Pagina
-      titulo="Garantía"
-      subtitulo="Te mostraremos únicamente el avance."
+      titulo="Validación de garantía"
+      subtitulo="Podrás consultar el estado sin visualizar información privada de terceros."
     >
       <Tracker paso={3} />
 
       <div className="card">
-        <div className="statusHeader">
+        <div className="statusRow">
           <div>
-            <h3>
-              {datos.tipoGarantia ||
-                "Garantía"}
-            </h3>
+            <span className="summaryLabel">
+              Garantía
+            </span>
 
-            <p>
-              Validación requerida para
-              continuar.
-            </p>
+            <h2>
+              {datos.tipoGarantia}
+            </h2>
           </div>
 
           <span className="yellowStatus">
@@ -1530,89 +3322,111 @@ function GarantiaStatus({
         </div>
 
         <div className="demoNotice">
-          DEMO: simularemos la validación
-          para continuar con el flujo.
+          Para continuar con el prototipo,
+          puedes simular la validación.
         </div>
 
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("revision")
-          }
-        >
-          Simular garantía validada
-        </button>
+        <div className="formAction">
+          <button
+            className="primary"
+            onClick={() =>
+              ir("revision")
+            }
+          >
+            Simular garantía validada
+          </button>
+        </div>
       </div>
     </Pagina>
   );
 }
 
 /* =====================================================
-   PASO 4 - REVISIÓN
+   REVISIÓN
 ===================================================== */
 
 function Revision({
   datos,
+  guardar,
+  guardando,
   ir,
 }) {
+  const nombre =
+    datos.tipoPersona === "fisica"
+      ? `${datos.nombre} ${datos.apellidoPaterno}`
+      : datos.razonSocial;
+
   return (
     <Pagina
       titulo="Revisa tu solicitud"
-      subtitulo="Confirma que la información sea correcta."
+      subtitulo="Confirma que la información sea correcta antes de enviarla."
     >
       <Tracker paso={4} />
 
       <div className="card">
-        <Resumen
-          titulo="Solicitante"
-          valor={`${datos.nombre} ${datos.apellidoPaterno}`}
-        />
+        <div className="summaryGrid">
+          <SummaryCard
+            titulo="Solicitante"
+            valor={nombre}
+          />
 
-        <Resumen
-          titulo="Monto solicitado"
-          valor={moneda(
-            Number(
+          <SummaryCard
+            titulo="Tipo"
+            valor={
+              datos.tipoPersona ===
+              "fisica"
+                ? "Persona Física"
+                : "Persona Moral"
+            }
+          />
+
+          <SummaryCard
+            titulo="Monto"
+            valor={moneda(
               datos.montoSolicitado
-            )
-          )}
-        />
+            )}
+          />
 
-        <Resumen
-          titulo="Plazo solicitado"
-          valor={`${datos.plazoSolicitado} meses`}
-        />
+          <SummaryCard
+            titulo="Plazo"
+            valor={`${datos.plazoSolicitado} meses`}
+          />
 
-        <Resumen
-          titulo="Destino"
-          valor={datos.destino}
-        />
+          <SummaryCard
+            titulo="Destino"
+            valor={datos.destino}
+          />
 
-        <Resumen
-          titulo="Garantía"
-          valor={
-            datos.tipoCredito ===
-            "con"
-              ? datos.tipoGarantia
-              : "No requerida"
-          }
-        />
-
-        <div className="importantNotice">
-          Todavía no existe una tasa,
-          CAT, comisión ni pago
-          definitivo. Las condiciones se
-          determinarán durante la
-          evaluación de crédito.
+          <SummaryCard
+            titulo="Garantía"
+            valor={
+              datos.tipoCredito === "con"
+                ? datos.tipoGarantia
+                : "No requerida"
+            }
+          />
         </div>
 
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("enRevision")
+        <div className="importantNotice">
+          En esta etapa todavía no existe
+          tasa, CAT, comisión ni pago
+          definitivo. Las condiciones
+          serán determinadas durante el
+          análisis de crédito.
+        </div>
+
+        <NavButtons
+          atras={() =>
+            ir("tipoCredito")
           }
-        >
-          Enviar solicitud
-        </button>
+          continuar={guardar}
+          textoContinuar={
+            guardando
+              ? "Enviando..."
+              : "Enviar solicitud"
+          }
+          disabled={guardando}
+        />
       </div>
     </Pagina>
   );
@@ -1620,46 +3434,55 @@ function Revision({
 
 function EnRevision({
   datos,
+  folio,
   ir,
 }) {
   return (
     <Pagina
-      titulo="Estamos revisando tu solicitud"
-      subtitulo="Folio TRI-482917"
+      titulo="Solicitud recibida"
+      subtitulo={`Folio ${folio || "TRI-XXXXXX"}`}
     >
       <Tracker paso={4} />
 
-      <div className="reviewCard">
-        <div className="loaderCircle">
-          ...
+      <div className="statusCard">
+        <div className="statusIcon">
+          04
         </div>
 
-        <h3>
-          Solicitud en revisión
-        </h3>
+        <div>
+          <p className="cardEyebrow">
+            EN REVISIÓN
+          </p>
 
-        <p>
-          Estamos analizando tu
-          información para determinar las
-          condiciones de tu crédito.
-        </p>
+          <h2>
+            Estamos analizando tu
+            solicitud.
+          </h2>
 
-        <div className="requestSummary">
-          <Resumen
-            titulo="Monto solicitado"
-            valor={moneda(
-              Number(
-                datos.montoSolicitado
-              )
-            )}
-          />
-
-          <Resumen
-            titulo="Plazo solicitado"
-            valor={`${datos.plazoSolicitado} meses`}
-          />
+          <p>
+            Nuestro equipo revisará tu
+            información para determinar
+            las condiciones que, en su
+            caso, puedan ofrecerse.
+          </p>
         </div>
+      </div>
 
+      <div className="summaryGrid">
+        <SummaryCard
+          titulo="Monto solicitado"
+          valor={moneda(
+            datos.montoSolicitado
+          )}
+        />
+
+        <SummaryCard
+          titulo="Plazo solicitado"
+          valor={`${datos.plazoSolicitado} meses`}
+        />
+      </div>
+
+      <div className="demoArea">
         <button
           className="demoButton"
           onClick={() =>
@@ -1674,8 +3497,7 @@ function EnRevision({
 }
 
 /* =====================================================
-   PASO 5 - OFERTA
-   AQUÍ APARECE CAT / TASA / COMISIÓN
+   OFERTA
 ===================================================== */
 
 function Oferta({
@@ -1686,127 +3508,123 @@ function Oferta({
   return (
     <Pagina
       titulo="Tenemos una oferta para ti"
-      subtitulo="Revisa cuidadosamente las condiciones aprobadas."
+      subtitulo="Aquí aparecen por primera vez las condiciones financieras de tu oferta individual."
     >
       <Tracker paso={5} />
 
-      <div className="offerCard">
-        <p className="offerLabel">
-          Monto aprobado
+      <div className="offerHero">
+        <p className="offerEyebrow">
+          MONTO APROBADO
         </p>
 
         <h2>
           {moneda(
-            Number(
-              datos.montoAprobado
-            )
+            datos.montoAprobado
           )}
         </h2>
+      </div>
 
-        <div className="offerGrid">
-          <OfertaDato
-            titulo="Plazo"
-            valor={`${datos.plazoAprobado} meses`}
-          />
+      <div className="offerGrid">
+        <OfertaDato
+          titulo="Plazo"
+          valor={`${datos.plazoAprobado} meses`}
+        />
 
-          <OfertaDato
-            titulo="Tasa anual fija"
-            valor={`${datos.tasaAprobada}%`}
-          />
+        <OfertaDato
+          titulo="Tasa anual fija"
+          valor={`${Number(
+            datos.tasaAprobada
+          ).toFixed(1)}%`}
+        />
 
-          <OfertaDato
-            titulo="Pago mensual"
-            valor={moneda(
-              pagoOferta
-            )}
-          />
+        <OfertaDato
+          titulo="Pago estimado"
+          valor={moneda(
+            pagoOferta
+          )}
+        />
 
-          <OfertaDato
-            titulo="Comisión"
-            valor={`${datos.comisionAprobada}%`}
-          />
+        <OfertaDato
+          titulo="Comisión"
+          valor={`${Number(
+            datos.comisionAprobada
+          ).toFixed(1)}%`}
+        />
 
-          <OfertaDato
-            titulo="CAT"
-            valor={`${datos.catAprobado}%`}
-          />
+        <OfertaDato
+          titulo="CAT"
+          valor={`${Number(
+            datos.catAprobado
+          ).toFixed(1)}%`}
+        />
 
-          <OfertaDato
-            titulo="Garantía"
-            valor={
-              datos.tipoCredito ===
-              "con"
-                ? datos.tipoGarantia
-                : "No requerida"
-            }
-          />
-        </div>
+        <OfertaDato
+          titulo="Garantía"
+          valor={
+            datos.tipoCredito === "con"
+              ? datos.tipoGarantia
+              : "No requerida"
+          }
+        />
+      </div>
 
-        <div className="catDisclosure">
-          <strong>
-            CAT {datos.catAprobado}%
-          </strong>
+      <div className="catDisclosure">
+        <strong>
+          CAT{" "}
+          {Number(
+            datos.catAprobado
+          ).toFixed(1)}
+          % Sin IVA
+        </strong>
 
-          <p>
-            Para fines informativos y de
-            comparación. Las condiciones
-            mostradas corresponden a esta
-            oferta.
-          </p>
-        </div>
+        <p>
+          Para fines informativos y de
+          comparación. En producción se
+          calculará automáticamente con
+          las condiciones específicas de
+          la operación.
+        </p>
+      </div>
 
-        <div className="warningBox">
-          <strong>
-            Información importante
-          </strong>
+      <div className="warningBox">
+        <strong>
+          Información importante
+        </strong>
 
-          <p>
-            Contratar créditos que excedan
-            tu capacidad de pago afecta tu
-            historial crediticio.
-          </p>
+        <p>
+          Contratar créditos que excedan
+          tu capacidad de pago afecta tu
+          historial crediticio.
+        </p>
 
-          <p>
-            Incumplir tus obligaciones
-            puede generar intereses
-            moratorios y, cuando
-            corresponda, comisiones.
-          </p>
+        <p>
+          Incumplir tus obligaciones
+          puede generar intereses
+          moratorios y comisiones cuando
+          correspondan.
+        </p>
+      </div>
 
-          {datos.tipoCredito === "con" &&
-            datos.tipoGarantia ===
-              "Obligado solidario" && (
-              <p>
-                El obligado solidario
-                responderá conforme a las
-                obligaciones establecidas
-                en los documentos del
-                crédito.
-              </p>
-            )}
-        </div>
+      <div className="buttonRow">
+        <button
+          className="primary"
+          onClick={() =>
+            ir("cuentaBanco")
+          }
+        >
+          Aceptar oferta
+        </button>
 
-        <div className="buttonRow">
-          <button
-            className="primary"
-            onClick={() =>
-              ir("cuentaBanco")
-            }
-          >
-            Aceptar oferta
-          </button>
-
-          <button className="secondary">
-            Rechazar
-          </button>
-        </div>
+        <button className="secondary">
+          Rechazar oferta
+        </button>
       </div>
     </Pagina>
   );
 }
 
 /* =====================================================
-   PASO 6 - CONTRATACIÓN
+   CONTRATACIÓN
 ===================================================== */
 
 function CuentaBanco({
@@ -1817,48 +3635,41 @@ function CuentaBanco({
   return (
     <Pagina
       titulo="Cuenta bancaria"
-      subtitulo="Indica dónde quieres recibir tu crédito."
+      subtitulo="Indica dónde deseas recibir el crédito."
     >
       <Tracker paso={6} />
 
-      <div className="card narrow">
+      <div className="card formCard">
         <Campo
-          label="CLABE"
+          label="CLABE *"
           value={datos.clabe}
+          placeholder="18 dígitos"
           onChange={(v) =>
             actualizar("clabe", v)
           }
-          placeholder="18 dígitos"
         />
 
-        <Check
-          texto="Autorizo la domiciliación de los pagos."
-        />
+        <div className="formAction">
+          <button
+            className="primary"
+            onClick={() => {
+              if (
+                !/^\d{18}$/.test(
+                  datos.clabe
+                )
+              ) {
+                alert(
+                  "La CLABE debe contener 18 dígitos."
+                );
+                return;
+              }
 
-        <div className="paymentBox">
-          <h3>
-            Tarjeta de débito de respaldo
-          </h3>
-
-          <p>
-            La tarjeta será tokenizada por
-            un proveedor externo. TRISAL
-            no almacenará CVV.
-          </p>
-
-          <button className="secondary">
-            Agregar tarjeta
+              ir("contratos");
+            }}
+          >
+            Continuar
           </button>
         </div>
-
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("contratos")
-          }
-        >
-          Continuar
-        </button>
       </div>
     </Pagina>
   );
@@ -1867,7 +3678,7 @@ function CuentaBanco({
 function Contratos({ ir }) {
   return (
     <Pagina
-      titulo="Tus documentos"
+      titulo="Documentos contractuales"
       subtitulo="Revisa los documentos antes de firmar."
     >
       <Tracker paso={6} />
@@ -1889,14 +3700,16 @@ function Contratos({ ir }) {
           titulo="Autorización de domiciliación"
         />
 
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("firma")
-          }
-        >
-          Continuar a firma
-        </button>
+        <div className="formAction">
+          <button
+            className="primary"
+            onClick={() =>
+              ir("firma")
+            }
+          >
+            Continuar a firma
+          </button>
+        </div>
       </div>
     </Pagina>
   );
@@ -1909,71 +3722,86 @@ function Firma({
   return (
     <Pagina
       titulo="Firma tus documentos"
-      subtitulo="Último paso antes de enviar el crédito a tesorería."
+      subtitulo="Último paso antes de enviar la operación a tesorería."
     >
       <Tracker paso={6} />
 
-      <div className="signatureCard">
-        <div className="signatureIcon">
+      <div className="statusCard">
+        <div className="statusIcon">
           ✍
         </div>
 
-        <h3>
-          Firma del solicitante
-        </h3>
+        <div>
+          <p className="cardEyebrow">
+            FIRMA
+          </p>
 
-        <p>
-          Se registrará evidencia de la
-          firma y versión documental.
-        </p>
+          <h2>
+            Firma del solicitante
+          </h2>
 
-        {datos.tipoCredito ===
-          "con" && (
-          <div className="smallNotice">
-            También deberán completarse
-            las firmas o formalidades
-            asociadas a la garantía.
-          </div>
-        )}
+          <p>
+            Se registrará evidencia de
+            firma y versión documental.
+          </p>
 
-        <button
-          className="primary"
-          onClick={() =>
-            ir("tesoreriaCliente")
-          }
-        >
-          Firmar
-        </button>
+          {datos.tipoCredito ===
+            "con" && (
+            <div className="smallNotice">
+              También deberán completarse
+              las formalidades asociadas
+              a la garantía.
+            </div>
+          )}
+
+          <button
+            className="primary"
+            onClick={() =>
+              ir(
+                "tesoreriaCliente"
+              )
+            }
+          >
+            Simular firma
+          </button>
+        </div>
       </div>
     </Pagina>
   );
 }
 
-function TesoreriaCliente({
-  ir,
-}) {
+function TesoreriaCliente({ ir }) {
   return (
     <Pagina
       titulo="Todo listo"
-      subtitulo="Tu crédito pasó a tesorería."
+      subtitulo="Tu crédito pasó a las validaciones finales de tesorería."
     >
       <Tracker paso={6} />
 
-      <div className="successCard">
+      <div className="statusCard">
         <div className="successIcon">
           ✓
         </div>
 
-        <h2>
-          Documentación completa
-        </h2>
+        <div>
+          <p className="cardEyebrow">
+            DOCUMENTACIÓN COMPLETA
+          </p>
 
-        <p>
-          Estamos validando los últimos
-          datos antes de realizar la
-          dispersión.
-        </p>
+          <h2>
+            La operación está lista para
+            dispersión.
+          </h2>
 
+          <p>
+            Tesorería realizará las
+            últimas validaciones antes de
+            transferir los recursos.
+          </p>
+        </div>
+      </div>
+
+      <div className="demoArea">
         <button
           className="demoButton"
           onClick={() =>
@@ -1991,30 +3819,32 @@ function Dispersado({ ir }) {
   return (
     <Pagina
       titulo="¡Tu crédito fue depositado!"
-      subtitulo="El dinero fue enviado a tu cuenta bancaria."
+      subtitulo="La operación ahora se encuentra activa."
     >
-      <div className="successCard">
+      <div className="statusCard">
         <div className="successIcon">
           ✓
         </div>
 
-        <h2>
-          Crédito activo
-        </h2>
+        <div>
+          <p className="cardEyebrow">
+            CRÉDITO ACTIVO
+          </p>
 
-        <p>
-          Ya puedes consultar tus pagos
-          y documentos desde tu portal.
-        </p>
+          <h2>
+            Los recursos fueron
+            dispersados.
+          </h2>
 
-        <button
-          className="primary"
-          onClick={() =>
-            ir("creditoActivo")
-          }
-        >
-          Ver mi crédito
-        </button>
+          <button
+            className="primary"
+            onClick={() =>
+              ir("creditoActivo")
+            }
+          >
+            Ver mi crédito
+          </button>
+        </div>
       </div>
     </Pagina>
   );
@@ -2026,45 +3856,23 @@ function CreditoActivo({
 }) {
   return (
     <Pagina
-      titulo={
-        datos.nombre
-          ? `Hola, ${datos.nombre}`
-          : "Mi crédito"
-      }
-      subtitulo="Consulta y administra tu crédito."
+      titulo="Mi crédito"
+      subtitulo="Consulta información y documentos de tu operación."
     >
-      <div className="clientDashboard">
-        <div className="balance">
-          <span>
-            Saldo inicial
-          </span>
+      <div className="summaryGrid">
+        <SummaryCard
+          titulo="Monto original"
+          valor={moneda(
+            datos.montoAprobado
+          )}
+        />
 
-          <h2>
-            {moneda(
-              Number(
-                datos.montoAprobado
-              )
-            )}
-          </h2>
-        </div>
-
-        <div className="nextPayment">
-          <span>
-            Próximo pago
-          </span>
-
-          <h2>
-            {moneda(pagoOferta)}
-          </h2>
-
-          <p>
-            Próximo vencimiento
-          </p>
-
-          <button className="primary">
-            Pagar ahora
-          </button>
-        </div>
+        <SummaryCard
+          titulo="Próximo pago"
+          valor={moneda(
+            pagoOferta
+          )}
+        />
       </div>
 
       <div className="portalOptions">
@@ -2097,43 +3905,52 @@ function CreditoActivo({
 }
 
 /* =====================================================
-   PANTALLAS REGULATORIAS
+   REGULATORIO
 ===================================================== */
 
 function UNE({ empresa }) {
   return (
     <Pagina
       titulo="Unidad Especializada de Atención a Usuarios"
-      subtitulo="Atención de consultas, aclaraciones y reclamaciones."
+      subtitulo="Información para consultas, aclaraciones y reclamaciones."
     >
-      <div className="card">
-        <h3>UNE de TRISAL</h3>
+      <div className="card legalText">
+        <SectionDivider
+          titulo="UNE de TRISAL"
+        />
 
         <Resumen
           titulo="Entidad"
-          valor={empresa.razonSocial}
+          valor={
+            empresa.razonSocial
+          }
         />
 
         <Resumen
           titulo="Teléfono UNE"
-          valor={empresa.uneTelefono}
+          valor={
+            empresa.uneTelefono
+          }
         />
 
         <Resumen
           titulo="Correo UNE"
-          valor={empresa.uneCorreo}
+          valor={
+            empresa.uneCorreo
+          }
         />
 
         <div className="importantNotice">
-          Antes de publicar esta página,
-          sustituye los campos PENDIENTE
+          Sustituye los campos PENDIENTE
           por los datos oficiales de la
-          Unidad Especializada de TRISAL.
+          UNE antes de producción.
         </div>
       </div>
 
-      <div className="card">
-        <h3>CONDUSEF</h3>
+      <div className="card legalText">
+        <SectionDivider
+          titulo="CONDUSEF"
+        />
 
         <Resumen
           titulo="Teléfono"
@@ -2155,7 +3972,7 @@ function UNE({ empresa }) {
           target="_blank"
           rel="noreferrer"
         >
-          Ir al sitio oficial de CONDUSEF
+          Consultar sitio de CONDUSEF →
         </a>
       </div>
     </Pagina>
@@ -2170,12 +3987,8 @@ function Normatividad({
       titulo="Normatividad y transparencia"
       subtitulo="Información relevante para nuestros usuarios."
     >
-      <div className="card">
-        <h3>
-          FDG5 SERVICIOS
-        </h3>
-
-        <p className="legalParagraph">
+      <div className="card legalText">
+        <p>
           Para la constitución y operación
           de {empresa.razonSocial} con tal
           carácter, no requiere de
@@ -2183,35 +3996,31 @@ function Normatividad({
           Hacienda y Crédito Público.
         </p>
 
-        <p className="legalParagraph">
+        <p>
           {empresa.razonSocial} se
-          encuentra sujeta a la supervisión
-          de la Comisión Nacional Bancaria
-          y de Valores, únicamente para
-          efectos de lo dispuesto por el
-          artículo 56 de la Ley General de
-          Organizaciones y Actividades
-          Auxiliares del Crédito.
+          encuentra sujeta a la
+          supervisión de la Comisión
+          Nacional Bancaria y de Valores,
+          únicamente para efectos de lo
+          dispuesto por el artículo 56 de
+          la Ley General de Organizaciones
+          y Actividades Auxiliares del
+          Crédito.
         </p>
       </div>
 
-      <div className="card">
-        <h3>
-          Despachos de cobranza
-        </h3>
+      <div className="card legalText">
+        <SectionDivider
+          titulo="Despachos de cobranza"
+        />
 
-        <p className="legalParagraph">
-          La información de los despachos
-          de cobranza que, en su caso,
-          actúen a nombre de la entidad
-          deberá encontrarse disponible
-          para que los usuarios puedan
+        <p>
+          Los datos de los despachos de
+          cobranza que correspondan
+          estarán disponibles para que
+          nuestros clientes puedan
           identificarlos y localizarlos.
         </p>
-
-        <button className="secondary">
-          Consultar despachos
-        </button>
       </div>
     </Pagina>
   );
@@ -2221,44 +4030,29 @@ function Buro() {
   return (
     <Pagina
       titulo="Buró de Entidades Financieras"
-      subtitulo="Información para ayudarte a comparar y tomar decisiones."
+      subtitulo="Información para conocer y comparar entidades financieras."
     >
-      <div className="card">
+      <div className="card legalText">
         <div className="buroLogoMock">
           BURÓ DE ENTIDADES FINANCIERAS
         </div>
 
-        <p className="legalParagraph">
-          El Buró de Entidades Financieras
-          es una herramienta de consulta
-          que permite conocer información
-          sobre las entidades financieras y
-          los productos que ofrecen.
-        </p>
-
-        <p className="legalParagraph">
-          En el sitio oficial podrás
-          consultar información sobre
-          productos, comisiones, tasas,
-          reclamaciones, sanciones y otros
-          elementos relevantes.
-        </p>
-
-        <p className="legalParagraph">
-          La información correspondiente
-          a FDG5 SERVICIOS deberá
-          presentarse conforme a la
-          información oficial que conste
-          en el Buró.
+        <p>
+          Esta sección deberá incorporar
+          la descripción, alcance e
+          información oficial
+          correspondiente a FDG5
+          SERVICIOS conforme a las
+          disposiciones aplicables.
         </p>
 
         <a
+          className="legalLink"
           href="https://www.buro.gob.mx/"
           target="_blank"
           rel="noreferrer"
-          className="primary legalAnchor"
         >
-          Consultar Buró de Entidades Financieras
+          Consultar sitio oficial →
         </a>
       </div>
     </Pagina>
@@ -2271,54 +4065,53 @@ function Privacidad({
   return (
     <Pagina
       titulo="Aviso de privacidad"
-      subtitulo="Conoce cómo tratamos tus datos personales."
+      subtitulo="Información sobre el tratamiento de datos personales."
     >
-      <div className="card privacyText">
-        <h3>
-          Responsable
-        </h3>
+      <div className="card legalText">
+        <SectionDivider
+          titulo="Responsable"
+        />
 
         <p>
           {empresa.razonSocial}, con
           domicilio en{" "}
           {empresa.direccion}, es
           responsable del tratamiento de
-          los datos personales que recabe.
+          los datos personales que
+          recabe.
         </p>
 
-        <h3>
-          Finalidades
-        </h3>
+        <SectionDivider
+          titulo="Finalidades"
+        />
 
         <p>
-          Los datos podrán utilizarse para
-          identificación, integración de
-          expediente, análisis de crédito,
-          contratación, administración del
-          producto, cumplimiento
-          regulatorio, prevención de fraude
-          y atención de solicitudes.
+          Los datos podrán utilizarse
+          para identificación,
+          integración del expediente,
+          análisis de crédito,
+          contratación, administración,
+          cumplimiento regulatorio y
+          prevención de fraude.
         </p>
 
-        <h3>
-          Derechos ARCO
-        </h3>
+        <SectionDivider
+          titulo="Derechos ARCO"
+        />
 
         <p>
-          El titular podrá ejercer sus
-          derechos de acceso,
-          rectificación, cancelación y
-          oposición conforme al
-          procedimiento establecido por la
-          entidad.
+          El titular podrá ejercer los
+          derechos correspondientes
+          conforme al procedimiento
+          establecido por la entidad.
         </p>
 
         <div className="importantNotice">
-          Esta es una versión de prototipo.
-          Antes de producción sustituye
-          esta sección por el aviso de
-          privacidad definitivo aprobado
-          por el área legal.
+          Esta es una versión de
+          prototipo. Sustituye este texto
+          por el Aviso de Privacidad
+          definitivo validado por el área
+          legal.
         </div>
       </div>
     </Pagina>
@@ -2326,565 +4119,28 @@ function Privacidad({
 }
 
 /* =====================================================
-   BACKOFFICE
+   COMPONENTES
 ===================================================== */
 
-function BackofficeLogin({ ir }) {
-  return (
-    <Pagina
-      titulo="TRISAL Operaciones"
-      subtitulo="Acceso exclusivo para personal autorizado."
-    >
-      <div className="card narrow">
-        <Campo
-          label="Correo corporativo"
-          placeholder="usuario@trisal.mx"
-        />
-
-        <Campo
-          label="Contraseña"
-          type="password"
-        />
-
-        <button
-          className="primary full"
-          onClick={() =>
-            ir("dashboard")
-          }
-        >
-          Iniciar sesión
-        </button>
-      </div>
-    </Pagina>
-  );
-}
-
-function Dashboard({ ir }) {
-  const indicadores = [
-    ["Nuevas", "28"],
-    ["En revisión", "12"],
-    [
-      "Información pendiente",
-      "6",
-    ],
-    ["Aprobadas", "9"],
-    [
-      "Pendientes de firma",
-      "4",
-    ],
-    [
-      "Pendientes de dispersión",
-      "3",
-    ],
-    ["Activos", "82"],
-    ["Mora", "7"],
-  ];
-
-  return (
-    <Pagina
-      titulo="Dashboard"
-      subtitulo="Operación de crédito TRISAL"
-    >
-      <div className="kpiGrid">
-        {indicadores.map(
-          ([nombre, numero]) => (
-            <div
-              className="kpiCard"
-              key={nombre}
-            >
-              <span>{nombre}</span>
-              <strong>{numero}</strong>
-            </div>
-          )
-        )}
-      </div>
-
-      <div className="buttonRow">
-        <button
-          className="primary"
-          onClick={() =>
-            ir("bandeja")
-          }
-        >
-          Solicitudes
-        </button>
-
-        <button
-          className="secondary"
-          onClick={() =>
-            ir("tesoreria")
-          }
-        >
-          Tesorería
-        </button>
-
-        <button
-          className="secondary"
-          onClick={() =>
-            ir("cobranza")
-          }
-        >
-          Cobranza
-        </button>
-      </div>
-    </Pagina>
-  );
-}
-
-function Bandeja({ ir }) {
-  return (
-    <Pagina
-      titulo="Solicitudes"
-      subtitulo="Bandeja de originación"
-    >
-      <div className="tableContainer">
-        <table>
-          <thead>
-            <tr>
-              <th>Folio</th>
-              <th>Cliente</th>
-              <th>Monto</th>
-              <th>Plazo</th>
-              <th>Garantía</th>
-              <th>Estado</th>
-              <th></th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr>
-              <td>TRI-482917</td>
-              <td>Cliente demo</td>
-              <td>$10,000</td>
-              <td>6 meses</td>
-              <td>
-                Obligado solidario
-              </td>
-              <td>
-                <span className="yellowStatus">
-                  En revisión
-                </span>
-              </td>
-
-              <td>
-                <button
-                  className="smallDarkButton"
-                  onClick={() =>
-                    ir("expediente")
-                  }
-                >
-                  Abrir
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </Pagina>
-  );
-}
-
-function Expediente({
-  datos,
-  ir,
+function Pagina({
+  titulo,
+  subtitulo,
+  children,
 }) {
-  const validaciones = [
-    ["Identidad", "OK"],
-    ["Documentos", "OK"],
-    ["Buró", "Revisar"],
-    ["PEP/Listas", "OK"],
-    ["Ingresos", "OK"],
-    [
-      "Capacidad de pago",
-      "Revisar",
-    ],
-    [
-      "Garantía",
-      datos.tipoCredito === "con"
-        ? "OK"
-        : "No requerida",
-    ],
-    ["Fraude", "OK"],
-  ];
-
   return (
-    <Pagina
-      titulo="TRI-482917"
-      subtitulo="Expediente digital"
-    >
-      <div className="tabs">
-        {[
-          "Resumen",
-          "Perfil",
-          "Identidad",
-          "Domicilio",
-          "Ingresos",
-          "Bancario",
-          "Buró",
-          "Documentos",
-          "Garantía",
-          "Riesgo",
-          "Comentarios",
-          "Historial",
-        ].map((item) => (
-          <button key={item}>
-            {item}
-          </button>
-        ))}
-      </div>
+    <section className="page fadeUp">
+      <header className="pageTitle">
+        <h1>{titulo}</h1>
 
-      <div className="riskGrid">
-        {validaciones.map(
-          ([nombre, estado]) => (
-            <div
-              className="riskCard"
-              key={nombre}
-            >
-              <span>
-                {nombre}
-              </span>
-
-              <strong
-                className={
-                  estado === "OK"
-                    ? "green"
-                    : estado ===
-                      "Revisar"
-                    ? "orange"
-                    : ""
-                }
-              >
-                {estado}
-              </strong>
-            </div>
-          )
+        {subtitulo && (
+          <p>{subtitulo}</p>
         )}
-      </div>
+      </header>
 
-      <button
-        className="primary"
-        onClick={() =>
-          ir("mesaCredito")
-        }
-      >
-        Ir a Mesa de Crédito
-      </button>
-    </Pagina>
+      {children}
+    </section>
   );
 }
-
-/* =====================================================
-   MESA DE CRÉDITO
-   DEFINE LAS CONDICIONES
-===================================================== */
-
-function MesaCredito({
-  datos,
-  actualizar,
-  ir,
-}) {
-  const pago =
-    calcularPago(
-      Number(
-        datos.montoAprobado
-      ),
-      Number(
-        datos.tasaAprobada
-      ),
-      Number(
-        datos.plazoAprobado
-      )
-    );
-
-  return (
-    <Pagina
-      titulo="Mesa de Crédito"
-      subtitulo="Define las condiciones aprobadas para esta solicitud."
-    >
-      <div className="creditDecisionLayout">
-        <div className="card">
-          <h3>
-            Solicitud
-          </h3>
-
-          <Resumen
-            titulo="Monto solicitado"
-            valor={moneda(
-              Number(
-                datos.montoSolicitado
-              )
-            )}
-          />
-
-          <Resumen
-            titulo="Plazo solicitado"
-            valor={`${datos.plazoSolicitado} meses`}
-          />
-
-          <Resumen
-            titulo="Ingreso mensual"
-            valor={moneda(
-              Number(datos.ingreso)
-            )}
-          />
-
-          <Resumen
-            titulo="Garantía"
-            valor={
-              datos.tipoCredito ===
-              "con"
-                ? datos.tipoGarantia
-                : "No requerida"
-            }
-          />
-        </div>
-
-        <div className="card">
-          <h3>
-            Oferta propuesta
-          </h3>
-
-          <Campo
-            label="Monto aprobado"
-            type="number"
-            value={
-              datos.montoAprobado
-            }
-            onChange={(v) =>
-              actualizar(
-                "montoAprobado",
-                v
-              )
-            }
-          />
-
-          <Select
-            label="Plazo aprobado"
-            value={
-              datos.plazoAprobado
-            }
-            onChange={(v) =>
-              actualizar(
-                "plazoAprobado",
-                v
-              )
-            }
-            opciones={[
-              "3",
-              "6",
-              "9",
-              "12",
-            ]}
-          />
-
-          <Campo
-            label="Tasa anual fija (%)"
-            type="number"
-            value={
-              datos.tasaAprobada
-            }
-            onChange={(v) =>
-              actualizar(
-                "tasaAprobada",
-                v
-              )
-            }
-          />
-
-          <Campo
-            label="Comisión (%)"
-            type="number"
-            value={
-              datos.comisionAprobada
-            }
-            onChange={(v) =>
-              actualizar(
-                "comisionAprobada",
-                v
-              )
-            }
-          />
-
-          <Campo
-            label="CAT (%)"
-            type="number"
-            value={
-              datos.catAprobado
-            }
-            onChange={(v) =>
-              actualizar(
-                "catAprobado",
-                v
-              )
-            }
-          />
-
-          <div className="approvedPayment">
-            <span>
-              Pago calculado
-            </span>
-
-            <strong>
-              {moneda(pago)}
-            </strong>
-          </div>
-
-          <div className="importantNotice">
-            En producción, el CAT no debe
-            ser un número manual. Debe
-            calcularse automáticamente con
-            las condiciones aprobadas.
-          </div>
-        </div>
-      </div>
-
-      <div className="decisionButtons">
-        <button className="infoDecision">
-          Solicitar información
-        </button>
-
-        <button
-          className="approveDecision"
-          onClick={() =>
-            ir("dashboard")
-          }
-        >
-          Aprobar
-        </button>
-
-        <button className="warningDecision">
-          Aprobar con cambios
-        </button>
-
-        <button className="rejectDecision">
-          Rechazar
-        </button>
-
-        <button className="committeeDecision">
-          Escalar a comité
-        </button>
-      </div>
-    </Pagina>
-  );
-}
-
-function Tesoreria() {
-  return (
-    <Pagina
-      titulo="Tesorería"
-      subtitulo="Pendientes de dispersar"
-    >
-      <div className="card">
-        <h3>
-          TRI-482917
-        </h3>
-
-        <Check
-          texto="Crédito aprobado"
-          marcado
-        />
-
-        <Check
-          texto="Contrato firmado"
-          marcado
-        />
-
-        <Check
-          texto="Pagaré firmado"
-          marcado
-        />
-
-        <Check
-          texto="Garantía validada o no requerida"
-          marcado
-        />
-
-        <Check
-          texto="CLABE validada"
-          marcado
-        />
-
-        <Check
-          texto="Firmas completas"
-          marcado
-        />
-
-        <button className="primary full">
-          DISPERSAR
-        </button>
-      </div>
-    </Pagina>
-  );
-}
-
-function Cobranza() {
-  return (
-    <Pagina
-      titulo="Cobranza"
-      subtitulo="Seguimiento de cartera"
-    >
-      <div className="collectionGrid">
-        <Cartera
-          titulo="CURRENT"
-          cantidad="75"
-        />
-
-        <Cartera
-          titulo="1-7 DPD"
-          cantidad="4"
-        />
-
-        <Cartera
-          titulo="8-30 DPD"
-          cantidad="2"
-        />
-
-        <Cartera
-          titulo="31-60 DPD"
-          cantidad="1"
-        />
-
-        <Cartera
-          titulo="61+ DPD"
-          cantidad="0"
-        />
-      </div>
-
-      <div className="card">
-        <h3>
-          Automatizaciones
-        </h3>
-
-        <ul>
-          <li>
-            Recordatorio antes del
-            vencimiento.
-          </li>
-
-          <li>
-            Intento automático de cobro.
-          </li>
-
-          <li>
-            Reintento en caso de fallo.
-          </li>
-
-          <li>
-            Notificación de pago fallido.
-          </li>
-
-          <li>
-            Escalamiento a cobranza.
-          </li>
-        </ul>
-      </div>
-    </Pagina>
-  );
-}
-
-/* =====================================================
-   COMPONENTES GENERALES
-===================================================== */
 
 function Tracker({ paso }) {
   const pasos = [
@@ -2907,19 +4163,19 @@ function Tracker({ paso }) {
             const completado =
               numero < paso;
 
-            const activo =
+            const actual =
               numero === paso;
 
             return (
               <div
-                className="trackerSection"
+                className="trackerItem"
                 key={nombre}
               >
                 <div
                   className={
                     completado
                       ? "trackerDot completed"
-                      : activo
+                      : actual
                       ? "trackerDot current"
                       : "trackerDot"
                   }
@@ -2931,9 +4187,9 @@ function Tracker({ paso }) {
 
                 <span
                   className={
-                    activo
-                      ? "trackerLabel currentLabel"
-                      : "trackerLabel"
+                    actual
+                      ? "trackerText activeTrackerText"
+                      : "trackerText"
                   }
                 >
                   {nombre}
@@ -2957,23 +4213,22 @@ function Tracker({ paso }) {
       </div>
 
       <div className="mobileTracker">
-        <div className="mobileTrackerHeader">
-          <span>
-            Paso {paso} de 6
-          </span>
-
+        <div className="mobileTrackerTop">
           <strong>
-            {pasos[paso - 1]}
+            Paso {paso} de 6
           </strong>
+
+          <span>
+            {pasos[paso - 1]}
+          </span>
         </div>
 
         <div className="mobileProgress">
           <div
-            className="mobileProgressValue"
+            className="mobileProgressFill"
             style={{
               width: `${
-                (paso / 6) *
-                100
+                (paso / 6) * 100
               }%`,
             }}
           />
@@ -2987,26 +4242,6 @@ function Tracker({ paso }) {
         )}
       </div>
     </>
-  );
-}
-
-function Pagina({
-  titulo,
-  subtitulo,
-  children,
-}) {
-  return (
-    <section className="fadeUp">
-      <div className="pageTitle">
-        <h1>{titulo}</h1>
-
-        {subtitulo && (
-          <p>{subtitulo}</p>
-        )}
-      </div>
-
-      {children}
-    </section>
   );
 }
 
@@ -3026,8 +4261,7 @@ function Campo({
         value={value}
         placeholder={placeholder}
         onChange={(e) =>
-          onChange &&
-          onChange(
+          onChange?.(
             e.target.value
           )
         }
@@ -3070,28 +4304,13 @@ function Select({
   );
 }
 
-function Check({
-  texto,
-  marcado = false,
-}) {
-  return (
-    <label className="check">
-      <input
-        type="checkbox"
-        defaultChecked={marcado}
-      />
-
-      <span>{texto}</span>
-    </label>
-  );
-}
-
 function Upload({
   titulo,
-  descripcion,
+  archivo,
+  onChange,
 }) {
   return (
-    <div className="upload">
+    <label className="upload">
       <div className="uploadIcon">
         ↑
       </div>
@@ -3101,21 +4320,59 @@ function Upload({
           {titulo}
         </strong>
 
-        <p>
-          {descripcion}
-        </p>
+        <span>
+          {archivo
+            ? archivo.name
+            : "PDF, JPG o PNG"}
+        </span>
       </div>
 
-      <button className="secondary uploadButton">
-        Subir
-      </button>
-    </div>
+      <div className="uploadAction">
+        {archivo
+          ? "Cambiar"
+          : "Seleccionar"}
+      </div>
+
+      <input
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        onChange={(e) =>
+          onChange(
+            e.target.files?.[0]
+          )
+        }
+      />
+    </label>
   );
 }
 
-function Navegacion({
+function CheckControl({
+  texto,
+  checked,
+  onChange,
+}) {
+  return (
+    <label className="check">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+          )
+        }
+      />
+
+      <span>{texto}</span>
+    </label>
+  );
+}
+
+function NavButtons({
   atras,
   continuar,
+  textoContinuar = "Continuar",
+  disabled = false,
 }) {
   return (
     <div className="navigation">
@@ -3129,9 +4386,22 @@ function Navegacion({
       <button
         className="primary"
         onClick={continuar}
+        disabled={disabled}
       >
-        Continuar
+        {textoContinuar}
       </button>
+    </div>
+  );
+}
+
+function SectionDivider({
+  titulo,
+}) {
+  return (
+    <div className="sectionDivider">
+      <h3>{titulo}</h3>
+
+      <div />
     </div>
   );
 }
@@ -3151,19 +4421,30 @@ function Resumen({
   );
 }
 
+function SummaryCard({
+  titulo,
+  valor,
+}) {
+  return (
+    <div className="summaryCard">
+      <span>{titulo}</span>
+
+      <strong>
+        {valor || "-"}
+      </strong>
+    </div>
+  );
+}
+
 function OfertaDato({
   titulo,
   valor,
 }) {
   return (
     <div className="offerData">
-      <span>
-        {titulo}
-      </span>
+      <span>{titulo}</span>
 
-      <strong>
-        {valor}
-      </strong>
+      <strong>{valor}</strong>
     </div>
   );
 }
@@ -3174,16 +4455,14 @@ function Documento({
   return (
     <div className="document">
       <div>
-        <strong>
-          {titulo}
-        </strong>
+        <strong>{titulo}</strong>
 
-        <p>
+        <span>
           Documento generado
-        </p>
+        </span>
       </div>
 
-      <button className="textButton">
+      <button>
         Ver
       </button>
     </div>
@@ -3196,31 +4475,117 @@ function MiniStep({
 }) {
   return (
     <div className="miniStep">
-      <span>
-        {numero}
-      </span>
+      <span>{numero}</span>
 
-      <strong>
-        {texto}
-      </strong>
+      <strong>{texto}</strong>
     </div>
   );
 }
 
-function Cartera({
+function ProductData({
   titulo,
-  cantidad,
+  valor,
 }) {
   return (
-    <div className="collectionCard">
-      <span>
-        {titulo}
-      </span>
+    <div className="productData">
+      <span>{titulo}</span>
 
-      <strong>
-        {cantidad}
-      </strong>
+      <strong>{valor}</strong>
     </div>
+  );
+}
+
+function RequirementList({
+  items,
+}) {
+  return (
+    <div className="requirementList">
+      {items.map((item) => (
+        <div
+          className="requirement"
+          key={item}
+        >
+          <span>✓</span>
+
+          <p>{item}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Footer({
+  empresa,
+  ir,
+}) {
+  return (
+    <footer className="legalFooter">
+      <div className="footerContent">
+        <div className="footerBrand">
+          <img
+            src="/logo-trisal.jpeg"
+            alt="TRISAL"
+          />
+
+          <strong>
+            TRISAL
+          </strong>
+        </div>
+
+        <div className="footerLegal">
+          <p>
+            Para la constitución y
+            operación de{" "}
+            {empresa.razonSocial} con tal
+            carácter, no requiere de
+            autorización de la Secretaría
+            de Hacienda y Crédito Público.
+          </p>
+
+          <p>
+            {empresa.razonSocial} se
+            encuentra sujeta a la
+            supervisión de la Comisión
+            Nacional Bancaria y de Valores,
+            únicamente para efectos de lo
+            dispuesto por el artículo 56
+            de la Ley General de
+            Organizaciones y Actividades
+            Auxiliares del Crédito.
+          </p>
+        </div>
+
+        <div className="footerLinks">
+          <button
+            onClick={() => ir("une")}
+          >
+            UNE
+          </button>
+
+          <button
+            onClick={() =>
+              ir("normatividad")
+            }
+          >
+            Normatividad
+          </button>
+
+          <button
+            onClick={() => ir("buro")}
+          >
+            Buró de Entidades Financieras
+          </button>
+
+          <button
+            onClick={() =>
+              ir("privacidad")
+            }
+          >
+            Aviso de privacidad
+          </button>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -3253,13 +4618,10 @@ function calcularPago(
 function moneda(valor) {
   return Number(
     valor || 0
-  ).toLocaleString(
-    "es-MX",
-    {
-      style: "currency",
-      currency: "MXN",
-    }
-  );
+  ).toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
 }
 
 /* =====================================================
@@ -3267,6 +4629,26 @@ function moneda(valor) {
 ===================================================== */
 
 const css = `
+:root {
+  --navy: #111a2a;
+  --navy-2: #17243a;
+  --gold: #9c7427;
+  --gold-hover: #ae8432;
+
+  --text: #161d2b;
+  --muted: #657287;
+
+  --background: #f6f6f3;
+  --white: #ffffff;
+
+  --border: #e1e5ea;
+
+  --green: #1d7552;
+
+  --shadow:
+    0 12px 35px rgba(15,23,42,.055);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -3277,7 +4659,23 @@ html {
 
 body {
   margin: 0;
-  background: #f5f5f3;
+
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(156,116,39,.06),
+      transparent 32%
+    ),
+    var(--background);
+
+  color: var(--text);
+
+  font-family:
+    Inter,
+    Arial,
+    sans-serif;
+
+  text-align: left;
 }
 
 button,
@@ -3288,92 +4686,123 @@ select {
 
 button {
   transition:
+    background .2s ease,
     transform .2s ease,
-    box-shadow .2s ease,
-    background .2s ease;
+    box-shadow .2s ease;
 }
 
-button:hover {
+button:not(:disabled):hover {
   transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: .55;
+  cursor: wait;
 }
 
 .app {
   min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(155,117,44,.08),
-      transparent 30%
-    ),
-    #f6f6f4;
-  color: #121927;
-  font-family:
-    Inter,
-    Arial,
-    sans-serif;
 }
 
-/* HEADER */
+/* =====================================================
+   HEADER
+===================================================== */
 
 .header {
-  min-height: 82px;
+  min-height: 86px;
+
   position: sticky;
   top: 0;
-  z-index: 50;
-  background:
-    rgba(255,255,255,.96);
-  backdrop-filter: blur(16px);
+  z-index: 100;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding:
-    10px
+
+  padding-left:
     max(
-      22px,
-      calc(
-        (100vw - 1180px)
-        / 2
-      )
+      28px,
+      calc((100vw - 1240px) / 2)
     );
-  box-shadow:
-    0 1px 18px
-    rgba(15,23,42,.06);
+
+  padding-right:
+    max(
+      28px,
+      calc((100vw - 1240px) / 2)
+    );
+
+  background:
+    rgba(255,255,255,.97);
+
+  backdrop-filter: blur(14px);
+
+  border-bottom:
+    1px solid rgba(17,26,42,.05);
 }
 
 .logoButton {
-  border: none;
+  padding: 0;
+  border: 0;
   background: transparent;
   cursor: pointer;
-  padding: 0;
 }
 
 .logo {
-  width: 110px;
+  width: 112px;
   display: block;
 }
 
-.topActions {
+.desktopNav {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: #eef0f3;
-  border-radius: 11px;
-  padding: 4px;
+  gap: 8px;
 }
 
-.topButton {
-  border: none;
+.navButton {
+  border: 0;
   background: transparent;
-  padding: 9px 14px;
-  border-radius: 8px;
-  color: #697386;
-  cursor: pointer;
+
+  color: #354052;
+
+  padding: 12px 14px;
+
+  border-radius: 9px;
+
+  font-size: 15px;
   font-weight: 750;
+
+  cursor: pointer;
 }
 
-.topButton.selected {
-  background: #121927;
+.navButton:hover {
+  background: #f1f3f6;
+}
+
+.navCta,
+.goldButton {
+  border: 0;
+
+  background: var(--gold);
+
   color: white;
+
+  border-radius: 10px;
+
+  padding: 14px 19px;
+
+  font-size: 15px;
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+.navCta:hover,
+.goldButton:hover {
+  background: var(--gold-hover);
+}
+
+.hamburger {
+  display: none;
 }
 
 .legalDropdown {
@@ -3382,630 +4811,1508 @@ button:hover {
 
 .legalMenu {
   position: absolute;
-  top: 48px;
+
+  top: 49px;
   right: 0;
+
+  min-width: 255px;
+
   background: white;
+
+  border:
+    1px solid var(--border);
+
   border-radius: 13px;
-  padding: 9px;
-  min-width: 250px;
+
+  padding: 8px;
+
   box-shadow:
-    0 18px 50px
-    rgba(15,23,42,.16);
-  z-index: 100;
+    0 18px 45px
+    rgba(15,23,42,.13);
 }
 
 .legalMenu button {
-  display: block;
   width: 100%;
-  border: none;
+
+  display: block;
+
+  border: 0;
+
   background: transparent;
+
+  color: var(--text);
+
   text-align: left;
-  padding: 12px;
+
+  padding: 11px 12px;
+
   border-radius: 8px;
+
   cursor: pointer;
+
   font-weight: 700;
-  color: #121927;
 }
 
 .legalMenu button:hover {
   background: #f3f4f6;
 }
 
-/* LAYOUT */
+/* =====================================================
+   GENERAL PAGE
+===================================================== */
 
 .container {
   width:
     min(
-      1100px,
-      calc(100% - 36px)
+      1240px,
+      calc(100% - 64px)
     );
+
   margin: 0 auto;
-  padding: 55px 0 90px;
+
+  padding:
+    62px 0 100px;
+}
+
+.page {
+  width: 100%;
+}
+
+.pageTitle {
+  width: 100%;
+
+  margin:
+    0 0 38px;
+
+  text-align: left;
+}
+
+.pageTitle h1 {
+  margin: 0;
+
+  max-width: 920px;
+
+  color: var(--text);
+
+  font-size:
+    clamp(
+      40px,
+      4vw,
+      56px
+    );
+
+  line-height: 1.03;
+
+  letter-spacing: -.038em;
+
+  text-align: left;
+}
+
+.pageTitle p {
+  max-width: 800px;
+
+  margin:
+    11px 0 0;
+
+  color: var(--muted);
+
+  font-size: 18px;
+
+  line-height: 1.55;
+
+  text-align: left;
 }
 
 .fadeUp {
   animation:
-    fadeUp .55s ease both;
+    fadeUp .5s ease both;
 }
 
 @keyframes fadeUp {
   from {
     opacity: 0;
+
     transform:
-      translateY(24px);
+      translateY(18px);
   }
 
   to {
     opacity: 1;
+
     transform:
       translateY(0);
   }
 }
 
-/* LANDING */
+/* =====================================================
+   ERRORS
+===================================================== */
+
+.globalError,
+.globalInfo {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+
+  margin-bottom: 25px;
+
+  padding: 15px 18px;
+
+  border-radius: 11px;
+}
+
+.globalError {
+  background: #fff0f0;
+
+  border:
+    1px solid #efc6c6;
+
+  color: #8a2929;
+}
+
+.globalInfo {
+  background: #edf5ff;
+
+  border:
+    1px solid #ccdff5;
+
+  color: #315f93;
+}
+
+/* =====================================================
+   HERO HOME
+===================================================== */
 
 .hero {
-  min-height: 72vh;
+  min-height: 68vh;
+
   display: grid;
+
   grid-template-columns:
-    1.2fr .8fr;
+    minmax(0, 1.35fr)
+    minmax(350px, .65fr);
+
+  gap: 70px;
+
   align-items: center;
-  gap: 60px;
+}
+
+.heroContent {
+  text-align: left;
+}
+
+.eyebrow,
+.cardEyebrow,
+.productKicker,
+.offerEyebrow {
+  margin: 0;
+
+  color: var(--gold);
+
+  font-size: 12px;
+
+  font-weight: 900;
+
+  letter-spacing: .15em;
 }
 
 .hero h1 {
-  max-width: 720px;
+  max-width: 780px;
+
+  margin:
+    14px 0 24px;
+
+  color: var(--text);
+
   font-size:
     clamp(
-      45px,
-      6vw,
-      73px
+      48px,
+      5.6vw,
+      74px
     );
-  line-height: .99;
-  letter-spacing: -.045em;
-  margin: 16px 0 25px;
-}
 
-.eyebrow {
-  color: #957028;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: .13em;
+  line-height: .99;
+
+  letter-spacing: -.047em;
+
+  text-align: left;
 }
 
 .heroText {
-  max-width: 650px;
+  max-width: 670px;
+
+  margin: 0;
+
+  color: var(--muted);
+
   font-size: 19px;
+
   line-height: 1.65;
-  color: #5b6779;
+
+  text-align: left;
 }
 
 .heroCard {
   background: white;
-  padding: 33px;
-  border-radius: 24px;
-  box-shadow:
-    0 24px 65px
-    rgba(15,23,42,.09);
+
+  padding: 31px;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 22px;
+
+  box-shadow: var(--shadow);
+
+  text-align: left;
+}
+
+.heroCard h2 {
+  margin:
+    8px 0 20px;
+
+  font-size: 27px;
+
+  line-height: 1.2;
 }
 
 .miniStep {
-  display: flex;
+  display: grid;
+
+  grid-template-columns:
+    35px 1fr;
+
+  gap: 12px;
+
   align-items: center;
-  gap: 13px;
-  padding: 16px 0;
+
+  padding: 13px 0;
+
   border-bottom:
     1px solid #edf0f3;
 }
 
-.miniStep span {
+.miniStep > span {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+
   display: grid;
   place-items: center;
-  background: #121927;
+
+  background: var(--navy);
+
   color: white;
+
+  border-radius: 50%;
+
   font-weight: 900;
 }
 
-/* PAGE TITLE */
+.heroProductTag {
+  display: inline-block;
 
-.pageTitle {
-  margin-bottom: 26px;
+  margin-top: 18px;
+
+  padding: 7px 10px;
+
+  background: #f3efe6;
+
+  color: #73571d;
+
+  border-radius: 8px;
+
+  font-size: 12px;
+
+  font-weight: 850;
 }
 
-.pageTitle h1 {
-  font-size:
-    clamp(
-      34px,
-      4vw,
-      51px
-    );
-  letter-spacing: -.035em;
-  margin: 0 0 9px;
+.textLinkButton {
+  border: 0;
+
+  background: transparent;
+
+  color: #76591e;
+
+  padding:
+    20px 0 0;
+
+  cursor: pointer;
+
+  font-weight: 800;
+
+  text-align: left;
 }
 
-.pageTitle p {
-  font-size: 18px;
-  color: #657287;
+/* =====================================================
+   BUTTONS
+===================================================== */
+
+.primary,
+.secondary,
+.demoButton {
+  min-height: 48px;
+
+  border-radius: 10px;
+
+  padding:
+    12px 20px;
+
+  font-size: 15px;
+
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+
+  background: var(--navy);
+
+  color: white;
+}
+
+.primary:hover {
+  background: #202b3e;
+
+  box-shadow:
+    0 8px 22px
+    rgba(17,26,42,.14);
+}
+
+.secondary {
+  border:
+    1px solid #c8d0db;
+
+  background: white;
+
+  color: var(--navy);
+}
+
+.demoButton {
+  border: 0;
+
+  background: #e9edf2;
+
+  color: #4a5668;
+}
+
+.buttonRow,
+.navigation {
+  display: flex;
+
+  gap: 12px;
+
+  margin-top: 26px;
+}
+
+.navigation {
+  justify-content: space-between;
+}
+
+.formAction,
+.bottomAction,
+.demoArea {
+  display: flex;
+
+  justify-content: flex-start;
+
+  margin-top: 26px;
+}
+
+/* =====================================================
+   CARDS
+===================================================== */
+
+.card {
+  width: 100%;
+
+  background: white;
+
+  padding: 30px;
+
+  margin-bottom: 24px;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 18px;
+
+  box-shadow: var(--shadow);
+
+  text-align: left;
+}
+
+.formCard {
+  max-width: 820px;
+}
+
+.grid2 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0,1fr));
+
+  gap:
+    0 28px;
+}
+
+/* =====================================================
+   FIELDS
+===================================================== */
+
+.field {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  margin-bottom: 20px;
+
+  color: #354052;
+
+  font-weight: 750;
+
+  text-align: left;
+}
+
+.field span,
+.label {
+  font-size: 15px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+
+  min-height: 50px;
+
+  border:
+    1px solid #d1d8e2;
+
+  border-radius: 10px;
+
+  padding:
+    13px 15px;
+
+  background: white;
+
+  color: var(--text);
+
+  font-size: 16px;
+
+  outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--gold);
+
+  box-shadow:
+    0 0 0 3px
+    rgba(156,116,39,.09);
+}
+
+.sectionDivider {
+  display: grid;
+
+  grid-template-columns:
+    auto 1fr;
+
+  gap: 18px;
+
+  align-items: center;
+
+  margin:
+    10px 0 24px;
+}
+
+.sectionDivider h3 {
   margin: 0;
-  line-height: 1.5;
+
+  font-size: 17px;
+
+  color: var(--text);
 }
 
-/* TRACKER */
+.sectionDivider > div {
+  height: 1px;
+
+  background: var(--border);
+}
+
+/* =====================================================
+   TRACKER
+===================================================== */
 
 .desktopTracker {
   display: flex;
-  align-items: flex-start;
-  justify-content:
-    space-between;
-  margin: 35px 0 43px;
+
+  align-items: center;
+
+  width: 100%;
+
+  margin:
+    0 0 45px;
 }
 
-.trackerSection {
+.trackerItem {
   flex: 1;
+
+  min-width: 0;
+
   display: flex;
+
   align-items: center;
-  position: relative;
 }
 
 .trackerDot {
-  width: 35px;
-  height: 35px;
-  border-radius: 50%;
-  border:
-    2px solid #d7dde5;
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  color: #8993a1;
-  background: #f6f6f4;
-  font-weight: 800;
-  z-index: 2;
+
+  border:
+    2px solid #d3dae4;
+
+  border-radius: 50%;
+
+  color: #8b95a4;
+
+  background: var(--background);
+
+  font-size: 13px;
+
+  font-weight: 850;
 }
 
 .trackerDot.completed {
-  background: #1c7551;
-  border-color: #1c7551;
+  background: var(--green);
+
+  border-color: var(--green);
+
   color: white;
 }
 
 .trackerDot.current {
-  background: #121927;
-  border-color: #121927;
+  background: var(--navy);
+
+  border-color: var(--navy);
+
   color: white;
 }
 
-.trackerLabel {
-  position: absolute;
-  top: 43px;
-  left: -8px;
-  font-size: 12px;
-  color: #8a94a3;
+.trackerText {
+  margin-left: 9px;
+
+  color: #8993a1;
+
+  font-size: 13px;
+
   white-space: nowrap;
 }
 
-.currentLabel {
-  color: #121927;
-  font-weight: 800;
+.activeTrackerText {
+  color: var(--navy);
+
+  font-weight: 850;
 }
 
 .trackerLine {
   height: 2px;
-  background: #dfe3e8;
+
   flex: 1;
-  margin: 0 9px;
+
+  min-width: 10px;
+
+  margin:
+    0 12px;
+
+  background: #dde2e8;
 }
 
 .completedLine {
-  background: #1c7551;
+  background: var(--green);
 }
 
 .mobileTracker {
   display: none;
 }
 
-/* SIMPLE FLOW */
+/* =====================================================
+   HOW IT WORKS
+===================================================== */
 
 .simpleFlow {
-  max-width: 760px;
-  margin: 36px auto;
+  width: 100%;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 13px;
 }
 
 .simpleFlowCard {
-  background: white;
-  border-radius: 18px;
-  padding: 21px 25px;
-  display: flex;
+  width: 100%;
+
+  min-height: 95px;
+
+  display: grid;
+
+  grid-template-columns:
+    54px
+    minmax(190px, 280px)
+    minmax(0,1fr);
+
+  gap: 25px;
+
   align-items: center;
-  gap: 19px;
-  margin-bottom: 14px;
+
+  padding:
+    19px 25px;
+
+  background: white;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 16px;
+
   box-shadow:
-    0 8px 28px
-    rgba(15,23,42,.055);
+    0 7px 23px
+    rgba(15,23,42,.04);
+
+  text-align: left;
+}
+
+.stepCircle {
+  width: 48px;
+  height: 48px;
+
+  display: grid;
+  place-items: center;
+
+  background: var(--navy);
+
+  color: white;
+
+  border-radius: 13px;
+
+  font-size: 18px;
+
+  font-weight: 900;
 }
 
 .simpleFlowCard h3 {
-  margin: 0 0 4px;
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: 20px;
+
+  line-height: 1.3;
+
+  text-align: left;
 }
 
 .simpleFlowCard p {
   margin: 0;
-  color: #657287;
+
+  color: var(--muted);
+
+  font-size: 16px;
+
+  line-height: 1.5;
+
+  text-align: left;
 }
 
-.stepCircle {
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
+/* =====================================================
+   PRODUCT
+===================================================== */
+
+.productHero {
   display: grid;
-  place-items: center;
-  background: #121927;
-  color: white;
-  font-weight: 900;
-  font-size: 18px;
-  flex-shrink: 0;
-}
 
-.centerButton {
-  display: block;
-  margin: 30px auto;
-}
-
-/* CARDS */
-
-.card,
-.offerCard,
-.signatureCard,
-.reviewCard,
-.successCard {
-  background: white;
-  border-radius: 21px;
-  padding: 30px;
-  margin-bottom: 25px;
-  box-shadow:
-    0 12px 40px
-    rgba(15,23,42,.065);
-}
-
-.card.narrow {
-  max-width: 560px;
-}
-
-.grid2 {
-  display: grid;
   grid-template-columns:
-    1fr 1fr;
-  column-gap: 22px;
+    minmax(0,1.5fr)
+    minmax(230px,.5fr);
+
+  gap: 50px;
+
+  align-items: center;
+
+  padding:
+    42px 45px;
+
+  margin-bottom: 24px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #111a2a 0%,
+      #17263d 100%
+    );
+
+  border-radius: 20px;
+
+  box-shadow:
+    0 14px 35px
+    rgba(15,23,42,.1);
+
+  text-align: left;
 }
 
-/* FORMS */
+.productHeroText {
+  text-align: left;
+}
 
-.field {
+.productHero h2 {
+  max-width: 680px;
+
+  margin:
+    10px 0 16px;
+
+  color: white !important;
+
+  font-size:
+    clamp(
+      29px,
+      3.3vw,
+      41px
+    );
+
+  line-height: 1.14;
+
+  letter-spacing: -.025em;
+
+  text-align: left;
+}
+
+.productHero p:not(.productKicker) {
+  max-width: 720px;
+
+  margin: 0;
+
+  color: #d7dde7 !important;
+
+  font-size: 16px;
+
+  line-height: 1.65;
+
+  text-align: left;
+}
+
+.productHeroAction {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 20px;
-  color: #364152;
-  font-weight: 750;
+
+  justify-content: flex-end;
 }
 
-.field input,
-.field select {
+.productHeroAction button {
   width: 100%;
-  border:
-    1px solid #d4dbe4;
-  padding: 14px 15px;
-  border-radius: 10px;
-  outline: none;
+
+  max-width: 230px;
+
+  min-height: 55px;
+}
+
+.productDataGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3,minmax(0,1fr));
+
+  gap: 15px;
+
+  margin-bottom: 22px;
+}
+
+.productData {
+  min-height: 120px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  align-items: flex-start;
+
+  padding: 21px;
+
   background: white;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 7px 22px
+    rgba(15,23,42,.04);
+
+  text-align: left;
+}
+
+.productData span {
+  color: var(--muted);
+
+  font-size: 13px;
+
+  margin-bottom: 8px;
+}
+
+.productData strong {
+  color: var(--text);
+
+  font-size: 17px;
+
+  line-height: 1.4;
+
+  text-align: left;
+}
+
+.catPublicCard {
+  display: grid;
+
+  grid-template-columns:
+    minmax(200px,.7fr)
+    minmax(190px,.6fr)
+    minmax(0,1.7fr);
+
+  gap: 28px;
+
+  align-items: center;
+
+  margin-bottom: 22px;
+
+  padding:
+    24px 27px;
+
+  background: #f4efe4;
+
+  border:
+    1px solid #dfd3b8;
+
+  border-left:
+    5px solid var(--gold);
+
+  border-radius: 13px;
+
+  text-align: left;
+}
+
+.catLabel {
+  display: block;
+
+  color: #75571b;
+
+  margin-bottom: 6px;
+
+  font-size: 12px;
+
+  font-weight: 900;
+
+  letter-spacing: .12em;
+}
+
+.catPublicCard strong {
+  color: var(--text);
+
+  font-size: 25px;
+}
+
+.catMeta {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.catMeta span {
+  color: #726a5a;
+
+  font-size: 13px;
+}
+
+.catMeta strong {
   font-size: 16px;
 }
 
-.field input:focus,
-.field select:focus {
-  border-color: #947128;
-  box-shadow:
-    0 0 0 3px
-    rgba(148,113,40,.09);
-}
+.catPublicCard > p {
+  margin: 0;
 
-.label {
-  font-weight: 750;
-  color: #364152;
-}
+  color: #61594c;
 
-.optionRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 12px 0 25px;
-}
-
-.optionButton {
-  border:
-    1px solid #d5dce4;
-  background: white;
-  padding: 13px 19px;
-  border-radius: 11px;
-  cursor: pointer;
-  font-weight: 750;
-}
-
-.selectedOption {
-  background: #121927;
-  border-color: #121927;
-  color: white;
-}
-
-/* BUTTONS */
-
-.primary,
-.secondary,
-.demoButton {
-  border: none;
-  border-radius: 10px;
-  padding: 13px 20px;
-  font-size: 15px;
-  font-weight: 850;
-  cursor: pointer;
-}
-
-.primary {
-  background: #121927;
-  color: white;
-}
-
-.primary:hover {
-  background: #202a3a;
-  box-shadow:
-    0 10px 25px
-    rgba(15,23,42,.15);
-}
-
-.secondary {
-  background: white;
-  color: #121927;
-  border:
-    1px solid #cbd3dd;
-}
-
-.full {
-  width: 100%;
-}
-
-.buttonRow,
-.navigation {
-  display: flex;
-  gap: 12px;
-  margin-top: 25px;
-}
-
-.navigation {
-  justify-content:
-    space-between;
-}
-
-/* NOTICES */
-
-.notice,
-.importantNotice,
-.smallNotice,
-.demoNotice {
-  padding: 16px 18px;
-  border-radius: 11px;
-  margin: 20px 0;
   line-height: 1.55;
 }
 
-.notice {
-  background: #f2f4f7;
-  color: #596579;
+.requirementsGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2,minmax(0,1fr));
+
+  gap: 20px;
 }
 
-.importantNotice {
-  background: #fff6df;
-  color: #71561b;
+.requirementsGrid .card {
+  height: 100%;
 }
 
-.smallNotice {
-  background: #f4f1e9;
-  color: #5f4d29;
+.requirementsGrid h2 {
+  margin:
+    8px 0 20px;
+
+  font-size: 24px;
+
+  text-align: left;
 }
 
-.demoNotice {
-  background: #edf3fb;
-  color: #335c8c;
+.requirement {
+  display: grid;
+
+  grid-template-columns:
+    20px 1fr;
+
+  gap: 10px;
+
+  padding: 7px 0;
+
+  align-items: start;
 }
 
-/* CHECK */
+.requirement > span {
+  color: var(--green);
+
+  font-weight: 900;
+}
+
+.requirement p {
+  margin: 0;
+
+  color: #4c586a;
+
+  line-height: 1.5;
+}
+
+/* =====================================================
+   CHOICES
+===================================================== */
+
+.choiceGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2,minmax(0,1fr));
+
+  gap: 20px;
+
+  margin-bottom: 25px;
+}
+
+.bigChoice {
+  min-height: 220px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  align-items: flex-start;
+
+  padding: 30px;
+
+  background: white;
+
+  border:
+    2px solid transparent;
+
+  border-radius: 18px;
+
+  box-shadow: var(--shadow);
+
+  cursor: pointer;
+
+  text-align: left;
+}
+
+.bigChoice:hover {
+  border-color: #d2bd8b;
+}
+
+.bigChoice.chosen {
+  border-color: var(--gold);
+
+  background: #fffdf8;
+}
+
+.choiceIcon {
+  min-width: 43px;
+
+  display: inline-grid;
+  place-items: center;
+
+  padding: 8px 9px;
+
+  background: #f3efe5;
+
+  color: #76591f;
+
+  border-radius: 9px;
+
+  font-size: 13px;
+
+  font-weight: 900;
+}
+
+.bigChoice h2 {
+  margin:
+    15px 0 7px;
+
+  font-size: 25px;
+
+  text-align: left;
+}
+
+.bigChoice p {
+  max-width: 480px;
+
+  margin: 0;
+
+  color: var(--muted);
+
+  line-height: 1.55;
+
+  text-align: left;
+}
+
+/* =====================================================
+   UPLOADS
+===================================================== */
+
+.upload {
+  position: relative;
+
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    43px 1fr auto;
+
+  gap: 14px;
+
+  align-items: center;
+
+  margin-bottom: 13px;
+
+  padding: 16px;
+
+  border:
+    1px dashed #bac4d0;
+
+  border-radius: 12px;
+
+  cursor: pointer;
+
+  text-align: left;
+}
+
+.upload:hover {
+  border-color: var(--gold);
+
+  background: #fffdf8;
+}
+
+.uploadIcon {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  background: #f3efe6;
+
+  color: var(--gold);
+
+  border-radius: 50%;
+
+  font-size: 19px;
+
+  font-weight: 900;
+}
+
+.uploadInfo {
+  min-width: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.uploadInfo strong {
+  color: var(--text);
+}
+
+.uploadInfo span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  color: var(--muted);
+
+  white-space: nowrap;
+
+  font-size: 13px;
+}
+
+.uploadAction {
+  padding:
+    8px 11px;
+
+  border:
+    1px solid #ccd3dc;
+
+  border-radius: 8px;
+
+  background: white;
+
+  font-size: 13px;
+
+  font-weight: 750;
+}
+
+.upload input {
+  position: absolute;
+
+  inset: 0;
+
+  opacity: 0;
+
+  cursor: pointer;
+}
+
+/* =====================================================
+   CHECKS / NOTICES
+===================================================== */
 
 .check {
   display: flex;
-  align-items: center;
+
   gap: 12px;
-  padding: 15px 0;
+
+  align-items: flex-start;
+
+  padding:
+    14px 0;
+
   border-bottom:
     1px solid #edf0f3;
-  font-weight: 650;
+
+  line-height: 1.5;
+
+  text-align: left;
 }
 
 .check input {
   width: 18px;
   height: 18px;
+
+  flex-shrink: 0;
+
+  margin-top: 2px;
 }
 
-/* UPLOAD */
+.notice,
+.importantNotice,
+.smallNotice,
+.demoNotice {
+  margin:
+    20px 0;
 
-.upload {
-  border:
-    1px dashed #bec7d2;
-  padding: 19px;
-  border-radius: 14px;
-  margin-bottom: 15px;
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
+  padding:
+    15px 17px;
 
-.uploadIcon {
-  width: 43px;
-  height: 43px;
-  border-radius: 50%;
-  background: #f1eee6;
-  color: #957028;
-  display: grid;
-  place-items: center;
-  font-size: 21px;
-  font-weight: 900;
-}
+  border-radius: 10px;
 
-.uploadInfo {
-  flex: 1;
-}
+  line-height: 1.55;
 
-.uploadInfo p {
-  margin: 4px 0 0;
-  color: #697587;
-}
-
-.uploadButton {
-  padding: 9px 13px;
-}
-
-/* GUARANTEE */
-
-.choiceGrid {
-  display: grid;
-  grid-template-columns:
-    1fr 1fr;
-  gap: 22px;
-  margin: 30px 0;
-}
-
-.bigChoice {
-  border:
-    2px solid transparent;
-  background: white;
   text-align: left;
-  padding: 30px;
-  border-radius: 20px;
-  box-shadow:
-    0 10px 35px
-    rgba(15,23,42,.06);
-  cursor: pointer;
 }
 
-.bigChoice:hover {
-  border-color: #c7b47f;
-  transform:
-    translateY(-3px);
+.notice {
+  background: #f1f3f6;
+
+  color: #556174;
 }
 
-.bigChoice.chosen {
-  border-color: #957028;
-  background: #fffcf5;
+.importantNotice {
+  background: #fff5dd;
+
+  color: #70551d;
 }
 
-.choiceIcon {
-  font-size: 28px;
-  color: #957028;
+.smallNotice {
+  background: #f2efe7;
+
+  color: #5d4c2b;
 }
 
-.statusHeader {
+.demoNotice {
+  background: #edf4fc;
+
+  color: #315d8d;
+}
+
+/* =====================================================
+   SUMMARY / REVIEW
+===================================================== */
+
+.summaryGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3,minmax(0,1fr));
+
+  gap: 14px;
+
+  margin-bottom: 22px;
+}
+
+.summaryCard {
+  min-height: 105px;
+
   display: flex;
-  justify-content:
-    space-between;
-  align-items: center;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  padding: 19px;
+
+  background: white;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 13px;
+
+  text-align: left;
 }
 
-.yellowStatus {
-  background: #fff2c9;
-  color: #80600f;
-  padding: 8px 11px;
-  border-radius: 8px;
-  font-weight: 800;
+.summaryCard span,
+.summaryLabel {
+  color: var(--muted);
+
+  margin-bottom: 7px;
+
+  font-size: 13px;
 }
 
-/* REVIEW */
+.summaryCard strong {
+  color: var(--text);
+
+  font-size: 18px;
+}
 
 .summaryRow {
   display: flex;
-  justify-content:
-    space-between;
+
+  justify-content: space-between;
+
   gap: 30px;
-  padding: 15px 0;
+
+  padding:
+    14px 0;
+
   border-bottom:
     1px solid #edf0f3;
+
+  text-align: left;
 }
 
-.reviewCard {
-  text-align: center;
-  max-width: 680px;
-  margin-left: auto;
-  margin-right: auto;
+.statusRow {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
 }
 
-.loaderCircle {
-  width: 68px;
-  height: 68px;
+.statusRow h2 {
   margin:
-    0 auto 20px;
-  border-radius: 50%;
-  background: #f1eee5;
-  color: #957028;
-  display: grid;
-  place-items: center;
-  font-size: 25px;
-  font-weight: 900;
+    5px 0 0;
 }
 
-.reviewCard > p {
-  color: #697587;
+.yellowStatus {
+  display: inline-block;
+
+  background: #fff0c1;
+
+  color: #775a11;
+
+  padding:
+    8px 11px;
+
+  border-radius: 8px;
+
+  font-weight: 850;
+}
+
+.statusCard {
+  display: grid;
+
+  grid-template-columns:
+    75px 1fr;
+
+  gap: 25px;
+
+  align-items: start;
+
+  max-width: 850px;
+
+  padding: 30px;
+
+  background: white;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 18px;
+
+  box-shadow: var(--shadow);
+
+  text-align: left;
+}
+
+.statusCard h2 {
+  margin:
+    7px 0 10px;
+
+  font-size: 29px;
+}
+
+.statusCard p:not(.cardEyebrow) {
+  max-width: 650px;
+
+  margin:
+    0 0 18px;
+
+  color: var(--muted);
+
   line-height: 1.6;
 }
 
-.requestSummary {
+.statusIcon,
+.successIcon {
+  width: 65px;
+  height: 65px;
+
+  display: grid;
+  place-items: center;
+
+  background: var(--navy);
+
+  color: white;
+
+  border-radius: 15px;
+
+  font-size: 18px;
+
+  font-weight: 900;
+}
+
+.successIcon {
+  background: var(--green);
+
+  font-size: 27px;
+}
+
+/* =====================================================
+   OFFER
+===================================================== */
+
+.offerHero {
+  margin-bottom: 18px;
+
+  padding:
+    28px;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--navy),
+      var(--navy-2)
+    );
+
+  border-radius: 17px;
+
+  color: white;
+
   text-align: left;
-  margin: 25px 0;
 }
 
-.demoButton {
-  background: #eef1f4;
-  color: #485465;
-}
+.offerHero h2 {
+  margin:
+    7px 0 0;
 
-/* OFFER */
+  color: white;
 
-.offerLabel {
-  color: #697587;
-  margin-bottom: 5px;
-}
-
-.offerCard > h2 {
-  font-size: 48px;
-  margin: 0 0 30px;
+  font-size: 43px;
 }
 
 .offerGrid {
   display: grid;
+
   grid-template-columns:
-    repeat(3, 1fr);
+    repeat(3,minmax(0,1fr));
+
   gap: 14px;
 }
 
 .offerData {
-  background: #f7f8fa;
-  padding: 18px;
+  min-height: 108px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  align-items: flex-start;
+
+  padding: 19px;
+
+  background: white;
+
+  border:
+    1px solid var(--border);
+
   border-radius: 13px;
+
+  text-align: left;
 }
 
 .offerData span {
-  display: block;
-  color: #697587;
-  font-size: 13px;
+  color: var(--muted);
+
   margin-bottom: 7px;
+
+  font-size: 13px;
 }
 
 .offerData strong {
@@ -4013,497 +6320,414 @@ button:hover {
 }
 
 .catDisclosure {
-  margin-top: 26px;
-  padding: 20px;
-  background: #f6f2e8;
-  border-radius: 13px;
+  margin-top: 20px;
+
+  padding: 19px;
+
+  background: #f4efe4;
+
   border-left:
-    4px solid #957028;
+    4px solid var(--gold);
+
+  border-radius: 12px;
+
+  text-align: left;
 }
 
 .catDisclosure strong {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .catDisclosure p {
-  margin: 7px 0 0;
-  color: #657287;
+  margin:
+    7px 0 0;
+
+  color: #615b50;
+
+  line-height: 1.5;
 }
 
 .warningBox {
-  margin-top: 18px;
+  margin-top: 17px;
+
   padding: 19px;
-  background: #fff8e8;
-  border-radius: 13px;
+
+  background: #fff7e5;
+
+  border-radius: 12px;
+
+  text-align: left;
 }
 
 .warningBox p {
-  color: #65572f;
-  line-height: 1.55;
-  margin-bottom: 7px;
+  color: #67582f;
+
+  line-height: 1.5;
 }
 
-/* PAYMENT */
-
-.paymentBox {
-  background: #f7f8fa;
-  border-radius: 13px;
-  padding: 19px;
-  margin: 20px 0;
-}
-
-/* DOCUMENT */
+/* =====================================================
+   DOCUMENTS / CREDIT PORTAL
+===================================================== */
 
 .document {
   display: flex;
-  justify-content:
-    space-between;
-  padding: 17px 0;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding:
+    15px 0;
+
   border-bottom:
     1px solid #edf0f3;
+
+  text-align: left;
 }
 
-.document p {
-  margin: 4px 0 0;
-  color: #697587;
+.document > div {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
 }
 
-.textButton {
-  border: none;
-  background: none;
-  color: #957028;
-  cursor: pointer;
+.document span {
+  color: var(--muted);
+
+  font-size: 13px;
+}
+
+.document button {
+  border: 0;
+
+  background: transparent;
+
+  color: var(--gold);
+
   font-weight: 850;
-}
 
-/* SIGNATURE */
-
-.signatureCard {
-  text-align: center;
-  max-width: 650px;
-  margin-left: auto;
-  margin-right: auto;
-  padding: 50px 30px;
-}
-
-.signatureIcon {
-  font-size: 48px;
-}
-
-/* SUCCESS */
-
-.successCard {
-  text-align: center;
-  max-width: 680px;
-  margin-left: auto;
-  margin-right: auto;
-  padding: 50px 30px;
-}
-
-.successIcon {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  margin:
-    0 auto 17px;
-  background: #1b7951;
-  color: white;
-  font-size: 34px;
-  font-weight: 900;
-}
-
-/* CLIENT DASHBOARD */
-
-.clientDashboard {
-  display: grid;
-  grid-template-columns:
-    1.3fr .7fr;
-  gap: 20px;
-}
-
-.balance,
-.nextPayment {
-  background: white;
-  border-radius: 18px;
-  padding: 28px;
-  box-shadow:
-    0 10px 35px
-    rgba(15,23,42,.06);
-}
-
-.balance h2,
-.nextPayment h2 {
-  font-size: 38px;
-  margin: 8px 0 15px;
+  cursor: pointer;
 }
 
 .portalOptions {
   display: grid;
+
   grid-template-columns:
-    repeat(3, 1fr);
+    repeat(3,minmax(0,1fr));
+
   gap: 13px;
-  margin-top: 22px;
 }
 
 .portalOptions button {
-  border: none;
+  min-height: 80px;
+
+  border:
+    1px solid var(--border);
+
   background: white;
+
   border-radius: 13px;
-  padding: 20px;
+
+  color: var(--text);
+
   cursor: pointer;
-  box-shadow:
-    0 8px 28px
-    rgba(15,23,42,.05);
+
   font-weight: 750;
+
+  text-align: left;
+
+  padding: 18px;
 }
 
-/* LEGAL */
+/* =====================================================
+   LEGAL
+===================================================== */
 
-.legalParagraph {
-  color: #4f5b6d;
+.legalText {
+  max-width: 1000px;
+
+  color: #4d596b;
+
   line-height: 1.7;
+
+  text-align: left;
 }
 
 .legalLink {
   display: inline-block;
-  margin-top: 15px;
-  color: #121927;
-  font-weight: 800;
-}
 
-.legalAnchor {
-  text-decoration: none;
-  display: inline-block;
   margin-top: 15px;
+
+  color: var(--navy);
+
+  font-weight: 850;
 }
 
 .buroLogoMock {
-  background: #121927;
-  color: white;
   display: inline-block;
-  padding: 17px 20px;
-  border-radius: 12px;
+
   margin-bottom: 18px;
-  font-weight: 900;
-  letter-spacing: .04em;
-}
 
-.privacyText {
-  line-height: 1.7;
-}
+  padding:
+    15px 18px;
 
-.privacyText h3 {
-  margin-top: 28px;
-}
+  background: var(--navy);
 
-/* BACKOFFICE */
-
-.kpiGrid {
-  display: grid;
-  grid-template-columns:
-    repeat(4, 1fr);
-  gap: 15px;
-}
-
-.kpiCard {
-  background: white;
-  border-radius: 15px;
-  padding: 21px;
-  box-shadow:
-    0 8px 30px
-    rgba(15,23,42,.055);
-}
-
-.kpiCard span {
-  display: block;
-  color: #697587;
-}
-
-.kpiCard strong {
-  font-size: 31px;
-  display: block;
-  margin-top: 7px;
-}
-
-.tableContainer {
-  background: white;
-  padding: 10px;
-  border-radius: 17px;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  padding: 14px;
-  text-align: left;
-  border-bottom:
-    1px solid #edf0f3;
-  white-space: nowrap;
-}
-
-th {
-  font-size: 13px;
-  color: #697587;
-}
-
-.smallDarkButton {
-  background: #121927;
   color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
+
+  border-radius: 10px;
+
+  font-size: 13px;
+
+  font-weight: 900;
+
+  letter-spacing: .06em;
 }
 
-.tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  margin-bottom: 22px;
-}
-
-.tabs button {
-  white-space: nowrap;
-  background: white;
-  border:
-    1px solid #d9dfe6;
-  padding: 9px 12px;
-  border-radius: 8px;
-}
-
-.riskGrid {
-  display: grid;
-  grid-template-columns:
-    repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 28px;
-}
-
-.riskCard {
-  background: white;
-  border-radius: 13px;
-  padding: 18px;
-  display: flex;
-  justify-content:
-    space-between;
-  gap: 10px;
-}
-
-.green {
-  color: #18744d;
-}
-
-.orange {
-  color: #b56d19;
-}
-
-/* MESA */
-
-.creditDecisionLayout {
-  display: grid;
-  grid-template-columns:
-    1fr 1fr;
-  gap: 20px;
-}
-
-.approvedPayment {
-  background: #f5f2eb;
-  padding: 18px;
-  border-radius: 12px;
-}
-
-.approvedPayment span {
-  display: block;
-  color: #697587;
-}
-
-.approvedPayment strong {
-  display: block;
-  font-size: 28px;
-  margin-top: 6px;
-}
-
-.decisionButtons {
-  display: grid;
-  grid-template-columns:
-    repeat(5, 1fr);
-  gap: 10px;
-}
-
-.decisionButtons button {
-  border: none;
-  border-radius: 11px;
-  padding: 15px 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.infoDecision {
-  background: #e9f2ff;
-  color: #285e9a;
-}
-
-.approveDecision {
-  background: #def4e8;
-  color: #17643f;
-}
-
-.warningDecision {
-  background: #fff1d5;
-  color: #80600f;
-}
-
-.rejectDecision {
-  background: #ffe2e2;
-  color: #942c2c;
-}
-
-.committeeDecision {
-  background: #ece6f5;
-  color: #634583;
-}
-
-/* COLLECTION */
-
-.collectionGrid {
-  display: grid;
-  grid-template-columns:
-    repeat(5, 1fr);
-  gap: 13px;
-  margin-bottom: 22px;
-}
-
-.collectionCard {
-  background: white;
-  border-radius: 14px;
-  padding: 20px;
-}
-
-.collectionCard span {
-  color: #697587;
-  display: block;
-}
-
-.collectionCard strong {
-  font-size: 30px;
-}
-
-/* FOOTER */
+/* =====================================================
+   FOOTER
+===================================================== */
 
 .legalFooter {
-  background: #121927;
+  background: var(--navy);
+
   color: white;
-  padding: 35px 24px;
+
+  padding:
+    38px 28px;
 }
 
 .footerContent {
   width:
     min(
-      1180px,
+      1240px,
       100%
     );
-  margin: auto;
+
   display: grid;
+
   grid-template-columns:
-    130px
-    1fr
-    250px;
-  gap: 32px;
+    170px
+    minmax(0,1fr)
+    260px;
+
+  gap: 35px;
+
   align-items: start;
+
+  margin: 0 auto;
 }
 
-.footerLogo {
-  width: 100px;
+.footerBrand {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 10px;
+
+  align-items: flex-start;
+}
+
+.footerBrand img {
+  width: 95px;
+
   background: white;
-  border-radius: 10px;
+
+  border-radius: 8px;
 }
 
 .footerLegal {
+  max-width: 720px;
+
+  color: #d3d8e1;
+
   font-size: 12px;
-  line-height: 1.6;
-  color: #d1d5db;
+
+  line-height: 1.65;
+
+  text-align: left;
 }
 
 .footerLegal p {
-  margin: 0 0 10px;
+  margin:
+    0 0 10px;
 }
 
 .footerLinks {
   display: flex;
+
   flex-direction: column;
-  gap: 5px;
+
+  align-items: flex-start;
+
+  gap: 7px;
 }
 
 .footerLinks button {
-  color: white;
-  border: none;
+  border: 0;
+
   background: transparent;
+
+  color: white;
+
+  padding: 3px 0;
+
   cursor: pointer;
-  text-align: left;
+
   font-weight: 700;
-  padding: 5px 0;
+
+  text-align: left;
 }
 
-/* MOBILE */
+/* =====================================================
+   MOBILE
+===================================================== */
 
-@media (max-width: 800px) {
+@media (max-width: 820px) {
 
   .header {
-    min-height: 69px;
-    padding: 9px 15px;
+    min-height: 66px;
+
+    padding:
+      8px 14px;
   }
 
   .logo {
-    width: 78px;
+    width: 82px;
   }
 
-  .topActions {
-    gap: 1px;
+  .hamburger {
+    display: block;
+
+    border: 0;
+
+    background: var(--navy);
+
+    color: white;
+
+    border-radius: 8px;
+
+    padding:
+      9px 12px;
+
+    cursor: pointer;
+
+    font-weight: 800;
   }
 
-  .topButton {
-    font-size: 10px;
-    padding: 8px 6px;
+  .desktopNav {
+    display: none;
+  }
+
+  .mobileNavOpen {
+    position: absolute;
+
+    top: 65px;
+
+    left: 10px;
+    right: 10px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: stretch;
+
+    padding: 13px;
+
+    background: white;
+
+    border:
+      1px solid var(--border);
+
+    border-radius: 14px;
+
+    box-shadow:
+      0 20px 45px
+      rgba(15,23,42,.16);
+  }
+
+  .mobileNavOpen .navButton,
+  .mobileNavOpen .navCta {
+    width: 100%;
+
+    margin: 2px 0;
+
+    text-align: left;
+  }
+
+  .legalDropdown {
+    width: 100%;
   }
 
   .legalMenu {
-    position: fixed;
-    top: 65px;
-    left: 12px;
-    right: 12px;
-    width: auto;
+    position: static;
+
+    width: 100%;
+
     min-width: 0;
+
+    box-shadow: none;
+
+    margin-top: 5px;
   }
 
   .container {
     width:
-      calc(
-        100% - 26px
-      );
+      calc(100% - 26px);
+
     padding:
       30px 0 65px;
   }
 
+  .pageTitle {
+    margin-bottom: 25px;
+  }
+
+  .pageTitle h1 {
+    font-size:
+      clamp(
+        34px,
+        10.5vw,
+        43px
+      );
+
+    line-height: 1.05;
+  }
+
+  .pageTitle p {
+    font-size: 16px;
+  }
+
   .hero {
-    grid-template-columns:
-      1fr;
     min-height: auto;
-    gap: 32px;
+
+    grid-template-columns: 1fr;
+
+    gap: 30px;
   }
 
   .hero h1 {
-    font-size: 45px;
+    font-size:
+      clamp(
+        43px,
+        13vw,
+        55px
+      );
+
+    line-height: 1.01;
+  }
+
+  .heroText {
+    font-size: 17px;
   }
 
   .heroCard {
-    padding: 23px;
+    padding: 22px;
   }
 
   .desktopTracker {
@@ -4512,67 +6736,119 @@ th {
 
   .mobileTracker {
     display: block;
+
     margin:
-      25px 0 30px;
+      0 0 27px;
   }
 
-  .mobileTrackerHeader {
+  .mobileTrackerTop {
     display: flex;
-    justify-content:
-      space-between;
-    margin-bottom: 9px;
+
+    justify-content: space-between;
+
+    gap: 10px;
+
+    margin-bottom: 8px;
   }
 
   .mobileProgress {
     width: 100%;
+
     height: 7px;
-    background: #e3e6ea;
-    border-radius: 20px;
+
     overflow: hidden;
+
+    background: #dfe3e8;
+
+    border-radius: 20px;
+
     margin-bottom: 7px;
   }
 
-  .mobileProgressValue {
+  .mobileProgressFill {
     height: 100%;
-    background: #957028;
+
+    background: var(--gold);
+
     border-radius: 20px;
-    transition:
-      width .4s ease;
   }
 
   .mobileTracker small {
-    color: #697587;
+    color: var(--muted);
   }
 
   .grid2,
   .choiceGrid,
+  .productDataGrid,
+  .requirementsGrid,
   .offerGrid,
-  .clientDashboard,
-  .kpiGrid,
-  .riskGrid,
-  .creditDecisionLayout,
-  .collectionGrid {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .formCard {
+    max-width: none;
+  }
+
+  .simpleFlowCard {
     grid-template-columns:
-      1fr;
+      45px 1fr;
+
+    gap:
+      10px 15px;
+
+    align-items: start;
+
+    padding: 17px;
   }
 
-  .portalOptions {
-    grid-template-columns:
-      1fr 1fr;
+  .simpleFlowCard h3 {
+    align-self: center;
+
+    font-size: 18px;
   }
 
-  .card,
-  .offerCard,
-  .reviewCard {
-    padding: 21px;
+  .simpleFlowCard p {
+    grid-column: 2;
+
+    font-size: 15px;
   }
 
-  .pageTitle h1 {
-    font-size: 36px;
+  .stepCircle {
+    width: 42px;
+    height: 42px;
   }
 
-  .pageTitle p {
-    font-size: 16px;
+  .productHero {
+    grid-template-columns: 1fr;
+
+    gap: 26px;
+
+    padding: 24px;
+  }
+
+  .productHero h2 {
+    font-size: 31px;
+  }
+
+  .productHeroAction {
+    justify-content: stretch;
+  }
+
+  .productHeroAction button {
+    max-width: none;
+  }
+
+  .catPublicCard {
+    grid-template-columns: 1fr;
+
+    gap: 15px;
+
+    padding: 20px;
   }
 
   .navigation,
@@ -4581,31 +6857,70 @@ th {
   }
 
   .navigation button,
-  .buttonRow button {
+  .buttonRow button,
+  .formAction button,
+  .bottomAction button {
     width: 100%;
   }
 
-  .decisionButtons {
-    grid-template-columns:
-      1fr;
+  .navigation {
+    flex-direction: column-reverse;
   }
 
-  .simpleFlowCard {
-    padding: 18px;
+  .upload {
+    grid-template-columns:
+      42px 1fr;
+  }
+
+  .uploadAction {
+    display: none;
+  }
+
+  .statusCard {
+    grid-template-columns: 1fr;
+
+    gap: 18px;
+
+    padding: 21px;
   }
 
   .summaryRow {
     flex-direction: column;
-    gap: 5px;
+
+    gap: 4px;
+  }
+
+  .portalOptions {
+    grid-template-columns:
+      1fr 1fr;
   }
 
   .footerContent {
-    grid-template-columns:
-      1fr;
+    grid-template-columns: 1fr;
+
+    gap: 25px;
   }
 
-  .footerLogo {
-    width: 85px;
+  .footerLegal {
+    max-width: none;
+  }
+}
+
+@media (max-width: 440px) {
+
+  .optionRow {
+    display: grid;
+
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .optionButton {
+    width: 100%;
+  }
+
+  .portalOptions {
+    grid-template-columns: 1fr;
   }
 }
 `;
