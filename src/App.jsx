@@ -47,6 +47,7 @@ const PASO_POR_PANTALLA = {
   confirmarCorreo: 2,
   consentimientos: 2,
   datosSolicitante: 2,
+  pep: 2,
   documentosIdentidad: 2,
   domicilio: 2,
   ingresos: 2,
@@ -88,6 +89,8 @@ const ESTADOS_ENVIADOS = [
   "SIGNED",
   "DISBURSED",
 ];
+
+const DOCUMENTOS_BUCKET = "documentos-solicitudes";
 
 /* =========================================================
    APP
@@ -136,8 +139,8 @@ export default function App() {
 
   const [datos, setDatos] = useState({
     /* CRÉDITO */
-    montoSolicitado: "10000",
-    plazoSolicitado: "6",
+    montoSolicitado: "",
+    plazoSolicitado: "",
     destino: "",
 
     /* TIPO PERSONA */
@@ -177,6 +180,13 @@ export default function App() {
 
     propietarioReal: "",
     rfcPropietarioReal: "",
+
+    /* DECLARACIÓN PEP */
+    esPep: "",
+    tipoPep: "",
+    detallePep: "",
+    declaracionPepAceptada: false,
+    declaracionPepFecha: "",
 
     /* DOMICILIO */
     calle: "",
@@ -578,6 +588,26 @@ export default function App() {
 
         tipo_garantia: datos.tipoGarantia || null,
 
+        es_pep:
+          datos.esPep === "si"
+            ? true
+            : datos.esPep === "no"
+            ? false
+            : null,
+
+        tipo_pep:
+          datos.esPep === "no"
+            ? "NO_PEP"
+            : datos.tipoPep || null,
+
+        detalle_pep:
+          datos.esPep === "si"
+            ? datos.detallePep || null
+            : null,
+
+        declaracion_pep_aceptada: Boolean(datos.declaracionPepAceptada),
+        declaracion_pep_fecha: datos.declaracionPepFecha || null,
+
         estado: "DRAFT",
 
         pantalla_actual: pantalla,
@@ -657,6 +687,85 @@ export default function App() {
     }
   }
 
+  async function cargarDocumentos(aplicacionId) {
+    if (!aplicacionId) return;
+
+    const { data, error } = await supabase
+      .from("DocumentosSolicitud")
+      .select(
+        "id, tipo_documento, nombre_archivo, storage_path, estado, observaciones, version, es_actual, subido_en, updated_at"
+      )
+      .eq("aplicacion_id", aplicacionId)
+      .eq("es_actual", true);
+
+    if (error) {
+      console.error("No se pudieron recuperar los documentos:", error);
+      return;
+    }
+
+    const documentosRecuperados = {};
+
+    (data || []).forEach((documento) => {
+      documentosRecuperados[documento.tipo_documento] = {
+        id: documento.id,
+        name: documento.nombre_archivo || documento.tipo_documento,
+        storagePath: documento.storage_path,
+        estado: documento.estado || "PENDING",
+        observaciones: documento.observaciones || "",
+        version: documento.version || 1,
+        subidoEn: documento.subido_en || documento.updated_at || null,
+        remoto: true,
+      };
+    });
+
+    setArchivos(documentosRecuperados);
+  }
+
+  async function cargarDecisionCredito(aplicacionId) {
+    if (!aplicacionId) return null;
+
+    const { data, error } = await supabase
+      .from("DecisionesCredito")
+      .select(
+        "decision, monto_aprobado, plazo_aprobado, tasa_anual, comision_apertura, cat, condiciones"
+      )
+      .eq("aplicacion_id", aplicacionId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("No se pudo recuperar la decisión:", error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    setDatos((prev) => ({
+      ...prev,
+      montoAprobado:
+        data.monto_aprobado === null || data.monto_aprobado === undefined
+          ? prev.montoAprobado
+          : String(data.monto_aprobado),
+      plazoAprobado:
+        data.plazo_aprobado === null || data.plazo_aprobado === undefined
+          ? prev.plazoAprobado
+          : String(data.plazo_aprobado),
+      tasaAprobada:
+        data.tasa_anual === null || data.tasa_anual === undefined
+          ? prev.tasaAprobada
+          : String(data.tasa_anual),
+      comisionAprobada:
+        data.comision_apertura === null || data.comision_apertura === undefined
+          ? prev.comisionAprobada
+          : String(data.comision_apertura),
+      catAprobado:
+        data.cat === null || data.cat === undefined
+          ? prev.catAprobado
+          : String(data.cat),
+    }));
+
+    return data;
+  }
+
   /* =========================================================
      RECUPERAR SOLICITUD
   ========================================================= */
@@ -672,6 +781,11 @@ export default function App() {
           estado,
           pantalla_actual,
           datos_borrador,
+          es_pep,
+          tipo_pep,
+          detalle_pep,
+          declaracion_pep_aceptada,
+          declaracion_pep_fecha,
           actualizado_en
         `
         )
@@ -704,6 +818,8 @@ export default function App() {
       setSolicitudId(data.id);
       setEstadoSolicitud(data.estado || "DRAFT");
 
+      await cargarDocumentos(data.id);
+
       if (data.folio) {
         setFolio(data.folio);
       }
@@ -717,6 +833,22 @@ export default function App() {
           password: "",
         }));
       }
+
+      setDatos((prev) => ({
+        ...prev,
+        esPep:
+          data.es_pep === true
+            ? "si"
+            : data.es_pep === false
+            ? "no"
+            : prev.esPep,
+        tipoPep: data.tipo_pep || prev.tipoPep,
+        detallePep: data.detalle_pep || prev.detallePep,
+        declaracionPepAceptada:
+          data.declaracion_pep_aceptada ?? prev.declaracionPepAceptada,
+        declaracionPepFecha:
+          data.declaracion_pep_fecha || prev.declaracionPepFecha,
+      }));
 
       if (borrador?.consentimientos) {
         setConsentimientos(borrador.consentimientos);
@@ -757,6 +889,7 @@ export default function App() {
       }
 
       if (data.estado === "APPROVED") {
+        await cargarDecisionCredito(data.id);
         setPasoMaximo((prev) => Math.max(prev, 5));
         setPantalla("oferta");
         return true;
@@ -804,13 +937,256 @@ export default function App() {
     setMensajeError("");
   }
 
-  function seleccionarArchivo(campo, archivo) {
-    setArchivos((prev) => ({
-      ...prev,
-      [campo]: archivo || null,
-    }));
+  async function asegurarSolicitudId() {
+    if (solicitudId) return solicitudId;
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user) {
+      throw new Error("Necesitas iniciar sesión para subir documentos.");
+    }
+
+    const { data: existente, error: errorBuscar } = await supabase
+      .from("Aplicaciones")
+      .select("id")
+      .eq("user_id", session.user.id)
+      .eq("estado", "DRAFT")
+      .order("actualizado_en", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (errorBuscar) throw errorBuscar;
+
+    if (existente?.id) {
+      setSolicitudId(existente.id);
+      return existente.id;
+    }
+
+    const { data: creada, error: errorCrear } = await supabase
+      .from("Aplicaciones")
+      .insert([
+        {
+          user_id: session.user.id,
+          correo: datos.correo || session.user.email || null,
+          celular: datos.celular || null,
+          tipo_persona: datos.tipoPersona || null,
+          nombre: obtenerNombreSolicitud() || null,
+          monto: numeroONull(datos.montoSolicitado),
+          plazo: numeroONull(datos.plazoSolicitado),
+          estado: "DRAFT",
+          pantalla_actual: pantalla,
+          datos_borrador: {
+            datos: { ...datos, password: "" },
+            consentimientos,
+            pasoMaximo,
+            ultimaPantallaPorPaso,
+          },
+          actualizado_en: new Date().toISOString(),
+        },
+      ])
+      .select("id")
+      .single();
+
+    if (errorCrear) throw errorCrear;
+
+    setSolicitudId(creada.id);
+    return creada.id;
+  }
+
+  async function seleccionarArchivo(campo, archivo) {
+    if (!archivo) return;
 
     setMensajeError("");
+    setMensajeInfo("");
+
+    const tiposPermitidos = ["application/pdf", "image/jpeg", "image/png"];
+    const limiteBytes = 15 * 1024 * 1024;
+
+    if (!tiposPermitidos.includes(archivo.type)) {
+      mostrarError("El documento debe ser PDF, JPG o PNG.");
+      return;
+    }
+
+    if (archivo.size > limiteBytes) {
+      mostrarError("El documento no puede pesar más de 15 MB.");
+      return;
+    }
+
+    const documentoAnterior = archivos[campo] || null;
+
+    setArchivos((prev) => ({
+      ...prev,
+      [campo]: {
+        ...documentoAnterior,
+        name: archivo.name,
+        estado: "UPLOADING",
+        observaciones: "",
+      },
+    }));
+
+    let documentoActualAnterior = null;
+    let storagePathNuevo = null;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        throw new Error("Necesitas iniciar sesión para subir documentos.");
+      }
+
+      const aplicacionId = await asegurarSolicitudId();
+
+      /*
+        Buscamos la última versión histórica para calcular
+        el número de la siguiente versión.
+      */
+      const { data: ultimaVersion, error: errorVersion } = await supabase
+        .from("DocumentosSolicitud")
+        .select("id, version, es_actual, estado")
+        .eq("aplicacion_id", aplicacionId)
+        .eq("tipo_documento", campo)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (errorVersion) throw errorVersion;
+
+      const nuevaVersion = Number(ultimaVersion?.version || 0) + 1;
+      documentoActualAnterior = ultimaVersion?.es_actual ? ultimaVersion : null;
+
+      const extension = (archivo.name.split(".").pop() || "pdf")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+
+      const nombreSeguro = archivo.name
+        .replace(/\.[^/.]+$/, "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "_")
+        .slice(0, 60);
+
+      storagePathNuevo = `${session.user.id}/${aplicacionId}/${campo}/v${nuevaVersion}_${Date.now()}_${nombreSeguro}.${extension}`;
+
+      /*
+        Primero subimos el nuevo archivo. El anterior NO se elimina.
+        Así conservamos historial físico en Storage.
+      */
+      const { error: errorStorage } = await supabase.storage
+        .from(DOCUMENTOS_BUCKET)
+        .upload(storagePathNuevo, archivo, {
+          upsert: false,
+          contentType: archivo.type,
+        });
+
+      if (errorStorage) throw errorStorage;
+
+      /*
+        La versión anterior deja de ser la actual, pero permanece
+        intacta en la tabla y en Storage para auditoría.
+      */
+      if (documentoActualAnterior?.id) {
+        const { error: errorAnterior } = await supabase
+          .from("DocumentosSolicitud")
+          .update({
+            es_actual: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", documentoActualAnterior.id);
+
+        if (errorAnterior) throw errorAnterior;
+      }
+
+      const { data: registro, error: errorRegistro } = await supabase
+        .from("DocumentosSolicitud")
+        .insert({
+          aplicacion_id: aplicacionId,
+          tipo_documento: campo,
+          nombre_archivo: archivo.name,
+          storage_path: storagePathNuevo,
+          estado: "PENDING",
+          observaciones: null,
+          revisado_por: null,
+          revisado_en: null,
+          version: nuevaVersion,
+          es_actual: true,
+          reemplaza_documento_id: documentoActualAnterior?.id || null,
+          subido_por: session.user.id,
+          subido_en: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select(
+          "id, tipo_documento, nombre_archivo, storage_path, estado, observaciones, version, subido_en"
+        )
+        .single();
+
+      if (errorRegistro) {
+        /*
+          Si algo falla al crear la nueva fila, tratamos de restaurar
+          la versión anterior como actual para no dejar el expediente
+          sin documento vigente.
+        */
+        if (documentoActualAnterior?.id) {
+          await supabase
+            .from("DocumentosSolicitud")
+            .update({ es_actual: true })
+            .eq("id", documentoActualAnterior.id);
+        }
+
+        throw errorRegistro;
+      }
+
+      setArchivos((prev) => ({
+        ...prev,
+        [campo]: {
+          id: registro.id,
+          name: registro.nombre_archivo,
+          storagePath: registro.storage_path,
+          estado: registro.estado,
+          observaciones: registro.observaciones || "",
+          version: registro.version,
+          subidoEn: registro.subido_en,
+          remoto: true,
+        },
+      }));
+
+      setMensajeInfo("Documento cargado y enviado a revisión.");
+    } catch (error) {
+      console.error("Error subiendo documento:", error);
+
+      /*
+        Si el archivo alcanzó a subirse a Storage pero falló el registro,
+        intentamos limpiar únicamente la nueva versión fallida.
+      */
+      if (storagePathNuevo) {
+        try {
+          await supabase.storage
+            .from(DOCUMENTOS_BUCKET)
+            .remove([storagePathNuevo]);
+        } catch (cleanupError) {
+          console.error("No se pudo limpiar el archivo fallido:", cleanupError);
+        }
+      }
+
+      setArchivos((prev) => {
+        const copia = { ...prev };
+
+        if (documentoAnterior) {
+          copia[campo] = documentoAnterior;
+        } else {
+          delete copia[campo];
+        }
+
+        return copia;
+      });
+
+      mostrarError(
+        error?.message || "No se pudo subir el documento. Intenta nuevamente."
+      );
+    }
   }
 
   function mostrarError(texto) {
@@ -827,7 +1203,13 @@ export default function App() {
   }
 
   function documentoExiste(nombre) {
-    return Boolean(archivos[nombre]);
+    const documento = archivos[nombre];
+
+    return Boolean(
+      documento &&
+        documento.estado !== "UPLOADING" &&
+        documento.estado !== "REJECTED"
+    );
   }
 
   function obtenerNombreSolicitud() {
@@ -937,7 +1319,72 @@ export default function App() {
       }
     }
 
-    ir("documentosIdentidad");
+    ir("pep");
+  }
+
+  async function validarPep() {
+    if (datos.esPep !== "si" && datos.esPep !== "no") {
+      mostrarError(
+        "Selecciona si eres o puedes ser una Persona Políticamente Expuesta."
+      );
+      return;
+    }
+
+    if (!datos.declaracionPepAceptada) {
+      mostrarError(
+        "Confirma que la declaración PEP proporcionada es verdadera."
+      );
+      return;
+    }
+
+    if (datos.esPep === "si" && !datos.tipoPep) {
+      mostrarError(
+        "Selecciona el supuesto de Persona Políticamente Expuesta que corresponda."
+      );
+      return;
+    }
+
+    if (datos.esPep === "si" && !datos.detallePep.trim()) {
+      mostrarError(
+        "Describe brevemente el cargo, relación o vínculo PEP."
+      );
+      return;
+    }
+
+    try {
+      const aplicacionId = await asegurarSolicitudId();
+      const fechaDeclaracion = new Date().toISOString();
+      const tipoPep = datos.esPep === "no" ? "NO_PEP" : datos.tipoPep;
+
+      const { error } = await supabase
+        .from("Aplicaciones")
+        .update({
+          es_pep: datos.esPep === "si",
+          tipo_pep: tipoPep,
+          detalle_pep:
+            datos.esPep === "si" ? datos.detallePep.trim() : null,
+          declaracion_pep_aceptada: true,
+          declaracion_pep_fecha: fechaDeclaracion,
+          actualizado_en: fechaDeclaracion,
+        })
+        .eq("id", aplicacionId);
+
+      if (error) throw error;
+
+      setDatos((prev) => ({
+        ...prev,
+        tipoPep,
+        detallePep: prev.esPep === "si" ? prev.detallePep : "",
+        declaracionPepFecha: fechaDeclaracion,
+      }));
+
+      ir("documentosIdentidad");
+    } catch (error) {
+      console.error("Error guardando declaración PEP:", error);
+      mostrarError(
+        error?.message || "No se pudo guardar la declaración PEP."
+      );
+    }
   }
 
   function validarDocumentosIdentidad() {
@@ -1326,6 +1773,26 @@ export default function App() {
 
         tipo_garantia: datos.tipoGarantia || null,
 
+        es_pep:
+          datos.esPep === "si"
+            ? true
+            : datos.esPep === "no"
+            ? false
+            : null,
+
+        tipo_pep:
+          datos.esPep === "no"
+            ? "NO_PEP"
+            : datos.tipoPep || null,
+
+        detalle_pep:
+          datos.esPep === "si"
+            ? datos.detallePep || null
+            : null,
+
+        declaracion_pep_aceptada: Boolean(datos.declaracionPepAceptada),
+        declaracion_pep_fecha: datos.declaracionPepFecha || null,
+
         estado: "SUBMITTED",
 
         pantalla_actual: "enRevision",
@@ -1578,13 +2045,28 @@ export default function App() {
           />
         )}
 
+        {pantalla === "pep" && (
+          <DeclaracionPep
+            datos={datos}
+            actualizar={actualizar}
+            continuar={validarPep}
+            regresar={() => regresarA("datosSolicitante")}
+            trackerProps={{
+              pasoActual: 2,
+              pasoMaximo,
+              navegarPorTracker,
+              estadoSolicitud,
+            }}
+          />
+        )}
+
         {pantalla === "documentosIdentidad" && (
           <DocumentosIdentidad
             datos={datos}
             archivos={archivos}
             seleccionarArchivo={seleccionarArchivo}
             continuar={validarDocumentosIdentidad}
-            regresar={() => regresarA("datosSolicitante")}
+            regresar={() => regresarA("pep")}
             trackerProps={{
               pasoActual: 2,
               pasoMaximo,
@@ -2265,6 +2747,10 @@ function Simulacion({
   continuar,
   trackerProps,
 }) {
+  const simulacionCompleta =
+    Number(datos.montoSolicitado) > 0 &&
+    Boolean(datos.plazoSolicitado);
+
   return (
     <Pagina
       titulo="¿Cuánto necesitas?"
@@ -2315,6 +2801,7 @@ function Simulacion({
           <button
             className="primary"
             onClick={continuar}
+            disabled={!simulacionCompleta}
           >
             Continuar
           </button>
@@ -2970,6 +3457,143 @@ function DatosSolicitante({
           atras={regresar}
           continuar={continuar}
         />
+      </div>
+    </Pagina>
+  );
+}
+
+/* =========================================================
+   DECLARACIÓN PEP
+========================================================= */
+
+function DeclaracionPep({
+  datos,
+  actualizar,
+  continuar,
+  regresar,
+  trackerProps,
+}) {
+  const esMoral = datos.tipoPersona === "moral";
+
+  function seleccionarRespuesta(valor) {
+    actualizar("esPep", valor);
+
+    if (valor === "no") {
+      actualizar("tipoPep", "NO_PEP");
+      actualizar("detallePep", "");
+    } else if (datos.tipoPep === "NO_PEP") {
+      actualizar("tipoPep", "");
+    }
+  }
+
+  return (
+    <Pagina
+      titulo="Declaración PEP"
+      subtitulo={
+        esMoral
+          ? "Necesitamos conocer si el representante legal o propietario real se encuentra en un supuesto de Persona Políticamente Expuesta."
+          : "Necesitamos conocer si te encuentras en un supuesto de Persona Políticamente Expuesta."
+      }
+    >
+      <Tracker {...trackerProps} />
+
+      <div className="card">
+        <div className="pepExplanation">
+          <span className="pepLabel">¿QUÉ ES UNA PEP?</span>
+
+          <h3>Persona Políticamente Expuesta</h3>
+
+          <p>
+            Es una persona que desempeña o ha desempeñado funciones públicas
+            relevantes. También pueden existir supuestos relacionados con
+            familiares cercanos o personas con determinados vínculos
+            patrimoniales con una PEP.
+          </p>
+
+          <p>
+            La mayoría de las personas no se encuentran dentro de esta
+            categoría. Si nunca has desempeñado una función pública de alta
+            relevancia y no tienes alguno de estos vínculos, normalmente
+            deberás seleccionar “No”.
+          </p>
+        </div>
+
+        <SectionDivider
+          titulo={
+            esMoral
+              ? "¿El representante legal o propietario real es o puede ser PEP? *"
+              : "¿Eres o has sido una Persona Políticamente Expuesta? *"
+          }
+        />
+
+        <div className="choiceGrid pepChoiceGrid">
+          <button
+            type="button"
+            className={
+              datos.esPep === "no"
+                ? "bigChoice chosen pepChoice"
+                : "bigChoice pepChoice"
+            }
+            onClick={() => seleccionarRespuesta("no")}
+          >
+            <span className="choiceIcon">NO</span>
+            <h2>No, no soy PEP</h2>
+            <p>No me encuentro en los supuestos descritos.</p>
+          </button>
+
+          <button
+            type="button"
+            className={
+              datos.esPep === "si"
+                ? "bigChoice chosen pepChoice"
+                : "bigChoice pepChoice"
+            }
+            onClick={() => seleccionarRespuesta("si")}
+          >
+            <span className="choiceIcon">SÍ</span>
+            <h2>Sí, soy o puedo ser PEP</h2>
+            <p>Quiero proporcionar información adicional.</p>
+          </button>
+        </div>
+
+        {datos.esPep === "si" && (
+          <div className="pepDetails">
+            <Select
+              label="Supuesto PEP *"
+              value={datos.tipoPep}
+              onChange={(v) => actualizar("tipoPep", v)}
+              opciones={[
+                "",
+                "PEP_DIRECTO",
+                "FAMILIAR_PEP",
+                "VINCULO_PATRIMONIAL_PEP",
+              ]}
+            />
+
+            <label className="field">
+              <span>Describe el cargo, relación o vínculo * </span>
+              <textarea
+                value={datos.detallePep}
+                onChange={(e) => actualizar("detallePep", e.target.value)}
+                placeholder="Ej. cargo público, institución, parentesco o vínculo relevante."
+              />
+            </label>
+
+            <div className="importantNotice">
+              Declarar que eres o puedes ser PEP no significa que tu crédito sea
+              rechazado automáticamente. La información será revisada como parte
+              del proceso de conocimiento del cliente.
+            </div>
+          </div>
+        )}
+
+        <CheckControl
+          texto="Declaro que la información proporcionada en esta declaración es verdadera y completa. *"
+          checked={Boolean(datos.declaracionPepAceptada)}
+          onChange={(v) => actualizar("declaracionPepAceptada", v)}
+        />
+
+        <NavButtons atras={regresar} continuar={continuar} />
       </div>
     </Pagina>
   );
@@ -4576,32 +5200,153 @@ function Upload({
   archivo,
   onChange,
 }) {
+  const estado = archivo?.estado || "";
+
+  const [abriendo, setAbriendo] = useState(false);
+
+  const textoEstado =
+    estado === "UPLOADING"
+      ? "Subiendo..."
+      : estado === "PENDING"
+      ? "Pendiente de revisión"
+      : estado === "APPROVED"
+      ? "Documento aprobado"
+      : estado === "REJECTED"
+      ? "Documento rechazado · debes reemplazarlo"
+      : "";
+
+  const puedeVer =
+    Boolean(archivo?.storagePath) &&
+    estado !== "REJECTED" &&
+    estado !== "UPLOADING";
+
+  const debeReemplazar = estado === "REJECTED";
+  const yaTieneDocumento = estado === "PENDING" || estado === "APPROVED";
+
+  async function verDocumento() {
+    if (!archivo?.storagePath || abriendo) return;
+
+    try {
+      setAbriendo(true);
+
+      const { data, error } = await supabase.storage
+        .from(DOCUMENTOS_BUCKET)
+        .createSignedUrl(archivo.storagePath, 300);
+
+      if (error) throw error;
+
+      if (!data?.signedUrl) {
+        throw new Error("No se pudo generar el enlace temporal.");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("No se pudo abrir el documento:", error);
+      alert("No se pudo abrir el documento. Intenta nuevamente.");
+    } finally {
+      setAbriendo(false);
+    }
+  }
+
   return (
-    <label className="upload">
-      <div className="uploadIcon">↑</div>
-
-      <div className="uploadInfo">
-        <strong>{titulo}</strong>
-
-        <span>
-          {archivo
-            ? archivo.name
-            : "PDF, JPG o PNG"}
-        </span>
-      </div>
-
-      <div className="uploadAction">
-        {archivo ? "Cambiar" : "Seleccionar"}
-      </div>
-
-      <input
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
-        onChange={(e) =>
-          onChange(e.target.files?.[0])
+    <div className="uploadWrapper">
+      <div
+        className={
+          estado === "REJECTED"
+            ? "upload uploadRejected"
+            : estado === "APPROVED"
+            ? "upload uploadApproved"
+            : "upload"
         }
-      />
-    </label>
+      >
+        <div className="uploadIcon">
+          {estado === "APPROVED" ? "✓" : estado === "REJECTED" ? "!" : "↑"}
+        </div>
+
+        <div className="uploadInfo">
+          <strong>{titulo}</strong>
+
+          {/*
+            Si el documento fue rechazado ya no lo mostramos como
+            documento vigente al cliente. El archivo histórico sigue
+            guardado para Backoffice/auditoría.
+          */}
+          {estado === "REJECTED" ? (
+            <span>Debes cargar un documento nuevo.</span>
+          ) : (
+            <span>
+              {archivo?.name || "PDF, JPG o PNG · Máx. 15 MB"}
+            </span>
+          )}
+
+          {textoEstado && (
+            <span
+              className={
+                estado === "APPROVED"
+                  ? "documentStatus documentApproved"
+                  : estado === "REJECTED"
+                  ? "documentStatus documentRejected"
+                  : estado === "UPLOADING"
+                  ? "documentStatus documentUploading"
+                  : "documentStatus documentPending"
+              }
+            >
+              {textoEstado}
+            </span>
+          )}
+        </div>
+
+        <div className="uploadButtons">
+          {puedeVer && (
+            <button
+              type="button"
+              className="viewDocumentButton"
+              disabled={abriendo}
+              onClick={verDocumento}
+            >
+              {abriendo ? "Abriendo..." : "Ver documento"}
+            </button>
+          )}
+
+          {/*
+            La versión vigente pendiente/aprobada se conserva tal cual.
+            Sólo pedimos reemplazo directo cuando fue rechazada o cuando
+            todavía no existe archivo.
+          */}
+          {(!yaTieneDocumento || debeReemplazar || estado === "UPLOADING") && (
+            <label className="uploadAction uploadActionLabel">
+              {estado === "UPLOADING"
+                ? "Subiendo..."
+                : debeReemplazar
+                ? "Subir nuevo"
+                : "Seleccionar"}
+
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                disabled={estado === "UPLOADING"}
+                onChange={(e) => {
+                  const nuevoArchivo = e.target.files?.[0];
+                  onChange(nuevoArchivo);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+        </div>
+      </div>
+
+      {estado === "REJECTED" && (
+        <div className="documentObservation">
+          <strong>Necesitamos que reemplaces este documento.</strong>
+          {archivo?.observaciones ? (
+            <span> Motivo: {archivo.observaciones}</span>
+          ) : (
+            <span> El documento no pasó la revisión.</span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -5407,6 +6152,51 @@ button:disabled {
 
   box-shadow:
     0 8px 22px rgba(17,26,42,.14);
+}
+
+.primary:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.optionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.optionButton {
+  min-width: 118px;
+  min-height: 49px;
+
+  border: 1px solid #c8d0db;
+  background: white;
+  color: var(--navy);
+
+  border-radius: 10px;
+  padding: 12px 18px;
+
+  font-size: 15px;
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+.optionButton:hover {
+  border-color: var(--gold);
+  background: #fffdf8;
+}
+
+.optionButton.selectedOption {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: white;
+
+  box-shadow:
+    0 7px 18px rgba(156,116,39,.18);
 }
 
 .secondary {
@@ -6802,6 +7592,168 @@ button:disabled {
 }
 
 /* =========================================================
+   PEP + ESTADO DOCUMENTAL
+========================================================= */
+
+.pepExplanation {
+  margin-bottom: 24px;
+  padding: 22px;
+  background: #f4f6f8;
+  border: 1px solid #e0e5eb;
+  border-radius: 13px;
+}
+
+.pepExplanation h3 {
+  margin: 7px 0 10px;
+  font-size: 23px;
+}
+
+.pepExplanation p {
+  max-width: 900px;
+  margin: 8px 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.pepLabel {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.pepChoice {
+  min-height: 175px;
+}
+
+.pepDetails {
+  margin: 5px 0 20px;
+  padding: 22px;
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+}
+
+.field textarea {
+  width: 100%;
+  min-height: 105px;
+  padding: 13px 15px;
+  border: 1px solid #d1d8e2;
+  border-radius: 10px;
+  background: white;
+  color: var(--text);
+  font-size: 16px;
+  resize: vertical;
+  outline: none;
+}
+
+.field textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(156,116,39,.09);
+}
+
+.uploadWrapper {
+  margin-bottom: 13px;
+}
+
+.uploadWrapper .upload {
+  margin-bottom: 0;
+}
+
+.uploadRejected {
+  border-color: #d58a8a;
+  background: #fffafa;
+}
+
+.uploadApproved {
+  border-color: #add7c2;
+  background: #fbfffd;
+}
+
+.uploadButtons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.viewDocumentButton {
+  border: 1px solid #c8d0db;
+  background: white;
+  color: var(--navy);
+  padding: 8px 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.viewDocumentButton:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: #76591f;
+}
+
+.uploadActionLabel {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.uploadActionLabel input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.documentStatus {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 11px !important;
+  font-weight: 850;
+}
+
+.documentPending {
+  background: #fff4d6;
+  color: #765b18 !important;
+}
+
+.documentApproved {
+  background: #e8f5ee;
+  color: #1c7554 !important;
+}
+
+.documentRejected {
+  background: #fdecec;
+  color: #923535 !important;
+}
+
+.documentUploading {
+  background: #edf4fc;
+  color: #315d8d !important;
+}
+
+.documentObservation {
+  margin-top: 7px;
+  padding: 10px 12px;
+  background: #fdecec;
+  color: #8f3434;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.uploadButtons {
+  min-width: 210px;
+}
+
+/* =========================================================
    MOBILE
 ========================================================= */
 
@@ -7132,6 +8084,18 @@ button:disabled {
 
   .uploadAction {
     display: none;
+  }
+
+  .uploadButtons {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .viewDocumentButton,
+  .uploadButtons .uploadActionLabel {
+    display: inline-flex;
   }
 
   .statusCard {
