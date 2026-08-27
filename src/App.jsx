@@ -215,8 +215,10 @@ export default function App() {
     garanteCorreo: "",
     garanteRfc: "",
 
-    /* BANCO */
-    clabe: "",
+/* BANCO */
+banco: "",
+clabe: "",
+fechaPrimerPago: "",
 
     /* OFERTA DEMO */
     montoAprobado: "10000",
@@ -889,24 +891,47 @@ export default function App() {
       }
 
       if (data.estado === "APPROVED") {
-        await cargarDecisionCredito(data.id);
-        setPasoMaximo((prev) => Math.max(prev, 5));
-        setPantalla("oferta");
-        return true;
-      }
+  setPasoMaximo((prev) => Math.max(prev, 5));
+  setPantalla("oferta");
+  return true;
+}
 
-      if (data.estado === "SIGNED") {
-        setPasoMaximo(6);
-        setPantalla("tesoreriaCliente");
-        return true;
-      }
 
-      if (data.estado === "DISBURSED") {
-        setPasoMaximo(6);
-        setPantalla("creditoActivo");
-        return true;
-      }
+/* =========================================
+   CONTRATACIÓN
+========================================= */
 
+if (data.estado === "CONTRACTING") {
+  setPasoMaximo(6);
+
+  setPantalla(
+    data.pantalla_actual || "contratos"
+  );
+
+  return true;
+}
+
+
+if (data.estado === "READY_TO_DISBURSE") {
+  setPasoMaximo(6);
+  setPantalla("tesoreriaCliente");
+
+  return true;
+}
+
+
+if (data.estado === "SIGNED") {
+  setPasoMaximo(6);
+  setPantalla("tesoreriaCliente");
+  return true;
+}
+
+
+if (data.estado === "DISBURSED") {
+  setPasoMaximo(6);
+  setPantalla("creditoActivo");
+  return true;
+}
       return true;
     } catch (error) {
       console.error(error);
@@ -919,14 +944,39 @@ export default function App() {
      FORM HELPERS
   ========================================================= */
 
-  function actualizar(campo, valor) {
-    setDatos((prev) => ({
-      ...prev,
-      [campo]: valor,
-    }));
+function actualizar(campo, valor) {
+  setDatos((prev) => ({
+    ...prev,
+    [campo]: valor,
+  }));
 
+  setMensajeError("");
+}
+
+
+/* =========================================
+   CONTRATACIÓN AUTOMÁTICA
+========================================= */
+
+async function prepararContratacion() {
+  try {
+    setGuardando(true);
     setMensajeError("");
+    setMensajeInfo("");
+
+    // ...TODO EL CÓDIGO QUE TE DI...
+  } catch (error) {
+    console.error(error);
+
+    mostrarError(
+      "Ocurrió un error al preparar la contratación."
+    );
+
+    return false;
+  } finally {
+    setGuardando(false);
   }
+}
 
   function actualizarConsentimiento(campo, valor) {
     setConsentimientos((prev) => ({
@@ -2249,17 +2299,24 @@ export default function App() {
 
         {pantalla === "cuentaBanco" && (
           <CuentaBanco
-            datos={datos}
-            actualizar={actualizar}
-            ir={ir}
-            regresar={() => regresarA("oferta")}
-            trackerProps={{
-              pasoActual: 6,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
+  datos={datos}
+  actualizar={actualizar}
+  continuar={
+    prepararContratacion
+  }
+  guardando={
+    guardando
+  }
+  regresar={() =>
+    regresarA("oferta")
+  }
+  trackerProps={{
+    pasoActual: 6,
+    pasoMaximo,
+    navegarPorTracker,
+    estadoSolicitud,
+  }}
+/>
         )}
 
         {pantalla === "contratos" && (
@@ -4602,36 +4659,78 @@ function Oferta({
 function CuentaBanco({
   datos,
   actualizar,
-  ir,
+  continuar,
+  guardando,
   regresar,
   trackerProps,
 }) {
   return (
     <Pagina
       titulo="Cuenta bancaria"
-      subtitulo="Indica dónde deseas recibir el crédito."
+      subtitulo="Confirma la cuenta donde deseas recibir el crédito y prepara tu calendario de pagos."
     >
       <Tracker {...trackerProps} />
 
       <div className="card formCard">
         <Campo
-          label="CLABE *"
-          value={datos.clabe}
-          onChange={(v) => actualizar("clabe", v)}
+          label="Banco *"
+          value={datos.banco}
+          onChange={(v) =>
+            actualizar("banco", v)
+          }
         />
+
+        <Campo
+          label="CLABE interbancaria *"
+          value={datos.clabe}
+          onChange={(v) =>
+            actualizar(
+              "clabe",
+              v.replace(/\D/g, "").slice(0, 18)
+            )
+          }
+        />
+
+        <Campo
+          label="Fecha del primer pago *"
+          type="date"
+          value={datos.fechaPrimerPago}
+          onChange={(v) =>
+            actualizar(
+              "fechaPrimerPago",
+              v
+            )
+          }
+        />
+
+        {datos.clabe.length > 0 && (
+          <div className="notice">
+            La CLABE debe contener 18 dígitos.
+            Terminación:{" "}
+            <strong>
+              {datos.clabe.length >= 4
+                ? datos.clabe.slice(-4)
+                : "----"}
+            </strong>
+          </div>
+        )}
+
+        <div className="importantNotice">
+          La autorización para domiciliar los pagos se
+          presentará por separado dentro de tus documentos
+          contractuales. Registrar esta cuenta no sustituye
+          dicha autorización.
+        </div>
 
         <NavButtons
           atras={regresar}
-          continuar={() => {
-            if (!/^\d{18}$/.test(datos.clabe)) {
-              alert(
-                "La CLABE debe contener exactamente 18 dígitos."
-              );
-              return;
-            }
-
-            ir("contratos");
-          }}
+          continuar={continuar}
+          textoContinuar={
+            guardando
+              ? "Preparando contrato..."
+              : "Continuar a documentos"
+          }
+          disabled={guardando}
         />
       </div>
     </Pagina>
