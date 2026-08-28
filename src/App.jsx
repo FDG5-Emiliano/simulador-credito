@@ -86,6 +86,8 @@ const ESTADOS_ENVIADOS = [
   "SUBMITTED",
   "IN_REVIEW",
   "APPROVED",
+  "CONTRACTING",
+  "READY_TO_DISBURSE",
   "SIGNED",
   "DISBURSED",
 ];
@@ -793,13 +795,15 @@ fechaPrimerPago: "",
         )
         .eq("user_id", userId)
         .in("estado", [
-          "DRAFT",
-          "SUBMITTED",
-          "IN_REVIEW",
-          "APPROVED",
-          "SIGNED",
-          "DISBURSED",
-        ])
+  "DRAFT",
+  "SUBMITTED",
+  "IN_REVIEW",
+  "APPROVED",
+  "CONTRACTING",
+  "READY_TO_DISBURSE",
+  "SIGNED",
+  "DISBURSED",
+])
         .order("actualizado_en", {
           ascending: false,
         })
@@ -959,20 +963,366 @@ function actualizar(campo, valor) {
 ========================================= */
 
 async function prepararContratacion() {
+  console.log("INICIANDO CONTRATACIÓN");
+
   try {
     setGuardando(true);
     setMensajeError("");
     setMensajeInfo("");
 
-    // ...TODO EL CÓDIGO QUE TE DI...
+    /* =========================================
+       1. VALIDAR SESIÓN
+    ========================================= */
+
+    const {
+      data: { session },
+      error: errorSession,
+    } = await supabase.auth.getSession();
+
+    console.log("SESSION:", session);
+
+    if (errorSession) {
+      throw errorSession;
+    }
+
+    if (!session?.user) {
+      mostrarError(
+        "Tu sesión expiró. Inicia sesión nuevamente."
+      );
+
+      return false;
+    }
+
+    /* =========================================
+       2. VALIDAR SOLICITUD
+    ========================================= */
+
+    if (!solicitudId) {
+      mostrarError(
+        "No encontramos la solicitud asociada a tu cuenta."
+      );
+
+      return false;
+    }
+
+    console.log(
+      "SOLICITUD ID:",
+      solicitudId
+    );
+
+    /* =========================================
+       3. VALIDAR BANCO
+    ========================================= */
+
+    if (!datos.banco?.trim()) {
+      mostrarError(
+        "Ingresa el nombre del banco."
+      );
+
+      return false;
+    }
+
+    if (
+      !/^\d{18}$/.test(
+        String(datos.clabe || "")
+      )
+    ) {
+      mostrarError(
+        "La CLABE debe contener exactamente 18 dígitos."
+      );
+
+      return false;
+    }
+
+    if (!datos.fechaPrimerPago) {
+      mostrarError(
+        "Selecciona la fecha del primer pago."
+      );
+
+      return false;
+    }
+
+    /* =========================================
+       4. TITULAR
+    ========================================= */
+
+    const titular =
+      datos.tipoPersona === "moral"
+        ? datos.razonSocial?.trim()
+        : [
+            datos.nombre,
+            datos.apellidoPaterno,
+            datos.apellidoMaterno,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+
+    if (!titular) {
+      mostrarError(
+        "No pudimos determinar el titular de la cuenta."
+      );
+
+      return false;
+    }
+
+    /* =========================================
+       5. GUARDAR CUENTA BANCARIA
+    ========================================= */
+
+    console.log(
+      "GUARDANDO CUENTA BANCARIA..."
+    );
+
+    const {
+      data: cuentaGuardada,
+      error: errorCuenta,
+    } = await supabase
+      .from("CuentasBancarias")
+      .upsert(
+        {
+          aplicacion_id:
+            solicitudId,
+
+          titular,
+
+          banco:
+            datos.banco.trim(),
+
+          clabe:
+            datos.clabe,
+
+          ultimos_4:
+            datos.clabe.slice(-4),
+
+          tipo_cuenta:
+            "CLABE",
+
+          uso:
+            "DISPERSION_Y_COBRO",
+
+          verificada:
+            false,
+
+          updated_at:
+            new Date().toISOString(),
+        },
+        {
+          onConflict:
+            "aplicacion_id,uso",
+        }
+      )
+      .select()
+      .single();
+
+    console.log(
+      "CUENTA GUARDADA:",
+      cuentaGuardada
+    );
+
+    if (errorCuenta) {
+      console.error(
+        "ERROR CUENTA:",
+        errorCuenta
+      );
+
+      mostrarError(
+        `No pudimos guardar la cuenta bancaria: ${errorCuenta.message}`
+      );
+
+      return false;
+    }
+
+    /* =========================================
+       6. EJECUTAR EDGE FUNCTION
+    ========================================= */
+
+    console.log(
+      "LLAMANDO generar-expediente..."
+    );
+
+    const {
+      data: expediente,
+      error: errorExpediente,
+    } =
+      await supabase.functions.invoke(
+        "generar-expediente",
+        {
+          body: {
+            aplicacion_id:
+              solicitudId,
+
+            fecha_primer_pago:
+              datos.fechaPrimerPago,
+          },
+        }
+      );
+
+    console.log(
+      "RESPUESTA EXPEDIENTE:",
+      expediente
+    );
+
+    console.log(
+      "ERROR EXPEDIENTE:",
+      errorExpediente
+    );
+
+    if (errorExpediente) {
+      console.error(
+        "EDGE FUNCTION ERROR:",
+        errorExpediente
+      );
+
+      mostrarError(
+        `No pudimos preparar el expediente contractual: ${
+          errorExpediente.message ||
+          "Error en generar-expediente"
+        }`
+      );
+
+      return false;
+    }
+
+    if (expediente?.error) {
+      console.error(
+        "ERROR DEL SERVIDOR:",
+        expediente.error
+      );
+
+      mostrarError(
+        expediente.error
+      );
+
+      return false;
+    }
+
+    /* =========================================
+       7. ACTUALIZAR SOLICITUD
+    ========================================= */
+
+    const ahora =
+      new Date().toISOString();
+
+    const nuevoHistorial = {
+      ...ultimaPantallaPorPaso,
+      6: "contratos",
+    };
+
+    /*
+      No guardamos la CLABE completa
+      dentro de datos_borrador.
+      La fuente oficial será
+      CuentasBancarias.
+    */
+
+    const datosSeguros = {
+      ...datos,
+      password: "",
+      clabe: "",
+    };
+
+    console.log(
+      "ACTUALIZANDO A CONTRACTING..."
+    );
+
+    const {
+      data: solicitudActualizada,
+      error: errorAplicacion,
+    } = await supabase
+      .from("Aplicaciones")
+      .update({
+        estado:
+          "CONTRACTING",
+
+        pantalla_actual:
+          "contratos",
+
+        datos_borrador: {
+          datos:
+            datosSeguros,
+
+          consentimientos,
+
+          pasoMaximo: 6,
+
+          ultimaPantallaPorPaso:
+            nuevoHistorial,
+        },
+
+        actualizado_en:
+          ahora,
+      })
+      .eq(
+        "id",
+        solicitudId
+      )
+      .select(
+        "id, estado, pantalla_actual"
+      )
+      .single();
+
+    console.log(
+      "SOLICITUD ACTUALIZADA:",
+      solicitudActualizada
+    );
+
+    if (errorAplicacion) {
+      console.error(
+        "ERROR ACTUALIZANDO APLICACIÓN:",
+        errorAplicacion
+      );
+
+      mostrarError(
+        `El expediente fue generado, pero no pudimos actualizar la solicitud: ${errorAplicacion.message}`
+      );
+
+      return false;
+    }
+
+    /* =========================================
+       8. ESTADO LOCAL
+    ========================================= */
+
+    setEstadoSolicitud(
+      "CONTRACTING"
+    );
+
+    setPasoMaximo(6);
+
+    setUltimaPantallaPorPaso(
+      nuevoHistorial
+    );
+
+    setMensajeInfo(
+      "Tu expediente contractual fue preparado correctamente."
+    );
+
+    /* =========================================
+       9. AVANZAR
+    ========================================= */
+
+    ir("contratos");
+
+    console.log(
+      "CONTRATACIÓN TERMINADA"
+    );
+
+    return true;
+
   } catch (error) {
-    console.error(error);
+    console.error(
+      "ERROR PREPARANDO CONTRATACIÓN:",
+      error
+    );
 
     mostrarError(
-      "Ocurrió un error al preparar la contratación."
+      error?.message ||
+        "Ocurrió un error al preparar la contratación."
     );
 
     return false;
+
   } finally {
     setGuardando(false);
   }
