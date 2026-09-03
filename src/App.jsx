@@ -86,6 +86,8 @@ const ESTADOS_ENVIADOS = [
   "SUBMITTED",
   "IN_REVIEW",
   "APPROVED",
+  "CONTRACTING",
+  "READY_TO_DISBURSE",
   "SIGNED",
   "DISBURSED",
 ];
@@ -824,6 +826,8 @@ fechaPrimerPago: "",
           "SUBMITTED",
           "IN_REVIEW",
           "APPROVED",
+          "CONTRACTING",
+          "READY_TO_DISBURSE",
           "SIGNED",
           "DISBURSED",
         ])
@@ -986,19 +990,151 @@ function actualizar(campo, valor) {
 ========================================= */
 
 async function prepararContratacion() {
+  console.log("INICIANDO CONTRATACIÓN");
+
   try {
     setGuardando(true);
     setMensajeError("");
     setMensajeInfo("");
 
-    // ...TODO EL CÓDIGO QUE TE DI...
+    const {
+      data: { session },
+      error: errorSession,
+    } = await supabase.auth.getSession();
+
+    if (errorSession) throw errorSession;
+
+    if (!session?.user) {
+      mostrarError("Tu sesión expiró. Inicia sesión nuevamente.");
+      return false;
+    }
+
+    if (!solicitudId) {
+      mostrarError("No encontramos la solicitud asociada a tu cuenta.");
+      return false;
+    }
+
+    if (!datos.banco?.trim()) {
+      mostrarError("Ingresa el nombre del banco.");
+      return false;
+    }
+
+    if (!/^\d{18}$/.test(String(datos.clabe || ""))) {
+      mostrarError("La CLABE debe contener exactamente 18 dígitos.");
+      return false;
+    }
+
+    if (!datos.fechaPrimerPago) {
+      mostrarError("Selecciona la fecha del primer pago.");
+      return false;
+    }
+
+    const titular =
+      datos.tipoPersona === "moral"
+        ? datos.razonSocial?.trim()
+        : [datos.nombre, datos.apellidoPaterno, datos.apellidoMaterno]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+
+    if (!titular) {
+      mostrarError("No pudimos determinar el titular de la cuenta.");
+      return false;
+    }
+
+    const { error: errorCuenta } = await supabase
+      .from("CuentasBancarias")
+      .upsert(
+        {
+          aplicacion_id: solicitudId,
+          titular,
+          banco: datos.banco.trim(),
+          clabe: datos.clabe,
+          ultimos_4: datos.clabe.slice(-4),
+          tipo_cuenta: "CLABE",
+          uso: "DISPERSION_Y_COBRO",
+          verificada: false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "aplicacion_id,uso" }
+      );
+
+    if (errorCuenta) {
+      console.error("ERROR CUENTA:", errorCuenta);
+      mostrarError(`No pudimos guardar la cuenta bancaria: ${errorCuenta.message}`);
+      return false;
+    }
+
+    const { data: expediente, error: errorExpediente } =
+      await supabase.functions.invoke("generar-expediente", {
+        body: {
+          aplicacion_id: solicitudId,
+          fecha_primer_pago: datos.fechaPrimerPago,
+        },
+      });
+
+    if (errorExpediente) {
+      console.error("EDGE FUNCTION ERROR:", errorExpediente);
+      mostrarError(
+        `No pudimos preparar el expediente contractual: ${
+          errorExpediente.message || "Error en generar-expediente"
+        }`
+      );
+      return false;
+    }
+
+    if (expediente?.error) {
+      console.error("ERROR DEL SERVIDOR:", expediente.error);
+      mostrarError(expediente.error);
+      return false;
+    }
+
+    const ahora = new Date().toISOString();
+    const nuevoHistorial = { ...ultimaPantallaPorPaso, 6: "contratos" };
+    const datosSeguros = { ...datos, password: "", clabe: "" };
+
+    const { data: solicitudActualizada, error: errorAplicacion } =
+      await supabase
+        .from("Aplicaciones")
+        .update({
+          estado: "CONTRACTING",
+          pantalla_actual: "contratos",
+          datos_borrador: {
+            datos: datosSeguros,
+            consentimientos,
+            pasoMaximo: 6,
+            ultimaPantallaPorPaso: nuevoHistorial,
+          },
+          actualizado_en: ahora,
+        })
+        .eq("id", solicitudId)
+        .select("id, estado, pantalla_actual")
+        .single();
+
+    if (errorAplicacion) {
+      console.error("ERROR ACTUALIZANDO APLICACIÓN:", errorAplicacion);
+      mostrarError(
+        `El expediente fue generado, pero no pudimos actualizar la solicitud: ${errorAplicacion.message}`
+      );
+      return false;
+    }
+
+    if (!solicitudActualizada) {
+      mostrarError("Supabase no confirmó la actualización de la solicitud.");
+      return false;
+    }
+
+    setEstadoSolicitud("CONTRACTING");
+    setPasoMaximo(6);
+    setUltimaPantallaPorPaso(nuevoHistorial);
+    setMensajeInfo("Tu expediente contractual fue preparado correctamente.");
+    ir("contratos");
+
+    console.log("CONTRATACIÓN TERMINADA");
+    return true;
   } catch (error) {
-    console.error(error);
-
-    mostrarError(
-      "Ocurrió un error al preparar la contratación."
-    );
-
+    console.error("ERROR PREPARANDO CONTRATACIÓN:", error);
+    mostrarError(error?.message || "Ocurrió un error al preparar la contratación.");
     return false;
   } finally {
     setGuardando(false);
@@ -4962,7 +5098,19 @@ function UNE({ empresa }) {
         <Resumen titulo="Sucursales u oficinas de atención" valor={empresa.uneSucursales} />
         <Resumen titulo="Medio de recepción o canal" valor={empresa.uneCanal} />
 
- 
+        <a
+          className="legalLink"
+          href={`tel:${empresa.uneTelefono}`}
+        >
+          Llamar a la UNE →
+        </a>
+
+        <a
+          className="legalLink"
+          href={`mailto:${empresa.uneCorreo}`}
+        >
+          Escribir a la UNE →
+        </a>
       </div>
 
       <div className="card legalText">
