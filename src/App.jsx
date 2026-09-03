@@ -86,8 +86,6 @@ const ESTADOS_ENVIADOS = [
   "SUBMITTED",
   "IN_REVIEW",
   "APPROVED",
-  "CONTRACTING",
-  "READY_TO_DISBURSE",
   "SIGNED",
   "DISBURSED",
 ];
@@ -226,21 +224,40 @@ fechaPrimerPago: "",
     montoAprobado: "10000",
     plazoAprobado: "6",
     tasaAprobada: "49",
+    tasaMoratoriaAprobada: "73.5",
     comisionAprobada: "3",
     catAprobado: "68.5",
   });
 
   const empresa = {
-    razonSocial: "FDG5 SERVICIOS, S.A. DE C.V. SOFOM ENR",
+    razonSocial: "FDG5 SERVICIOS, S.A. DE C.V., SOFOM, E.N.R.",
     marca: "TRISAL",
-    telefonoComercial: "844-102-9900",
-    correoComercial: "contactofdg5@gmail.com",
+
+    telefonoComercial: "8441001493",
+    correoComercial: "informacion.fdg5@gmail.com",
+    sitioWeb: "https://trisalmx.com",
 
     direccion:
-      "Paseo del Valle 310, Colonia San Patricio, Saltillo, Coahuila",
+      "Paseo del Valle No. 310, Colonia San Patricio, C.P. 25204, Saltillo, Coahuila de Zaragoza",
 
-    uneTelefono: "PENDIENTE",
-    uneCorreo: "PENDIENTE",
+    uneTitular: "MAYELA DEL ROSARIO GONZÁLEZ RAMOS",
+    uneDireccion:
+      "Paseo del Valle No. 310, Colonia San Patricio, C.P. 25204, Saltillo, Coahuila de Zaragoza",
+    uneTelefono: "8441001493",
+    uneCorreo: "informacion.fdg5@gmail.com",
+    uneHorario: "Lunes a viernes de 09:00 a 15:00 horas",
+    uneEntidad: "Coahuila",
+    uneSucursales: "1",
+    uneCanal: "UNE",
+
+    folioMercantil: "N-2024072786",
+    escrituraConstitutiva: "187",
+    fechaEscrituraConstitutiva: "16/07/2024",
+    fechaInscripcionRpc: "14/08/2024",
+    representanteLegal: "MAYELA DEL ROSARIO GONZÁLEZ RAMOS",
+    reca: "17307-439-043916/01-01273-0626",
+    jurisdiccion: "Tribunales locales competentes de Saltillo, Coahuila de Zaragoza",
+    ciudadFirma: "Saltillo, Coahuila de Zaragoza",
 
     condusefTelefono: "55 53 400 999",
     condusefCorreo: "asesoria@condusef.gob.mx",
@@ -731,7 +748,7 @@ fechaPrimerPago: "",
     const { data, error } = await supabase
       .from("DecisionesCredito")
       .select(
-        "decision, monto_aprobado, plazo_aprobado, tasa_anual, comision_apertura, cat, condiciones"
+        "decision, monto_aprobado, plazo_aprobado, tasa_anual, tasa_moratoria, comision_apertura, cat, condiciones"
       )
       .eq("aplicacion_id", aplicacionId)
       .maybeSingle();
@@ -757,6 +774,14 @@ fechaPrimerPago: "",
         data.tasa_anual === null || data.tasa_anual === undefined
           ? prev.tasaAprobada
           : String(data.tasa_anual),
+      tasaMoratoriaAprobada:
+        data.tasa_moratoria === null || data.tasa_moratoria === undefined
+          ? String(
+              Number(
+                (Number(data.tasa_anual ?? prev.tasaAprobada ?? 0) * 1.5).toFixed(2)
+              )
+            )
+          : String(data.tasa_moratoria),
       comisionAprobada:
         data.comision_apertura === null || data.comision_apertura === undefined
           ? prev.comisionAprobada
@@ -795,15 +820,13 @@ fechaPrimerPago: "",
         )
         .eq("user_id", userId)
         .in("estado", [
-  "DRAFT",
-  "SUBMITTED",
-  "IN_REVIEW",
-  "APPROVED",
-  "CONTRACTING",
-  "READY_TO_DISBURSE",
-  "SIGNED",
-  "DISBURSED",
-])
+          "DRAFT",
+          "SUBMITTED",
+          "IN_REVIEW",
+          "APPROVED",
+          "SIGNED",
+          "DISBURSED",
+        ])
         .order("actualizado_en", {
           ascending: false,
         })
@@ -963,366 +986,20 @@ function actualizar(campo, valor) {
 ========================================= */
 
 async function prepararContratacion() {
-  console.log("INICIANDO CONTRATACIÓN");
-
   try {
     setGuardando(true);
     setMensajeError("");
     setMensajeInfo("");
 
-    /* =========================================
-       1. VALIDAR SESIÓN
-    ========================================= */
-
-    const {
-      data: { session },
-      error: errorSession,
-    } = await supabase.auth.getSession();
-
-    console.log("SESSION:", session);
-
-    if (errorSession) {
-      throw errorSession;
-    }
-
-    if (!session?.user) {
-      mostrarError(
-        "Tu sesión expiró. Inicia sesión nuevamente."
-      );
-
-      return false;
-    }
-
-    /* =========================================
-       2. VALIDAR SOLICITUD
-    ========================================= */
-
-    if (!solicitudId) {
-      mostrarError(
-        "No encontramos la solicitud asociada a tu cuenta."
-      );
-
-      return false;
-    }
-
-    console.log(
-      "SOLICITUD ID:",
-      solicitudId
-    );
-
-    /* =========================================
-       3. VALIDAR BANCO
-    ========================================= */
-
-    if (!datos.banco?.trim()) {
-      mostrarError(
-        "Ingresa el nombre del banco."
-      );
-
-      return false;
-    }
-
-    if (
-      !/^\d{18}$/.test(
-        String(datos.clabe || "")
-      )
-    ) {
-      mostrarError(
-        "La CLABE debe contener exactamente 18 dígitos."
-      );
-
-      return false;
-    }
-
-    if (!datos.fechaPrimerPago) {
-      mostrarError(
-        "Selecciona la fecha del primer pago."
-      );
-
-      return false;
-    }
-
-    /* =========================================
-       4. TITULAR
-    ========================================= */
-
-    const titular =
-      datos.tipoPersona === "moral"
-        ? datos.razonSocial?.trim()
-        : [
-            datos.nombre,
-            datos.apellidoPaterno,
-            datos.apellidoMaterno,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .trim();
-
-    if (!titular) {
-      mostrarError(
-        "No pudimos determinar el titular de la cuenta."
-      );
-
-      return false;
-    }
-
-    /* =========================================
-       5. GUARDAR CUENTA BANCARIA
-    ========================================= */
-
-    console.log(
-      "GUARDANDO CUENTA BANCARIA..."
-    );
-
-    const {
-      data: cuentaGuardada,
-      error: errorCuenta,
-    } = await supabase
-      .from("CuentasBancarias")
-      .upsert(
-        {
-          aplicacion_id:
-            solicitudId,
-
-          titular,
-
-          banco:
-            datos.banco.trim(),
-
-          clabe:
-            datos.clabe,
-
-          ultimos_4:
-            datos.clabe.slice(-4),
-
-          tipo_cuenta:
-            "CLABE",
-
-          uso:
-            "DISPERSION_Y_COBRO",
-
-          verificada:
-            false,
-
-          updated_at:
-            new Date().toISOString(),
-        },
-        {
-          onConflict:
-            "aplicacion_id,uso",
-        }
-      )
-      .select()
-      .single();
-
-    console.log(
-      "CUENTA GUARDADA:",
-      cuentaGuardada
-    );
-
-    if (errorCuenta) {
-      console.error(
-        "ERROR CUENTA:",
-        errorCuenta
-      );
-
-      mostrarError(
-        `No pudimos guardar la cuenta bancaria: ${errorCuenta.message}`
-      );
-
-      return false;
-    }
-
-    /* =========================================
-       6. EJECUTAR EDGE FUNCTION
-    ========================================= */
-
-    console.log(
-      "LLAMANDO generar-expediente..."
-    );
-
-    const {
-      data: expediente,
-      error: errorExpediente,
-    } =
-      await supabase.functions.invoke(
-        "generar-expediente",
-        {
-          body: {
-            aplicacion_id:
-              solicitudId,
-
-            fecha_primer_pago:
-              datos.fechaPrimerPago,
-          },
-        }
-      );
-
-    console.log(
-      "RESPUESTA EXPEDIENTE:",
-      expediente
-    );
-
-    console.log(
-      "ERROR EXPEDIENTE:",
-      errorExpediente
-    );
-
-    if (errorExpediente) {
-      console.error(
-        "EDGE FUNCTION ERROR:",
-        errorExpediente
-      );
-
-      mostrarError(
-        `No pudimos preparar el expediente contractual: ${
-          errorExpediente.message ||
-          "Error en generar-expediente"
-        }`
-      );
-
-      return false;
-    }
-
-    if (expediente?.error) {
-      console.error(
-        "ERROR DEL SERVIDOR:",
-        expediente.error
-      );
-
-      mostrarError(
-        expediente.error
-      );
-
-      return false;
-    }
-
-    /* =========================================
-       7. ACTUALIZAR SOLICITUD
-    ========================================= */
-
-    const ahora =
-      new Date().toISOString();
-
-    const nuevoHistorial = {
-      ...ultimaPantallaPorPaso,
-      6: "contratos",
-    };
-
-    /*
-      No guardamos la CLABE completa
-      dentro de datos_borrador.
-      La fuente oficial será
-      CuentasBancarias.
-    */
-
-    const datosSeguros = {
-      ...datos,
-      password: "",
-      clabe: "",
-    };
-
-    console.log(
-      "ACTUALIZANDO A CONTRACTING..."
-    );
-
-    const {
-      data: solicitudActualizada,
-      error: errorAplicacion,
-    } = await supabase
-      .from("Aplicaciones")
-      .update({
-        estado:
-          "CONTRACTING",
-
-        pantalla_actual:
-          "contratos",
-
-        datos_borrador: {
-          datos:
-            datosSeguros,
-
-          consentimientos,
-
-          pasoMaximo: 6,
-
-          ultimaPantallaPorPaso:
-            nuevoHistorial,
-        },
-
-        actualizado_en:
-          ahora,
-      })
-      .eq(
-        "id",
-        solicitudId
-      )
-      .select(
-        "id, estado, pantalla_actual"
-      )
-      .single();
-
-    console.log(
-      "SOLICITUD ACTUALIZADA:",
-      solicitudActualizada
-    );
-
-    if (errorAplicacion) {
-      console.error(
-        "ERROR ACTUALIZANDO APLICACIÓN:",
-        errorAplicacion
-      );
-
-      mostrarError(
-        `El expediente fue generado, pero no pudimos actualizar la solicitud: ${errorAplicacion.message}`
-      );
-
-      return false;
-    }
-
-    /* =========================================
-       8. ESTADO LOCAL
-    ========================================= */
-
-    setEstadoSolicitud(
-      "CONTRACTING"
-    );
-
-    setPasoMaximo(6);
-
-    setUltimaPantallaPorPaso(
-      nuevoHistorial
-    );
-
-    setMensajeInfo(
-      "Tu expediente contractual fue preparado correctamente."
-    );
-
-    /* =========================================
-       9. AVANZAR
-    ========================================= */
-
-    ir("contratos");
-
-    console.log(
-      "CONTRATACIÓN TERMINADA"
-    );
-
-    return true;
-
+    // ...TODO EL CÓDIGO QUE TE DI...
   } catch (error) {
-    console.error(
-      "ERROR PREPARANDO CONTRATACIÓN:",
-      error
-    );
+    console.error(error);
 
     mostrarError(
-      error?.message ||
-        "Ocurrió un error al preparar la contratación."
+      "Ocurrió un error al preparar la contratación."
     );
 
     return false;
-
   } finally {
     setGuardando(false);
   }
@@ -4936,6 +4613,11 @@ function Oferta({
         />
 
         <OfertaDato
+          titulo="Tasa moratoria anual"
+          valor={`${Number(datos.tasaMoratoriaAprobada || 0).toFixed(1)}%`}
+        />
+
+        <OfertaDato
           titulo="Pago estimado"
           valor={moneda(pagoOferta)}
         />
@@ -5265,44 +4947,29 @@ function UNE({ empresa }) {
   return (
     <Pagina
       titulo="Unidad Especializada de Atención a Usuarios"
-      subtitulo="Información para consultas, aclaraciones y reclamaciones."
+      subtitulo="Información oficial para consultas, aclaraciones y reclamaciones."
     >
       <div className="card legalText">
         <SectionDivider titulo="UNE de TRISAL" />
 
-        <Resumen
-          titulo="Entidad"
-          valor={empresa.razonSocial}
-        />
+        <Resumen titulo="Entidad" valor={empresa.razonSocial} />
+        <Resumen titulo="Titular de la UNE" valor={empresa.uneTitular} />
+        <Resumen titulo="Domicilio" valor={empresa.uneDireccion} />
+        <Resumen titulo="Teléfono UNE" valor={empresa.uneTelefono} />
+        <Resumen titulo="Correo UNE" valor={empresa.uneCorreo} />
+        <Resumen titulo="Horario de atención" valor={empresa.uneHorario} />
+        <Resumen titulo="Entidad federativa" valor={empresa.uneEntidad} />
+        <Resumen titulo="Sucursales u oficinas de atención" valor={empresa.uneSucursales} />
+        <Resumen titulo="Medio de recepción o canal" valor={empresa.uneCanal} />
 
-        <Resumen
-          titulo="Teléfono UNE"
-          valor={empresa.uneTelefono}
-        />
-
-        <Resumen
-          titulo="Correo UNE"
-          valor={empresa.uneCorreo}
-        />
-
-        <div className="importantNotice">
-          Sustituye los campos PENDIENTE por los datos oficiales
-          de la UNE antes de producción.
-        </div>
+ 
       </div>
 
       <div className="card legalText">
         <SectionDivider titulo="CONDUSEF" />
 
-        <Resumen
-          titulo="Teléfono"
-          valor={empresa.condusefTelefono}
-        />
-
-        <Resumen
-          titulo="Correo"
-          valor={empresa.condusefCorreo}
-        />
+        <Resumen titulo="Teléfono" valor={empresa.condusefTelefono} />
+        <Resumen titulo="Correo" valor={empresa.condusefCorreo} />
 
         <a
           className="legalLink"
@@ -5321,21 +4988,48 @@ function Normatividad({ empresa }) {
   return (
     <Pagina
       titulo="Normatividad y transparencia"
-      subtitulo="Información relevante para nuestros usuarios."
+      subtitulo="Información institucional y contractual relevante para nuestros usuarios."
     >
       <div className="card legalText">
+        <SectionDivider titulo="Información institucional" />
+
+        <Resumen titulo="Razón social" valor={empresa.razonSocial} />
+        <Resumen titulo="Folio Mercantil Electrónico" valor={empresa.folioMercantil} />
+        <Resumen titulo="Escritura constitutiva" valor={empresa.escrituraConstitutiva} />
+        <Resumen titulo="Fecha de escritura constitutiva" valor={empresa.fechaEscrituraConstitutiva} />
+        <Resumen titulo="Fecha de inscripción en el RPC" valor={empresa.fechaInscripcionRpc} />
+        <Resumen titulo="Representante legal" valor={empresa.representanteLegal} />
+        <Resumen titulo="Domicilio" valor={empresa.direccion} />
+        <Resumen titulo="Página de internet" valor="trisalmx.com" />
+      </div>
+
+      <div className="card legalText">
+        <SectionDivider titulo="Información del contrato" />
+
+        <Resumen titulo="Número de registro RECA" valor={empresa.reca} />
+        <Resumen titulo="Lugar de firma" valor={empresa.ciudadFirma} />
+        <Resumen titulo="Jurisdicción pactada" valor={empresa.jurisdiccion} />
+
         <p>
-          Para la constitución y operación de {empresa.razonSocial}
-          {" "}con tal carácter, no requiere de autorización de la
-          Secretaría de Hacienda y Crédito Público.
+          Para la constitución y operación de {empresa.razonSocial}{" "}
+          con tal carácter, no requiere de autorización de la Secretaría
+          de Hacienda y Crédito Público.
         </p>
 
         <p>
           {empresa.razonSocial} se encuentra sujeta a la supervisión
-          de la Comisión Nacional Bancaria y de Valores, únicamente
-          para efectos de lo dispuesto por el artículo 56 de la Ley
-          General de Organizaciones y Actividades Auxiliares del Crédito.
+          de la Comisión Nacional Bancaria y de Valores únicamente
+          para los efectos previstos en la legislación aplicable a las
+          sociedades financieras de objeto múltiple, entidades no reguladas.
         </p>
+      </div>
+
+      <div className="card legalText">
+        <SectionDivider titulo="UNE" />
+        <Resumen titulo="Titular" valor={empresa.uneTitular} />
+        <Resumen titulo="Teléfono" valor={empresa.uneTelefono} />
+        <Resumen titulo="Correo" valor={empresa.uneCorreo} />
+        <Resumen titulo="Horario" valor={empresa.uneHorario} />
       </div>
 
       <div className="card legalText">
@@ -5343,8 +5037,8 @@ function Normatividad({ empresa }) {
 
         <p>
           Los datos de los despachos de cobranza que correspondan
-          estarán disponibles para que nuestros clientes puedan
-          identificarlos y localizarlos.
+          se publicarán y mantendrán actualizados conforme a la
+          regulación aplicable.
         </p>
       </div>
     </Pagina>
