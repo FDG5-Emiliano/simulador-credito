@@ -3,8 +3,8 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 
 const supabaseAdmin = createClient(
-  process.env.https://cttcidndjydqyywhlkbf.supabase.co,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SECRET_KEY,
   {
     auth: {
       persistSession: false,
@@ -959,16 +959,13 @@ function fechaLarga(valor) {
 }
 
 
-function construirDomicilio(
-  datos
-) {
-
+function construirDomicilio(datos) {
   const partes = [
     datos.calle,
     datos.numeroExterior,
     datos.numeroInterior,
     datos.colonia,
-    datos.codigoPostal,
+    datos.cp,
     datos.municipio,
     datos.estado,
   ];
