@@ -2486,6 +2486,9 @@ async function prepararContratacion() {
           <Contratos
             ir={ir}
             regresar={() => regresarA("cuentaBanco")}
+            solicitudId={solicitudId}
+guardando={guardando}
+setGuardando={setGuardando}
             trackerProps={{
               pasoActual: 6,
               pasoMaximo,
@@ -4909,8 +4912,11 @@ function Contratos({
   ir,
   regresar,
   trackerProps,
+  solicitudId,
+  guardando,
+  setGuardando,
 }) {
-  return (
+    return (
     <Pagina
       titulo="Documentos contractuales"
       subtitulo="Revisa los documentos antes de firmar."
@@ -4922,6 +4928,81 @@ function Contratos({
         <Documento titulo="Tabla de amortización" />
         <Documento titulo="Pagaré" />
         <Documento titulo="Autorización de domiciliación" />
+
+<div style={{ marginTop: "24px", marginBottom: "16px" }}>
+  <button
+    type="button"
+    className="primary"
+    disabled={guardando}
+    onClick={async () => {
+      try {
+        setGuardando(true);
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          alert("No hay una sesión activa.");
+          return;
+        }
+
+        if (!solicitudId) {
+          alert("No encontramos el ID de la solicitud.");
+          return;
+        }
+
+        const response = await fetch(
+          "/api/generar-documentos-contractuales",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              aplicacion_id: solicitudId,
+            }),
+          }
+        );
+
+        const body = await response.json();
+
+        if (!response.ok) {
+          console.error("ERROR GENERADOR:", body);
+
+          alert(
+            body?.error ||
+              `Error ${response.status} generando documentos.`
+          );
+
+          return;
+        }
+
+        console.log("DOCUMENTOS GENERADOS:", body);
+
+        alert(
+          `Generación terminada. Se generaron ${
+            body?.documentos?.length || 0
+          } documentos.`
+        );
+      } catch (error) {
+        console.error("ERROR:", error);
+
+        alert(
+          error?.message ||
+            "Ocurrió un error generando los documentos."
+        );
+      } finally {
+        setGuardando(false);
+      }
+    }}
+  >
+    {guardando
+      ? "Generando documentos..."
+      : "Probar generación de documentos"}
+  </button>
+</div>
 
         <NavButtons
           atras={regresar}

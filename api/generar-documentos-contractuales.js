@@ -395,6 +395,23 @@ export default async function handler(req, res) {
       DOMICILIO:
         construirDomicilio(datos),
 
+        CALLE_NUMERO: [
+  datos.calle,
+  datos.numeroExterior,
+].filter(Boolean).join(" "),
+
+COLONIA:
+  datos.colonia || "",
+
+MUNICIPIO:
+  datos.municipio || "",
+
+ESTADO:
+  datos.estado || "",
+
+CP:
+  datos.cp || "",
+
       MONTO_CREDITO:
         formatoMoneda(monto),
 
