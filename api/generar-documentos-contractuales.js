@@ -808,7 +808,7 @@ CP:
                 plantilla.requiere_firma,
 
               version:
-                "1.0",
+                1,
 
               updated_at:
                 new Date()
@@ -857,7 +857,7 @@ CP:
                 plantilla.requiere_firma,
 
               version:
-                "1.0",
+                1,
 
               firmado:
                 false,
