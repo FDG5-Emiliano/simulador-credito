@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import crypto from "crypto";
+import CloudConvert from "cloudconvert";
 
 
 /* =========================================================
@@ -21,11 +22,19 @@ const supabaseAdmin = createClient(
 
 
 /* =========================================================
+   CLOUDCONVERT
+========================================================= */
+
+const cloudConvert = new CloudConvert(
+  process.env.eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiMGU1M2Y3MDY0ZjcyOWI4ZDExMjBiMGZlZWJjZTU0ZDRmOWEzNGVkNmE4MmQ2NWZhOWY2N2YwNTEzZDEyMjZkNTg5MTFiNjZlZTgyMDRiZWQiLCJpYXQiOjE3ODk4Mzk1NzYuNDU4ODgsIm5iZiI6MTc4OTgzOTU3Ni40NTg4ODEsImV4cCI6NDk0NTUxMzE3Ni40NTExNTQsInN1YiI6Ijc3MDI4NDY0Iiwic2NvcGVzIjpbInVzZXIucmVhZCIsInRhc2sucmVhZCIsInRhc2sud3JpdGUiXX0.EbRlWs7lwOGajtuc6qaMFXnqobeZrj-54Hi-SalThXGY2B2vUe1IrVUCaFOZ3nmLE3E3r8ntvcpI25e1QZQWanL-DkYOp6mbJX9uHTUL2C_MMG3co-ot2Yj4b35PjbJyj61e0DVaVSFdWdVNPzNqivM9sNKM6QlXbVuiacpZZm9sYzOqjsREX494CFyKZuOZYowig1K74DPWYyI17wycbsNsRkjnhHkdonVv3Hlo__z0X8RzDrqcGypaXfqYALN64co9lzIBNg4Prpxj-zNh4h8UC6JPEa-jz1Q06vj5edBO0F9Uv6YZq-5Ah88wl1jQUEUG7kZGzDISJgaRPSjNSyfRCLY3D5RLco0ZbtPZQnSb9uN_E3lb9W5461FYSvVn18sXMN7JJxG3-tx84yqEEVMvIHsrU0SYbtLyw1ijuEakUuO4Ek_5F8SU_cM0LdXs-lJNHCfVC5VeaZ9ciRYSxBofHLP_ieQ6z0aLhM_8Tu31A2v6FWf3xIi9xB9lRR65udvTAwXVigUkyKZL1Dh-T2ofHm-oup4NJ2wOd3EcSSu7BB5NKHTDT4zMZBMjPb5CKLLihA9wgTpcjk6CUhzz-snW56fJIRRPouWoSdFeUcvbMlp5s8H68u7nLGAkUfhs1rOtycYcOCKUza9QkGbh3USHF0YtwS9QDS3aDzbnjVw
+);
+
+
+/* =========================================================
    API
 ========================================================= */
 
 export default async function handler(req, res) {
-
   if (req.method !== "POST") {
     return res.status(405).json({
       ok: false,
@@ -34,7 +43,6 @@ export default async function handler(req, res) {
   }
 
   try {
-
     /* =====================================================
        1. AUTENTICACIÓN
     ===================================================== */
@@ -57,8 +65,7 @@ export default async function handler(req, res) {
     const {
       data: authData,
       error: authError,
-    } =
-      await supabaseAdmin.auth.getUser(token);
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (
       authError ||
@@ -70,8 +77,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const usuario =
-      authData.user;
+    const usuario = authData.user;
 
 
     /* =====================================================
@@ -98,23 +104,21 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       3. RESOLVER APPLICATION NUEVA
+       3. RESOLVER APPLICATION
     ===================================================== */
 
     let application = null;
 
     if (application_id) {
-
       const {
         data,
         error,
-      } =
-        await supabaseAdmin
-          .schema("origination")
-          .from("credit_applications")
-          .select("*")
-          .eq("id", application_id)
-          .maybeSingle();
+      } = await supabaseAdmin
+        .schema("origination")
+        .from("credit_applications")
+        .select("*")
+        .eq("id", application_id)
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -122,29 +126,22 @@ export default async function handler(req, res) {
     }
 
 
-    /*
-      Compatibilidad temporal:
-      el frontend todavía manda solicitudId legacy.
-    */
-
     if (
       !application &&
       aplicacion_id
     ) {
-
       const {
         data,
         error,
-      } =
-        await supabaseAdmin
-          .schema("origination")
-          .from("credit_applications")
-          .select("*")
-          .eq(
-            "legacy_application_id",
-            aplicacion_id
-          )
-          .maybeSingle();
+      } = await supabaseAdmin
+        .schema("origination")
+        .from("credit_applications")
+        .select("*")
+        .eq(
+          "legacy_application_id",
+          aplicacion_id
+        )
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -159,42 +156,37 @@ export default async function handler(req, res) {
     let contract = null;
 
     if (contract_id) {
-
       const {
         data,
         error,
-      } =
-        await supabaseAdmin
-          .schema("contracts")
-          .from("contracts")
-          .select("*")
-          .eq("id", contract_id)
-          .maybeSingle();
+      } = await supabaseAdmin
+        .schema("contracts")
+        .from("contracts")
+        .select("*")
+        .eq("id", contract_id)
+        .maybeSingle();
 
       if (error) throw error;
 
       contract = data;
-
     } else if (application) {
-
       const {
         data,
         error,
-      } =
-        await supabaseAdmin
-          .schema("contracts")
-          .from("contracts")
-          .select("*")
-          .eq(
-            "application_id",
-            application.id
-          )
-          .order(
-            "created_at",
-            { ascending: false }
-          )
-          .limit(1)
-          .maybeSingle();
+      } = await supabaseAdmin
+        .schema("contracts")
+        .from("contracts")
+        .select("*")
+        .eq(
+          "application_id",
+          application.id
+        )
+        .order(
+          "created_at",
+          { ascending: false }
+        )
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -212,20 +204,18 @@ export default async function handler(req, res) {
 
 
     if (!application) {
-
       const {
         data,
         error,
-      } =
-        await supabaseAdmin
-          .schema("origination")
-          .from("credit_applications")
-          .select("*")
-          .eq(
-            "id",
-            contract.application_id
-          )
-          .single();
+      } = await supabaseAdmin
+        .schema("origination")
+        .from("credit_applications")
+        .select("*")
+        .eq(
+          "id",
+          contract.application_id
+        )
+        .single();
 
       if (error) throw error;
 
@@ -240,31 +230,22 @@ export default async function handler(req, res) {
     const {
       data: borrower,
       error: borrowerError,
-    } =
-      await supabaseAdmin
-        .schema("core")
-        .from("parties")
-        .select(
-          "id, auth_user_id, display_name"
-        )
-        .eq(
-          "id",
-          application.borrower_party_id
-        )
-        .single();
+    } = await supabaseAdmin
+      .schema("core")
+      .from("parties")
+      .select(
+        "id, auth_user_id, display_name"
+      )
+      .eq(
+        "id",
+        application.borrower_party_id
+      )
+      .single();
 
     if (borrowerError) {
       throw borrowerError;
     }
 
-
-    /*
-      Por ahora:
-      cliente dueño de la solicitud.
-
-      Posteriormente agregaremos autorización
-      formal de usuarios internos por IAM/RBAC.
-    */
 
     if (
       borrower.auth_user_id !==
@@ -279,29 +260,28 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       6. SNAPSHOT CONTRACTUAL VIGENTE
+       6. SNAPSHOT VIGENTE
     ===================================================== */
 
     const {
       data: snapshot,
       error: snapshotError,
-    } =
-      await supabaseAdmin
-        .schema("contracts")
-        .from("contract_snapshots")
-        .select(
-          "id, contract_id, snapshot_version, schema_version, sha256, snapshot_data, created_at"
-        )
-        .eq(
-          "contract_id",
-          contract.id
-        )
-        .order(
-          "snapshot_version",
-          { ascending: false }
-        )
-        .limit(1)
-        .single();
+    } = await supabaseAdmin
+      .schema("contracts")
+      .from("contract_snapshots")
+      .select(
+        "id, contract_id, snapshot_version, schema_version, sha256, snapshot_data, created_at"
+      )
+      .eq(
+        "contract_id",
+        contract.id
+      )
+      .order(
+        "snapshot_version",
+        { ascending: false }
+      )
+      .limit(1)
+      .single();
 
     if (snapshotError) {
       throw snapshotError;
@@ -342,7 +322,7 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       8. MAPA SEMÁNTICO
+       8. MODELO SEMÁNTICO
     ===================================================== */
 
     const semantic =
@@ -350,33 +330,25 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       9. PLANTILLAS ACTIVAS
+       9. PLANTILLAS
     ===================================================== */
 
     const {
       data: templates,
       error: templatesError,
-    } =
-      await supabaseAdmin
-        .from("PlantillasContractuales")
-        .select("*")
-        .eq("activa", true)
-        .order(
-          "tipo_documento",
-          { ascending: true }
-        );
+    } = await supabaseAdmin
+      .from("PlantillasContractuales")
+      .select("*")
+      .eq("activa", true)
+      .order(
+        "tipo_documento",
+        { ascending: true }
+      );
 
     if (templatesError) {
       throw templatesError;
     }
 
-
-    /*
-      Por ahora los documentos DOCX.
-
-      CARATULA sigue siendo PDF y se
-      incorporará en el siguiente paso.
-    */
 
     const docxTemplates =
       (templates || []).filter(
@@ -388,29 +360,111 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       10. GENERAR
+       10. GENERACIÓN IDEMPOTENTE
     ===================================================== */
 
-    const generatedDocuments =
-      [];
+    const generatedDocuments = [];
+    const skippedDocuments = [];
+
 
     for (
       const template of
       docxTemplates
     ) {
+      const templateVersion =
+        String(
+          template.version || ""
+        );
+
+
+      /* ===================================================
+         EVITAR DUPLICADOS
+         MISMO CONTRATO
+         + MISMO SNAPSHOT
+         + MISMA PLANTILLA
+         + MISMO TIPO
+      =================================================== */
+
+      const {
+        data: existing,
+        error: existingError,
+      } = await supabaseAdmin
+        .schema("contracts")
+        .from("contract_documents")
+        .select(
+          `
+          id,
+          document_type,
+          document_version,
+          template_version,
+          snapshot_id,
+          storage_path,
+          status,
+          generated_at
+          `
+        )
+        .eq(
+          "contract_id",
+          contract.id
+        )
+        .eq(
+          "snapshot_id",
+          snapshot.id
+        )
+        .eq(
+          "document_type",
+          template.tipo_documento
+        )
+        .eq(
+          "template_version",
+          templateVersion
+        )
+        .order(
+          "document_version",
+          { ascending: false }
+        )
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) {
+        throw existingError;
+      }
+
+
+      if (
+        existing &&
+        existing.status === "GENERATED"
+      ) {
+        skippedDocuments.push({
+          id: existing.id,
+          type: existing.document_type,
+          version:
+            existing.document_version,
+          reason:
+            "ALREADY_GENERATED_FOR_SNAPSHOT",
+          storage_path:
+            existing.storage_path,
+        });
+
+        continue;
+      }
+
+
+      /* ===================================================
+         DESCARGAR PLANTILLA DOCX
+      =================================================== */
 
       const {
         data: templateBlob,
         error: downloadError,
-      } =
-        await supabaseAdmin
-          .storage
-          .from(
-            "plantillas-contractuales"
-          )
-          .download(
-            template.storage_path
-          );
+      } = await supabaseAdmin
+        .storage
+        .from(
+          "plantillas-contractuales"
+        )
+        .download(
+          template.storage_path
+        );
 
       if (downloadError) {
         throw new Error(
@@ -425,9 +479,9 @@ export default async function handler(req, res) {
         );
 
 
-      /* ===============================================
-         DOCXTEMPLATER
-      =============================================== */
+      /* ===================================================
+         RENDER DOCX EN MEMORIA
+      =================================================== */
 
       const zip =
         new PizZip(
@@ -453,10 +507,6 @@ export default async function handler(req, res) {
         );
 
 
-      /*
-        Modelo común para todos los documentos.
-      */
-
       const templateData = {
         ...semantic,
 
@@ -470,7 +520,7 @@ export default async function handler(req, res) {
       );
 
 
-      const output =
+      const docxBuffer =
         doc
           .getZip()
           .generate({
@@ -480,50 +530,38 @@ export default async function handler(req, res) {
           });
 
 
-      /* ===============================================
-         HASH DEL ARCHIVO
-      =============================================== */
-
-      const fileHash =
-        crypto
-          .createHash("sha256")
-          .update(output)
-          .digest("hex");
-
-
-      /* ===============================================
-         VERSION DOCUMENTAL
-      =============================================== */
+      /* ===================================================
+         VERSIÓN DOCUMENTAL
+      =================================================== */
 
       const {
         data:
           previousDocuments,
         error:
           previousError,
-      } =
-        await supabaseAdmin
-          .schema("contracts")
-          .from(
-            "contract_documents"
-          )
-          .select(
-            "document_version"
-          )
-          .eq(
-            "contract_id",
-            contract.id
-          )
-          .eq(
-            "document_type",
-            template.tipo_documento
-          )
-          .order(
-            "document_version",
-            {
-              ascending: false,
-            }
-          )
-          .limit(1);
+      } = await supabaseAdmin
+        .schema("contracts")
+        .from(
+          "contract_documents"
+        )
+        .select(
+          "document_version"
+        )
+        .eq(
+          "contract_id",
+          contract.id
+        )
+        .eq(
+          "document_type",
+          template.tipo_documento
+        )
+        .order(
+          "document_version",
+          {
+            ascending: false,
+          }
+        )
+        .limit(1);
 
       if (previousError) {
         throw previousError;
@@ -539,9 +577,9 @@ export default async function handler(req, res) {
           : 1;
 
 
-      /* ===============================================
-         NOMBRE
-      =============================================== */
+      /* ===================================================
+         NOMBRE INTERNO DOCX
+      =================================================== */
 
       const loanNumber =
         S.contract
@@ -550,8 +588,38 @@ export default async function handler(req, res) {
         contract.contract_number;
 
 
-      const filename =
+      const docxFilename =
         `${template.tipo_documento}_${loanNumber}_v${documentVersion}.docx`;
+
+
+      /* ===================================================
+         CONVERTIR DOCX -> PDF
+      =================================================== */
+
+      const pdfBuffer =
+        await convertDocxToPdf(
+          docxBuffer,
+          docxFilename
+        );
+
+
+      /* ===================================================
+         HASH DEL PDF OFICIAL
+      =================================================== */
+
+      const fileHash =
+        crypto
+          .createHash("sha256")
+          .update(pdfBuffer)
+          .digest("hex");
+
+
+      /* ===================================================
+         NOMBRE PDF
+      =================================================== */
+
+      const pdfFilename =
+        `${template.tipo_documento}_${loanNumber}_v${documentVersion}.pdf`;
 
 
       const storagePath =
@@ -559,60 +627,140 @@ export default async function handler(req, res) {
           "contracts",
           contract.id,
           `snapshot-${snapshot.snapshot_version}`,
-          filename,
+          pdfFilename,
         ].join("/");
 
 
-      /* ===============================================
-         STORAGE
-      =============================================== */
+      /* ===================================================
+         GUARDAR SÓLO PDF
+      =================================================== */
 
       const {
         error: uploadError,
-      } =
+      } = await supabaseAdmin
+        .storage
+        .from(
+          "expedientes-contractuales"
+        )
+        .upload(
+          storagePath,
+          pdfBuffer,
+          {
+            contentType:
+              "application/pdf",
+
+            upsert: false,
+          }
+        );
+
+      if (uploadError) {
+        throw new Error(
+          `No se pudo guardar ${pdfFilename}: ${uploadError.message}`
+        );
+      }
+
+
+      /* ===================================================
+         REGISTRO OFICIAL
+      =================================================== */
+
+      const {
+        data: registeredDocument,
+        error: documentError,
+      } = await supabaseAdmin
+        .schema("contracts")
+        .from(
+          "contract_documents"
+        )
+        .insert({
+          contract_id:
+            contract.id,
+
+          snapshot_id:
+            snapshot.id,
+
+          document_type:
+            template.tipo_documento,
+
+          document_version:
+            documentVersion,
+
+          template_version:
+            templateVersion,
+
+          storage_path:
+            storagePath,
+
+          file_hash:
+            fileHash,
+
+          status:
+            "GENERATED",
+
+          requires_signature:
+            Boolean(
+              template.requiere_firma
+            ),
+
+          generated_at:
+            new Date()
+              .toISOString(),
+        })
+        .select("*")
+        .single();
+
+      if (documentError) {
+        /*
+          Si falla el registro DB después de subir,
+          eliminamos el PDF para no dejar huérfanos.
+        */
+
         await supabaseAdmin
           .storage
           .from(
             "expedientes-contractuales"
           )
-          .upload(
+          .remove([
             storagePath,
-            output,
-            {
-              contentType:
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ]);
 
-              upsert: false,
-            }
-          );
-
-      if (uploadError) {
-        throw new Error(
-          `No se pudo guardar ${filename}: ${uploadError.message}`
-        );
+        throw documentError;
       }
 
 
-      /* ===============================================
-         REGISTRO OFICIAL
-      =============================================== */
+      /* ===================================================
+         EVENTO DE AUDITORÍA
+      =================================================== */
 
       const {
-        data: registeredDocument,
-        error: documentError,
-      } =
-        await supabaseAdmin
-          .schema("contracts")
-          .from(
-            "contract_documents"
-          )
-          .insert({
+        error: eventError,
+      } = await supabaseAdmin
+        .schema("audit")
+        .from(
+          "business_events"
+        )
+        .insert({
+          aggregate_type:
+            "CONTRACT",
 
-            contract_id:
-              contract.id,
+          aggregate_id:
+            contract.id,
 
-            snapshot_id:
-              snapshot.id,
+          event_type:
+            "CONTRACT_DOCUMENT_GENERATED",
+
+          actor_type:
+            "CUSTOMER",
+
+          actor_id:
+            usuario.id,
+
+          source:
+            "TRISAL_DOCUMENT_GENERATOR_V4_PDF",
+
+          payload: {
+            document_id:
+              registeredDocument.id,
 
             document_type:
               template.tipo_documento,
@@ -620,100 +768,25 @@ export default async function handler(req, res) {
             document_version:
               documentVersion,
 
+            snapshot_id:
+              snapshot.id,
+
+            snapshot_version:
+              snapshot.snapshot_version,
+
             template_version:
-              String(
-                template.version ||
-                ""
-              ),
+              templateVersion,
 
             storage_path:
               storagePath,
 
-            file_hash:
+            mime_type:
+              "application/pdf",
+
+            sha256:
               fileHash,
-
-            status:
-              "GENERATED",
-
-            requires_signature:
-              Boolean(
-                template.requiere_firma
-              ),
-
-            generated_at:
-              new Date()
-                .toISOString(),
-
-          })
-          .select("*")
-          .single();
-
-      if (documentError) {
-        throw documentError;
-      }
-
-
-      /* ===============================================
-         AUDIT EVENT
-      =============================================== */
-
-      const {
-        error: eventError,
-      } =
-        await supabaseAdmin
-          .schema("audit")
-          .from(
-            "business_events"
-          )
-          .insert({
-
-            aggregate_type:
-              "CONTRACT",
-
-            aggregate_id:
-              contract.id,
-
-            event_type:
-              "CONTRACT_DOCUMENT_GENERATED",
-
-            actor_type:
-              "CUSTOMER",
-
-            actor_id:
-              usuario.id,
-
-            source:
-              "TRISAL_DOCUMENT_GENERATOR_V3",
-
-            payload: {
-              document_id:
-                registeredDocument.id,
-
-              document_type:
-                template.tipo_documento,
-
-              document_version:
-                documentVersion,
-
-              snapshot_id:
-                snapshot.id,
-
-              snapshot_version:
-                snapshot.snapshot_version,
-
-              template_version:
-                String(
-                  template.version ||
-                  ""
-                ),
-
-              storage_path:
-                storagePath,
-
-              sha256:
-                fileHash,
-            },
-          });
+          },
+        });
 
       if (eventError) {
         throw eventError;
@@ -731,15 +804,16 @@ export default async function handler(req, res) {
           documentVersion,
 
         template_version:
-          String(
-            template.version ||
-            ""
-          ),
+          templateVersion,
 
-        filename,
+        filename:
+          pdfFilename,
 
         storage_path:
           storagePath,
+
+        mime_type:
+          "application/pdf",
 
         sha256:
           fileHash,
@@ -753,27 +827,26 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       11. CONTRACT STATUS
+       11. ACTUALIZAR CONTRATO
     ===================================================== */
 
     const {
       error: contractUpdateError,
-    } =
-      await supabaseAdmin
-        .schema("contracts")
-        .from("contracts")
-        .update({
-          contract_status:
-            "GENERATED",
+    } = await supabaseAdmin
+      .schema("contracts")
+      .from("contracts")
+      .update({
+        contract_status:
+          "GENERATED",
 
-          updated_at:
-            new Date()
-              .toISOString(),
-        })
-        .eq(
-          "id",
-          contract.id
-        );
+        updated_at:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        "id",
+        contract.id
+      );
 
     if (contractUpdateError) {
       throw contractUpdateError;
@@ -781,15 +854,14 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
-       12. RESPONSE
+       12. RESPUESTA
     ===================================================== */
 
     return res.status(200).json({
-
       ok: true,
 
       architecture:
-        "SNAPSHOT_V3",
+        "SNAPSHOT_V4_PDF",
 
       contract_id:
         contract.id,
@@ -814,22 +886,29 @@ export default async function handler(req, res) {
       documents:
         generatedDocuments,
 
+      skipped:
+        skippedDocuments,
+
+      generated_count:
+        generatedDocuments.length,
+
+      skipped_count:
+        skippedDocuments.length,
+
       pending: [
         "CARATULA_PDF",
-        "PDF_CONVERSION",
+        "PAGARE",
         "E_SIGNATURE",
       ],
 
       message:
-        `${generatedDocuments.length} documentos fueron generados desde el snapshot contractual.`,
-
+        generatedDocuments.length > 0
+          ? `${generatedDocuments.length} documentos PDF fueron generados.`
+          : "Los documentos de este snapshot ya habían sido generados.",
     });
-
-
   } catch (error) {
-
     console.error(
-      "TRISAL DOCUMENT GENERATOR V3:",
+      "TRISAL DOCUMENT GENERATOR V4 PDF:",
       error
     );
 
@@ -845,11 +924,134 @@ export default async function handler(req, res) {
 
 
 /* =========================================================
+   DOCX -> PDF
+========================================================= */
+
+async function convertDocxToPdf(
+  docxBuffer,
+  filename
+) {
+  if (
+    !process.env
+      .CLOUDCONVERT_API_KEY
+  ) {
+    throw new Error(
+      "Falta CLOUDCONVERT_API_KEY en las variables de entorno."
+    );
+  }
+
+
+  /*
+    Importamos el DOCX como Base64.
+
+    Esto es adecuado aquí porque nuestros contratos
+    son pequeños. CloudConvert recomienda evitar
+    Base64 para archivos grandes.
+  */
+
+  let job =
+    await cloudConvert.jobs.create({
+      tasks: {
+        "import-docx": {
+          operation:
+            "import/base64",
+
+          file:
+            docxBuffer.toString(
+              "base64"
+            ),
+
+          filename,
+        },
+
+        "convert-pdf": {
+          operation:
+            "convert",
+
+          input:
+            "import-docx",
+
+          input_format:
+            "docx",
+
+          output_format:
+            "pdf",
+        },
+
+        "export-pdf": {
+          operation:
+            "export/url",
+
+          input:
+            "convert-pdf",
+        },
+      },
+    });
+
+
+  /*
+    Esperamos hasta que termine.
+  */
+
+  job =
+    await cloudConvert.jobs.wait(
+      job.id
+    );
+
+
+  if (
+    job.status !== "finished"
+  ) {
+    throw new Error(
+      "CloudConvert no pudo convertir el documento a PDF."
+    );
+  }
+
+
+  const files =
+    cloudConvert.jobs
+      .getExportUrls(job);
+
+
+  const pdfFile =
+    files?.[0];
+
+
+  if (!pdfFile?.url) {
+    throw new Error(
+      "CloudConvert no devolvió el PDF convertido."
+    );
+  }
+
+
+  const response =
+    await fetch(
+      pdfFile.url
+    );
+
+
+  if (!response.ok) {
+    throw new Error(
+      `No se pudo descargar el PDF convertido (${response.status}).`
+    );
+  }
+
+
+  const arrayBuffer =
+    await response.arrayBuffer();
+
+
+  return Buffer.from(
+    arrayBuffer
+  );
+}
+
+
+/* =========================================================
    SEMANTIC MODEL
 ========================================================= */
 
 function buildSemanticModel(S) {
-
   const borrower =
     S.borrower || {};
 
@@ -902,10 +1104,6 @@ function buildSemanticModel(S) {
       : [];
 
 
-  /* =====================================================
-     IDENTIFIERS
-  ===================================================== */
-
   const rfc =
     findIdentifier(
       identifiers,
@@ -918,10 +1116,6 @@ function buildSemanticModel(S) {
       "CURP"
     );
 
-
-  /* =====================================================
-     CONTACT
-  ===================================================== */
 
   const email =
     findContact(
@@ -939,10 +1133,6 @@ function buildSemanticModel(S) {
       "PHONE"
     );
 
-
-  /* =====================================================
-     ADDRESS
-  ===================================================== */
 
   const address =
     addresses.find(
@@ -964,10 +1154,6 @@ function buildSemanticModel(S) {
     {};
 
 
-  /* =====================================================
-     BANK ACCOUNT
-  ===================================================== */
-
   const bank =
     bankAccounts.find(
       (x) =>
@@ -982,10 +1168,6 @@ function buildSemanticModel(S) {
     bankAccounts[0] ||
     {};
 
-
-  /* =====================================================
-     RATES
-  ===================================================== */
 
   const annualRate =
     numberOrNull(
@@ -1008,10 +1190,6 @@ function buildSemanticModel(S) {
     );
 
 
-  /* =====================================================
-     DATE OF GENERATION
-  ===================================================== */
-
   const today =
     new Date();
 
@@ -1031,14 +1209,9 @@ function buildSemanticModel(S) {
   ];
 
 
-  /* =====================================================
-     PAYMENT SCHEDULE
-  ===================================================== */
-
   const paymentSchedule =
     schedule.map(
       (row) => ({
-
         numero:
           row.installment_number,
 
@@ -1081,21 +1254,11 @@ function buildSemanticModel(S) {
           formatMoney(
             row.total_due
           ),
-
       })
     );
 
 
-  /* =====================================================
-     OUTPUT SEMANTIC CONTRACT
-  ===================================================== */
-
   return {
-
-    /* -----------------------------------------------------
-       CONTRACT
-    ----------------------------------------------------- */
-
     CONTRACT_ID:
       contract.contract_id ||
       "",
@@ -1119,10 +1282,6 @@ function buildSemanticModel(S) {
       institution.RECA ||
       "",
 
-
-    /* -----------------------------------------------------
-       BORROWER
-    ----------------------------------------------------- */
 
     BORROWER_NAME:
       borrower.display_name ||
@@ -1168,10 +1327,6 @@ function buildSemanticModel(S) {
           "",
 
 
-    /* -----------------------------------------------------
-       ADDRESS
-    ----------------------------------------------------- */
-
     BORROWER_ADDRESS:
       buildAddress(address),
 
@@ -1206,10 +1361,6 @@ function buildSemanticModel(S) {
       address.postal_code ||
       "",
 
-
-    /* -----------------------------------------------------
-       CREDIT TERMS
-    ----------------------------------------------------- */
 
     CREDIT_APPROVED_AMOUNT:
       formatMoney(
@@ -1283,10 +1434,6 @@ function buildSemanticModel(S) {
       ),
 
 
-    /* -----------------------------------------------------
-       CONTRACTUAL TOTALS
-    ----------------------------------------------------- */
-
     MONTO_TOTAL:
       formatMoney(
         legacyTerms
@@ -1312,10 +1459,6 @@ function buildSemanticModel(S) {
     NUMERO_PAGOS:
       schedule.length,
 
-
-    /* -----------------------------------------------------
-       BANK
-    ----------------------------------------------------- */
 
     DISBURSEMENT_BANK:
       bank.institution_name ||
@@ -1349,10 +1492,6 @@ function buildSemanticModel(S) {
       borrower.display_name ||
       "",
 
-
-    /* -----------------------------------------------------
-       LENDER
-    ----------------------------------------------------- */
 
     LENDER_LEGAL_NAME:
       institution.RAZON_SOCIAL ||
@@ -1418,10 +1557,6 @@ function buildSemanticModel(S) {
       "",
 
 
-    /* -----------------------------------------------------
-       UNE
-    ----------------------------------------------------- */
-
     LENDER_UNE_PHONE:
       institution.TELEFONO_UNE ||
       "",
@@ -1451,10 +1586,6 @@ function buildSemanticModel(S) {
       "",
 
 
-    /* -----------------------------------------------------
-       JURISDICTION
-    ----------------------------------------------------- */
-
     FUERO:
       institution.FUERO ||
       "COMÚN",
@@ -1482,10 +1613,6 @@ function buildSemanticModel(S) {
         .filter(Boolean)
         .join(", "),
 
-
-    /* -----------------------------------------------------
-       SIGNING
-    ----------------------------------------------------- */
 
     CIUDAD_FIRMA:
       institution.CIUDAD_FIRMA ||
@@ -1515,13 +1642,6 @@ function buildSemanticModel(S) {
         today
       ),
 
-
-    /* -----------------------------------------------------
-       PERSONA MORAL
-       El modelo ya reserva conceptos.
-       Se llenarán cuando el onboarding PM
-       esté completamente normalizado.
-    ----------------------------------------------------- */
 
     PM_ESCRITURA_CONSTITUTIVA:
       organization
@@ -1565,11 +1685,6 @@ function buildSemanticModel(S) {
       "",
 
 
-    /* -----------------------------------------------------
-       GUARANTORS
-       V4 migrará obligados al Party Model.
-    ----------------------------------------------------- */
-
     OBLIGADO_NOMBRE:
       "",
 
@@ -1589,13 +1704,8 @@ function buildSemanticModel(S) {
       "",
 
 
-    /* -----------------------------------------------------
-       SCHEDULE
-    ----------------------------------------------------- */
-
     PAYMENT_SCHEDULE:
       paymentSchedule,
-
   };
 }
 
@@ -1608,7 +1718,6 @@ function findIdentifier(
   identifiers,
   type
 ) {
-
   return (
     identifiers.find(
       (x) =>
@@ -1625,7 +1734,6 @@ function findContact(
   contacts,
   type
 ) {
-
   return (
     contacts.find(
       (x) =>
@@ -1641,7 +1749,6 @@ function findContact(
 function buildAddress(
   address
 ) {
-
   if (!address) return "";
 
   return [
@@ -1664,7 +1771,6 @@ function buildAddress(
     address.postal_code
       ? `C.P. ${address.postal_code}`
       : "",
-
   ]
     .filter(Boolean)
     .join(", ");
@@ -1674,7 +1780,6 @@ function buildAddress(
 function numberOrNull(
   value
 ) {
-
   if (
     value === null ||
     value === undefined ||
@@ -1695,7 +1800,6 @@ function numberOrNull(
 function formatMoney(
   value
 ) {
-
   const number =
     Number(value || 0);
 
@@ -1713,7 +1817,6 @@ function formatPercent(
   decimalRate,
   decimals = 2
 ) {
-
   if (
     decimalRate === null ||
     decimalRate === undefined
@@ -1732,7 +1835,6 @@ function formatPercent(
 function formatDateShort(
   value
 ) {
-
   if (!value) return "";
 
   const date =
@@ -1752,7 +1854,6 @@ function formatDateShort(
 function formatDateLong(
   value
 ) {
-
   if (!value) return "";
 
   const date =
@@ -1772,7 +1873,6 @@ function formatDateLong(
 function normalizeDate(
   value
 ) {
-
   if (
     value instanceof Date
   ) {
@@ -1796,17 +1896,8 @@ function normalizeDate(
 }
 
 
-/*
-  Por ahora conserva la representación
-  numérica segura.
-
-  Después agregaremos un motor formal
-  número-a-letras MXN.
-*/
-
 function moneyInWordsPlaceholder(
   value
 ) {
-
   return `${formatMoney(value)} PESOS 00/100 M.N.`;
 }
