@@ -128,6 +128,8 @@ export default function App() {
 
   const [guardando, setGuardando] = useState(false);
 
+  const [documentosContractuales, setDocumentosContractuales] = useState({});
+
   const [archivos, setArchivos] = useState({});
 
   const yaRecuperoRef = useRef(false);
@@ -970,6 +972,124 @@ if (data.estado === "DISBURSED") {
       return false;
     }
   }
+
+  /* =========================================================
+     DOCUMENTOS CONTRACTUALES
+  ========================================================= */
+
+  async function cargarDocumentosContractuales() {
+    try {
+      if (!solicitudId) {
+        setDocumentosContractuales({});
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setDocumentosContractuales({});
+        return;
+      }
+
+      const response = await fetch(
+        `/api/documentos-contractuales?aplicacion_id=${encodeURIComponent(
+          solicitudId
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.error ||
+            `Error ${response.status} recuperando documentos contractuales.`
+        );
+      }
+
+      const latest = {};
+
+      for (const documento of body?.documents || []) {
+        if (!latest[documento.document_type]) {
+          latest[documento.document_type] = documento;
+        }
+      }
+
+      setDocumentosContractuales(latest);
+    } catch (error) {
+      console.error("Error cargando documentos contractuales:", error);
+      setDocumentosContractuales({});
+    }
+  }
+
+  async function abrirDocumento(tipoDocumento) {
+    const nuevaVentana = window.open("about:blank", "_blank");
+
+    try {
+      if (!solicitudId) {
+        throw new Error("No encontramos el ID de la solicitud.");
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+      }
+
+      const response = await fetch(
+        `/api/documentos-contractuales?aplicacion_id=${encodeURIComponent(
+          solicitudId
+        )}&tipo_documento=${encodeURIComponent(tipoDocumento)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.error || `Error ${response.status} abriendo el documento.`
+        );
+      }
+
+      if (!body?.document?.signed_url) {
+        throw new Error("No se pudo generar la liga segura del documento.");
+      }
+
+      if (nuevaVentana) {
+        nuevaVentana.opener = null;
+        nuevaVentana.location.href = body.document.signed_url;
+      } else {
+        window.location.href = body.document.signed_url;
+      }
+    } catch (error) {
+      if (nuevaVentana) {
+        nuevaVentana.close();
+      }
+
+      console.error("Error abriendo documento contractual:", error);
+      alert(error?.message || "No se pudo abrir el documento.");
+    }
+  }
+
+  useEffect(() => {
+    if (pantalla === "contratos" && solicitudId) {
+      cargarDocumentosContractuales();
+    }
+  }, [pantalla, solicitudId]);
 
   /* =========================================================
      FORM HELPERS
@@ -2487,8 +2607,11 @@ async function prepararContratacion() {
             ir={ir}
             regresar={() => regresarA("cuentaBanco")}
             solicitudId={solicitudId}
-guardando={guardando}
-setGuardando={setGuardando}
+            guardando={guardando}
+            setGuardando={setGuardando}
+            documentosContractuales={documentosContractuales}
+            abrirDocumento={abrirDocumento}
+            recargarDocumentos={cargarDocumentosContractuales}
             trackerProps={{
               pasoActual: 6,
               pasoMaximo,
@@ -4915,6 +5038,9 @@ function Contratos({
   solicitudId,
   guardando,
   setGuardando,
+  documentosContractuales,
+  abrirDocumento,
+  recargarDocumentos,
 }) {
     return (
     <Pagina
@@ -4924,10 +5050,28 @@ function Contratos({
       <Tracker {...trackerProps} />
 
       <div className="card">
-        <Documento titulo="Contrato de crédito" />
-        <Documento titulo="Tabla de amortización" />
-        <Documento titulo="Pagaré" />
-        <Documento titulo="Autorización de domiciliación" />
+<Documento
+  titulo="Contrato de crédito"
+  disponible={Boolean(documentosContractuales?.CONTRATO)}
+  onVer={() => abrirDocumento("CONTRATO")}
+/>
+
+<Documento
+  titulo="Tabla de amortización"
+  disponible={Boolean(documentosContractuales?.TABLA_AMORTIZACION)}
+  onVer={() => abrirDocumento("TABLA_AMORTIZACION")}
+/>
+
+<Documento
+  titulo="Pagaré"
+  disponible={false}
+/>
+
+<Documento
+  titulo="Autorización de domiciliación"
+  disponible={Boolean(documentosContractuales?.DOMICILIACION)}
+  onVer={() => abrirDocumento("DOMICILIACION")}
+/>
 
 <div style={{ marginTop: "24px", marginBottom: "16px" }}>
   <button
@@ -4981,11 +5125,13 @@ function Contratos({
 
         console.log("DOCUMENTOS GENERADOS:", body);
 
-   alert(
-  `Generación terminada. Se generaron ${
-    body?.documents?.length || 0
-  } documentos.`
-);
+        await recargarDocumentos?.();
+
+        alert(
+          `Generación terminada. Se generaron ${
+            body?.documents?.length || 0
+          } documentos.`
+        );
       } catch (error) {
         console.error("ERROR:", error);
 
@@ -5813,15 +5959,30 @@ function OfertaDato({
   );
 }
 
-function Documento({ titulo }) {
+function Documento({
+  titulo,
+  onVer,
+  disponible = true,
+}) {
   return (
     <div className="document">
       <div>
         <strong>{titulo}</strong>
-        <span>Documento generado</span>
+
+        <span>
+          {disponible
+            ? "Documento generado"
+            : "Pendiente de generación"}
+        </span>
       </div>
 
-      <button>Ver</button>
+      <button
+        type="button"
+        onClick={onVer}
+        disabled={!disponible}
+      >
+        Ver
+      </button>
     </div>
   );
 }
