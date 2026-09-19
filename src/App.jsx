@@ -4981,11 +4981,11 @@ function Contratos({
 
         console.log("DOCUMENTOS GENERADOS:", body);
 
-        alert(
-          `Generación terminada. Se generaron ${
-            body?.documentos?.length || 0
-          } documentos.`
-        );
+   alert(
+  `Generación terminada. Se generaron ${
+    body?.documents?.length || 0
+  } documentos.`
+);
       } catch (error) {
         console.error("ERROR:", error);
 
