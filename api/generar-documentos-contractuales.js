@@ -350,13 +350,58 @@ export default async function handler(req, res) {
     }
 
 
-    const docxTemplates =
-      (templates || []).filter(
-        (t) =>
-          t.storage_path
-            ?.toLowerCase()
-            .endsWith(".docx")
-      );
+/* =====================================================
+   SELECCIONAR PLANTILLAS SEGÚN TIPO DE PERSONA
+===================================================== */
+
+const borrowerPartyType =
+  String(
+    S.borrower?.party_type || ""
+  ).toUpperCase();
+
+const contractTemplateType =
+  borrowerPartyType === "ORGANIZATION"
+    ? "CONTRATO_PM"
+    : "CONTRATO_PF";
+
+const docxTemplates =
+  (templates || []).filter(
+    (template) => {
+      const isDocx =
+        template.storage_path
+          ?.toLowerCase()
+          .endsWith(".docx");
+
+      if (!isDocx) {
+        return false;
+      }
+
+      /*
+        Sólo utilizar el contrato correspondiente
+        al tipo de cliente.
+      */
+
+      if (
+        template.tipo_documento ===
+          "CONTRATO_PF" ||
+        template.tipo_documento ===
+          "CONTRATO_PM"
+      ) {
+        return (
+          template.tipo_documento ===
+          contractTemplateType
+        );
+      }
+
+      /*
+        Las demás plantillas aplican a ambos:
+        - Tabla de amortización
+        - Domiciliación
+      */
+
+      return true;
+    }
+  );
 
 
     /* =====================================================
@@ -379,10 +424,6 @@ export default async function handler(req, res) {
 
       /* ===================================================
          EVITAR DUPLICADOS
-         MISMO CONTRATO
-         + MISMO SNAPSHOT
-         + MISMA PLANTILLA
-         + MISMO TIPO
       =================================================== */
 
       const {
@@ -451,7 +492,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         DESCARGAR PLANTILLA DOCX
+         DESCARGAR PLANTILLA
       =================================================== */
 
       const {
@@ -480,7 +521,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         RENDER DOCX EN MEMORIA
+         RENDER DOCX
       =================================================== */
 
       const zip =
@@ -578,7 +619,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         NOMBRE INTERNO DOCX
+         NOMBRE DE CRÉDITO
       =================================================== */
 
       const loanNumber =
@@ -593,7 +634,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         CONVERTIR DOCX -> PDF
+         DOCX -> PDF
       =================================================== */
 
       const pdfBuffer =
@@ -604,7 +645,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         HASH DEL PDF OFICIAL
+         HASH PDF
       =================================================== */
 
       const fileHash =
@@ -613,10 +654,6 @@ export default async function handler(req, res) {
           .update(pdfBuffer)
           .digest("hex");
 
-
-      /* ===================================================
-         NOMBRE PDF
-      =================================================== */
 
       const pdfFilename =
         `${template.tipo_documento}_${loanNumber}_v${documentVersion}.pdf`;
@@ -632,7 +669,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         GUARDAR SÓLO PDF
+         GUARDAR PDF
       =================================================== */
 
       const {
@@ -661,7 +698,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         REGISTRO OFICIAL
+         REGISTRAR DOCUMENTO
       =================================================== */
 
       const {
@@ -710,11 +747,6 @@ export default async function handler(req, res) {
         .single();
 
       if (documentError) {
-        /*
-          Si falla el registro DB después de subir,
-          eliminamos el PDF para no dejar huérfanos.
-        */
-
         await supabaseAdmin
           .storage
           .from(
@@ -729,7 +761,7 @@ export default async function handler(req, res) {
 
 
       /* ===================================================
-         EVENTO DE AUDITORÍA
+         AUDITORÍA
       =================================================== */
 
       const {
@@ -756,7 +788,7 @@ export default async function handler(req, res) {
             usuario.id,
 
           source:
-            "TRISAL_DOCUMENT_GENERATOR_V4_PDF",
+            "TRISAL_DOCUMENT_GENERATOR_V5",
 
           payload: {
             document_id:
@@ -861,7 +893,7 @@ export default async function handler(req, res) {
       ok: true,
 
       architecture:
-        "SNAPSHOT_V4_PDF",
+        "SNAPSHOT_V5",
 
       contract_id:
         contract.id,
@@ -895,12 +927,6 @@ export default async function handler(req, res) {
       skipped_count:
         skippedDocuments.length,
 
-      pending: [
-        "CARATULA_PDF",
-        "PAGARE",
-        "E_SIGNATURE",
-      ],
-
       message:
         generatedDocuments.length > 0
           ? `${generatedDocuments.length} documentos PDF fueron generados.`
@@ -908,7 +934,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error(
-      "TRISAL DOCUMENT GENERATOR V4 PDF:",
+      "TRISAL DOCUMENT GENERATOR V5:",
       error
     );
 
@@ -940,14 +966,6 @@ async function convertDocxToPdf(
     );
   }
 
-
-  /*
-    Importamos el DOCX como Base64.
-
-    Esto es adecuado aquí porque nuestros contratos
-    son pequeños. CloudConvert recomienda evitar
-    Base64 para archivos grandes.
-  */
 
   let job =
     await cloudConvert.jobs.create({
@@ -988,10 +1006,6 @@ async function convertDocxToPdf(
       },
     });
 
-
-  /*
-    Esperamos hasta que termine.
-  */
 
   job =
     await cloudConvert.jobs.wait(
@@ -1104,6 +1118,10 @@ function buildSemanticModel(S) {
       : [];
 
 
+  /* =====================================================
+     IDENTIFICADORES
+  ===================================================== */
+
   const rfc =
     findIdentifier(
       identifiers,
@@ -1116,6 +1134,10 @@ function buildSemanticModel(S) {
       "CURP"
     );
 
+
+  /* =====================================================
+     CONTACTOS
+  ===================================================== */
 
   const email =
     findContact(
@@ -1133,6 +1155,10 @@ function buildSemanticModel(S) {
       "PHONE"
     );
 
+
+  /* =====================================================
+     DOMICILIO
+  ===================================================== */
 
   const address =
     addresses.find(
@@ -1154,6 +1180,10 @@ function buildSemanticModel(S) {
     {};
 
 
+  /* =====================================================
+     CUENTA BANCARIA
+  ===================================================== */
+
   const bank =
     bankAccounts.find(
       (x) =>
@@ -1168,6 +1198,10 @@ function buildSemanticModel(S) {
     bankAccounts[0] ||
     {};
 
+
+  /* =====================================================
+     TASAS
+  ===================================================== */
 
   const annualRate =
     numberOrNull(
@@ -1190,6 +1224,10 @@ function buildSemanticModel(S) {
     );
 
 
+  /* =====================================================
+     FECHA DE ELABORACIÓN
+  ===================================================== */
+
   const today =
     new Date();
 
@@ -1209,56 +1247,222 @@ function buildSemanticModel(S) {
   ];
 
 
+  /* =====================================================
+     TABLA DE AMORTIZACIÓN
+  ===================================================== */
+
   const paymentSchedule =
     schedule.map(
-      (row) => ({
-        numero:
-          row.installment_number,
+      (row) => {
+        const saldoInicial =
+          Number(
+            row.opening_balance || 0
+          );
 
-        fecha:
-          formatDateShort(
-            row.due_date
-          ),
+        const principal =
+          Number(
+            row.principal_due || 0
+          );
 
-        saldo_inicial:
-          formatMoney(
-            row.opening_balance
-          ),
+        const interes =
+          Number(
+            row.interest_due || 0
+          );
 
-        principal:
-          formatMoney(
-            row.principal_due
-          ),
+        const ivaInteres =
+          Number(
+            row.vat_interest_due || 0
+          );
 
-        interes:
-          formatMoney(
-            row.interest_due
-          ),
+        const comision =
+          Number(
+            row.fees_due || 0
+          );
 
-        iva_interes:
-          formatMoney(
-            row.vat_interest_due
-          ),
+        const ivaComision =
+          Number(
+            row.vat_fees_due || 0
+          );
 
-        comisiones:
-          formatMoney(
-            row.fees_due
-          ),
+        const total =
+          Number(
+            row.total_due || 0
+          );
 
-        iva_comision:
-          formatMoney(
-            row.vat_fees_due
-          ),
+        const saldoFinal =
+          Math.max(
+            0,
+            saldoInicial -
+              principal
+          );
 
-        total:
-          formatMoney(
-            row.total_due
-          ),
-      })
+        const comisionesConIva =
+          comision +
+          ivaComision;
+
+
+        return {
+          numero:
+            row.installment_number,
+
+          fecha:
+            formatDateShort(
+              row.due_date
+            ),
+
+          saldo_inicial:
+            formatMoney(
+              saldoInicial
+            ),
+
+          principal:
+            formatMoney(
+              principal
+            ),
+
+          interes:
+            formatMoney(
+              interes
+            ),
+
+          iva_interes:
+            formatMoney(
+              ivaInteres
+            ),
+
+          comisiones:
+            formatMoney(
+              comision
+            ),
+
+          iva_comision:
+            formatMoney(
+              ivaComision
+            ),
+
+          comisiones_con_iva:
+            formatMoney(
+              comisionesConIva
+            ),
+
+          total:
+            formatMoney(
+              total
+            ),
+
+          saldo_final:
+            formatMoney(
+              saldoFinal
+            ),
+        };
+      }
     );
 
 
+  /* =====================================================
+     TOTALES TABLA
+  ===================================================== */
+
+  const totalCapital =
+    schedule.reduce(
+      (acc, row) =>
+        acc +
+        Number(
+          row.principal_due || 0
+        ),
+      0
+    );
+
+  const totalInteres =
+    schedule.reduce(
+      (acc, row) =>
+        acc +
+        Number(
+          row.interest_due || 0
+        ),
+      0
+    );
+
+  const totalIvaInteres =
+    schedule.reduce(
+      (acc, row) =>
+        acc +
+        Number(
+          row.vat_interest_due || 0
+        ),
+      0
+    );
+
+  const totalComisiones =
+    schedule.reduce(
+      (acc, row) =>
+        acc +
+        Number(
+          row.fees_due || 0
+        ),
+      0
+    );
+
+  const totalIvaComisiones =
+    schedule.reduce(
+      (acc, row) =>
+        acc +
+        Number(
+          row.vat_fees_due || 0
+        ),
+      0
+    );
+
+  const totalComisionesConIva =
+    totalComisiones +
+    totalIvaComisiones;
+
+  const totalPagar =
+    schedule.reduce(
+      (acc, row) =>
+        acc +
+        Number(
+          row.total_due || 0
+        ),
+      0
+    );
+
+
+  /* =====================================================
+     DOMICILIACIÓN
+  ===================================================== */
+
+  const firstPaymentDate =
+    legacyTerms.fecha_primer_pago
+      ? normalizeDate(
+          legacyTerms
+            .fecha_primer_pago
+        )
+      : null;
+
+
+  const maxPayment =
+    schedule.length > 0
+      ? Math.max(
+          ...schedule.map(
+            (row) =>
+              Number(
+                row.total_due || 0
+              )
+          )
+        )
+      : 0;
+
+
+  /* =====================================================
+     RETURN
+  ===================================================== */
+
   return {
+    /* ===================================================
+       CONTRATO
+    =================================================== */
+
     CONTRACT_ID:
       contract.contract_id ||
       "",
@@ -1282,6 +1486,10 @@ function buildSemanticModel(S) {
       institution.RECA ||
       "",
 
+
+    /* ===================================================
+       ACREDITADO
+    =================================================== */
 
     BORROWER_NAME:
       borrower.display_name ||
@@ -1327,6 +1535,10 @@ function buildSemanticModel(S) {
           "",
 
 
+    /* ===================================================
+       DOMICILIO
+    =================================================== */
+
     BORROWER_ADDRESS:
       buildAddress(address),
 
@@ -1361,6 +1573,10 @@ function buildSemanticModel(S) {
       address.postal_code ||
       "",
 
+
+    /* ===================================================
+       CRÉDITO
+    =================================================== */
 
     CREDIT_APPROVED_AMOUNT:
       formatMoney(
@@ -1434,11 +1650,54 @@ function buildSemanticModel(S) {
       ),
 
 
+    /* ===================================================
+       TOTALES
+    =================================================== */
+
     MONTO_TOTAL:
       formatMoney(
-        legacyTerms
-          .monto_total_pagar
+        totalPagar
       ),
+
+    TOTAL_CAPITAL:
+      formatMoney(
+        totalCapital
+      ),
+
+    TOTAL_INTERES:
+      formatMoney(
+        totalInteres
+      ),
+
+    TOTAL_IVA_INTERES:
+      formatMoney(
+        totalIvaInteres
+      ),
+
+    TOTAL_COMISIONES:
+      formatMoney(
+        totalComisiones
+      ),
+
+    TOTAL_IVA_COMISIONES:
+      formatMoney(
+        totalIvaComisiones
+      ),
+
+    TOTAL_COMISIONES_CON_IVA:
+      formatMoney(
+        totalComisionesConIva
+      ),
+
+    TOTAL_PAGAR:
+      formatMoney(
+        totalPagar
+      ),
+
+
+    /* ===================================================
+       PAGOS
+    =================================================== */
 
     PERIODICIDAD:
       legacyTerms.periodicidad ||
@@ -1459,6 +1718,10 @@ function buildSemanticModel(S) {
     NUMERO_PAGOS:
       schedule.length,
 
+
+    /* ===================================================
+       CUENTA BANCARIA
+    =================================================== */
 
     DISBURSEMENT_BANK:
       bank.institution_name ||
@@ -1492,6 +1755,45 @@ function buildSemanticModel(S) {
       borrower.display_name ||
       "",
 
+
+    /* ===================================================
+       DOMICILIACIÓN
+    =================================================== */
+
+    DIA_CARGO:
+      firstPaymentDate
+        ? firstPaymentDate.getDate()
+        : "",
+
+    PERIODICIDAD_UNIDAD:
+      String(
+        legacyTerms.periodicidad ||
+        ""
+      ).toUpperCase() ===
+      "MENSUAL"
+        ? "mes"
+        : String(
+              legacyTerms.periodicidad ||
+              ""
+            ).toUpperCase() ===
+            "QUINCENAL"
+        ? "quincena"
+        : "",
+
+    MONTO_MAXIMO_CARGO:
+      formatMoney(
+        maxPayment
+      ),
+
+    MONTO_MAXIMO_CARGO_LETRA:
+      moneyInWordsPlaceholder(
+        maxPayment
+      ),
+
+
+    /* ===================================================
+       ACREDITANTE
+    =================================================== */
 
     LENDER_LEGAL_NAME:
       institution.RAZON_SOCIAL ||
@@ -1556,6 +1858,19 @@ function buildSemanticModel(S) {
         .REPRESENTANTE_LEGAL ||
       "",
 
+    DOMICILIO_ACREDITANTE:
+      institution
+        .DOMICILIO_ACREDITANTE ||
+      "",
+
+    CORREO_ACREDITANTE:
+      institution.CORREO_UNE ||
+      "",
+
+
+    /* ===================================================
+       UNE
+    =================================================== */
 
     LENDER_UNE_PHONE:
       institution.TELEFONO_UNE ||
@@ -1581,10 +1896,10 @@ function buildSemanticModel(S) {
       institution.HORARIO_UNE ||
       "",
 
-    CORREO_ACREDITANTE:
-      institution.CORREO_UNE ||
-      "",
 
+    /* ===================================================
+       JURISDICCIÓN
+    =================================================== */
 
     FUERO:
       institution.FUERO ||
@@ -1614,6 +1929,10 @@ function buildSemanticModel(S) {
         .join(", "),
 
 
+    /* ===================================================
+       FIRMA / FECHA
+    =================================================== */
+
     CIUDAD_FIRMA:
       institution.CIUDAD_FIRMA ||
       "Saltillo",
@@ -1642,6 +1961,10 @@ function buildSemanticModel(S) {
         today
       ),
 
+
+    /* ===================================================
+       PERSONA MORAL
+    =================================================== */
 
     PM_ESCRITURA_CONSTITUTIVA:
       organization
@@ -1685,6 +2008,10 @@ function buildSemanticModel(S) {
       "",
 
 
+    /* ===================================================
+       OBLIGADOS SOLIDARIOS
+    =================================================== */
+
     OBLIGADO_NOMBRE:
       "",
 
@@ -1704,7 +2031,14 @@ function buildSemanticModel(S) {
       "",
 
 
+    /* ===================================================
+       TABLA
+    =================================================== */
+
     PAYMENT_SCHEDULE:
+      paymentSchedule,
+
+    PAGOS:
       paymentSchedule,
   };
 }
