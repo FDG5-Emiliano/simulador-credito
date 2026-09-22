@@ -5260,11 +5260,6 @@ function UNE({ empresa }) {
         />
 
         <Resumen
-          titulo="Titular de la UNE"
-          valor={empresa.uneTitular}
-        />
-
-        <Resumen
           titulo="Domicilio"
           valor={empresa.uneDireccion}
         />
