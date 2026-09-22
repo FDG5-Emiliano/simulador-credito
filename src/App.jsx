@@ -5344,6 +5344,70 @@ function UNE({ empresa }) {
   );
 }
 
+function Normatividad({ empresa }) {
+  return (
+    <Pagina
+      titulo="Normatividad"
+      subtitulo="Información legal e institucional de TRISAL."
+    >
+      <div className="card legalText">
+        <SectionDivider titulo="Información de la entidad" />
+
+        <Resumen
+          titulo="Razón social"
+          valor={empresa.razonSocial}
+        />
+
+        <Resumen
+          titulo="Domicilio"
+          valor={empresa.direccion}
+        />
+
+        <Resumen
+          titulo="Página de internet"
+          valor="trisalmx.com"
+        />
+      </div>
+
+      <div className="card legalText">
+        <SectionDivider titulo="Registro de contrato de adhesión" />
+
+        <Resumen
+          titulo="RECA"
+          valor={empresa.reca}
+        />
+
+        <p>
+          Los contratos de adhesión utilizados por TRISAL se encuentran
+          registrados conforme a las disposiciones aplicables.
+        </p>
+      </div>
+
+      <div className="card legalText">
+        <SectionDivider titulo="Supervisión" />
+
+        <p>
+          {empresa.razonSocial} es una Sociedad Financiera de Objeto
+          Múltiple, Entidad No Regulada (SOFOM, E.N.R.).
+        </p>
+
+        <p>
+          Para la constitución y operación de {empresa.razonSocial} con
+          tal carácter, no requiere autorización de la Secretaría de
+          Hacienda y Crédito Público.
+        </p>
+
+        <p>
+          {empresa.razonSocial} se encuentra sujeta a la supervisión de
+          la Comisión Nacional Bancaria y de Valores únicamente para
+          efectos de lo dispuesto por el artículo 56 de la Ley General
+          de Organizaciones y Actividades Auxiliares del Crédito.
+        </p>
+      </div>
+    </Pagina>
+  );
+}
+
 function Buro() {
   return (
     <Pagina
