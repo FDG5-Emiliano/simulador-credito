@@ -5368,7 +5368,7 @@ function Privacidad({ empresa }) {
   return (
     <Pagina
       titulo="Aviso de privacidad"
-      subtitulo="Consulta el Aviso de Privacidad integral de TRISAL."
+      subtitulo="Información sobre el tratamiento de datos personales."
     >
       <div className="card legalText privacyCard">
         <SectionDivider titulo="Responsable" />
@@ -5379,39 +5379,30 @@ function Privacidad({ empresa }) {
           recabe.
         </p>
 
-        <SectionDivider titulo="Aviso de Privacidad integral" />
+        <SectionDivider titulo="Aviso de Privacidad" />
 
         <p>
-          Consulta el documento completo para conocer las finalidades
-          del tratamiento de tus datos personales, transferencias,
-          mecanismos para ejercer derechos ARCO, medios de contacto,
-          cambios al aviso y demás información aplicable.
+          Consulta nuestro Aviso de Privacidad integral para conocer
+          las finalidades del tratamiento de tus datos personales,
+          transferencias, mecanismos para ejercer derechos ARCO,
+          medios de contacto y demás información aplicable.
         </p>
 
-        <div className="privacyActions">
-          <a
-            className="privacyPrimaryLink"
-            href="/aviso-privacidad.pdf"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Consultar Aviso de Privacidad
-          </a>
-
-          <a
-            className="privacySecondaryLink"
-            href="/aviso-privacidad.pdf"
-            download
-          >
-            Descargar PDF
-          </a>
-        </div>
+        <a
+          className="privacyDocumentLink"
+          href="/aviso-privacidad.pdf"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Aviso de Privacidad
+        </a>
 
         <div className="privacyDocumentInfo">
-          <strong>Documento oficial</strong>
+          <strong>Documento oficial vigente</strong>
+
           <span>
-            El PDF publicado en esta sección corresponde al Aviso de
-            Privacidad vigente de TRISAL.
+            Consulta el Aviso de Privacidad de TRISAL antes de
+            proporcionar o autorizar el tratamiento de tus datos.
           </span>
         </div>
       </div>
@@ -6009,38 +6000,40 @@ function Footer({
       </div>
 
       <div className="regulatoryFooter">
-        <span className="regulatoryFooterTitle">
-          Información y autoridades financieras
-        </span>
+  <span className="regulatoryFooterTitle">
+    Información y autoridades financieras
+  </span>
 
-        <div className="regulatoryLogos">
-          <a
-            href="https://www.condusef.gob.mx/"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="CONDUSEF"
-          >
-            <img
-              src="/logo-condusef.png"
-              alt="CONDUSEF"
-              className="regulatoryLogo"
-            />
-          </a>
+  <div className="regulatoryLogos">
+    <a
+      className="regulatoryLogoLink"
+      href="https://www.condusef.gob.mx/"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="CONDUSEF"
+    >
+      <img
+        src="/logo-condusef.png"
+        alt="CONDUSEF"
+        className="regulatoryLogo regulatoryLogoCondusef"
+      />
+    </a>
 
-          <a
-            href="https://www.gob.mx/cnbv"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Comisión Nacional Bancaria y de Valores"
-          >
-            <img
-              src="/logo-cnbv.png"
-              alt="Comisión Nacional Bancaria y de Valores"
-              className="regulatoryLogo"
-            />
-          </a>
-        </div>
-      </div>
+    <a
+      className="regulatoryLogoLink"
+      href="https://www.gob.mx/cnbv"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Comisión Nacional Bancaria y de Valores"
+    >
+      <img
+        src="/logo-cnbv.png"
+        alt="Comisión Nacional Bancaria y de Valores"
+        className="regulatoryLogo regulatoryLogoCnbv"
+      />
+    </a>
+  </div>
+</div>
     </footer>
   );
 }

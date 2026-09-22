@@ -11,11 +11,16 @@
   &:hover {
     border-color: var(--accent-border);
   }
+
   &:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 }
+
+/* =========================================================
+   HERO
+========================================================= */
 
 .hero {
   position: relative;
@@ -42,7 +47,12 @@
     z-index: 1;
     top: 34px;
     height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
+
+    transform:
+      perspective(2000px)
+      rotateZ(300deg)
+      rotateX(44deg)
+      rotateY(39deg)
       scale(1.4);
   }
 
@@ -51,10 +61,19 @@
     top: 107px;
     height: 26px;
     width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
+
+    transform:
+      perspective(2000px)
+      rotateZ(300deg)
+      rotateX(40deg)
+      rotateY(39deg)
       scale(0.8);
   }
 }
+
+/* =========================================================
+   CENTER
+========================================================= */
 
 #center {
   display: flex;
@@ -70,6 +89,10 @@
   }
 }
 
+/* =========================================================
+   NEXT STEPS
+========================================================= */
+
 #next-steps {
   display: flex;
   border-top: 1px solid var(--border);
@@ -78,6 +101,7 @@
   & > div {
     flex: 1 1 0;
     padding: 32px;
+
     @media (max-width: 1024px) {
       padding: 24px 20px;
     }
@@ -130,6 +154,7 @@
     &:hover {
       box-shadow: var(--shadow);
     }
+
     .button-icon {
       height: 18px;
       width: 18px;
@@ -156,88 +181,312 @@
 #spacer {
   height: 88px;
   border-top: 1px solid var(--border);
+
   @media (max-width: 1024px) {
     height: 48px;
   }
 }
 
+/* =========================================================
+   FOOTER REGULATORIO
+========================================================= */
+
 .regulatoryFooter {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  margin-top: 18px;
+  padding-top: 16px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.1);
+
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+
+  gap: 11px;
 }
 
 .regulatoryFooterTitle {
-  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.72
+    );
+
   font-size: 10px;
   font-weight: 700;
+
+  line-height: 1.3;
+
   text-align: center;
+
+  letter-spacing: 0.01em;
 }
 
 .regulatoryLogos {
+  width: 100%;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+
+  gap: 12px;
+
   flex-wrap: wrap;
 }
 
-.regulatoryLogos a {
-  width: 118px;
-  height: 52px;
+.regulatoryLogoLink {
+  width: 104px;
+  height: 48px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  padding: 7px 10px;
+  overflow: hidden;
+
+  padding: 6px 8px;
 
   background: #ffffff;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.14
+    );
+
   border-radius: 7px;
 
-  opacity: 0.92;
+  text-decoration: none;
+
+  opacity: 0.94;
+
+  box-shadow:
+    0 2px 8px
+    rgba(
+      0,
+      0,
+      0,
+      0.08
+    );
 
   transition:
     transform 0.18s ease,
-    opacity 0.18s ease;
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-.regulatoryLogos a:hover {
-  transform: translateY(-1px);
+.regulatoryLogoLink:hover {
+  transform:
+    translateY(-1px);
+
   opacity: 1;
+
+  box-shadow:
+    0 4px 12px
+    rgba(
+      0,
+      0,
+      0,
+      0.12
+    );
 }
 
 .regulatoryLogo {
   display: block;
 
-  max-width: 94px;
-  max-height: 34px;
-
   width: auto;
   height: auto;
 
   object-fit: contain;
+
+  object-position: center;
 }
 
-@media (max-width: 700px) {
-  .regulatoryLogos {
-    gap: 9px;
-  }
+/*
+  CONDUSEF tiene un lienzo interno distinto
+  al de CNBV, por eso se corrige por separado.
+*/
 
-  .regulatoryLogos a {
-    width: 105px;
-    height: 48px;
-  }
+.regulatoryLogoCondusef {
+  max-width: 84px;
+  max-height: 29px;
 
-  .regulatoryLogo {
-    max-width: 84px;
-    max-height: 30px;
-  }
+  transform:
+    scale(1.08);
 }
+
+/*
+  CNBV en tu imagen fuente ocupa visualmente
+  mucho más espacio. La reducimos.
+*/
+
+.regulatoryLogoCnbv {
+  max-width: 78px;
+  max-height: 27px;
+
+  transform:
+    scale(0.88);
+}
+
+/* =========================================================
+   PRIVACIDAD
+========================================================= */
+
+.privacyCard {
+  width: 100%;
+  max-width: 920px;
+}
+
+.privacyCard p {
+  line-height: 1.7;
+}
+
+.privacyDocumentLink {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-top: 12px;
+
+  padding:
+    10px
+    17px;
+
+  border-radius: 8px;
+
+  background:
+    var(
+      --navy,
+      #111a2a
+    );
+
+  color: #ffffff;
+
+  font-size: 13px;
+
+  font-weight: 800;
+
+  line-height: 1;
+
+  text-decoration: none;
+
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.privacyDocumentLink:hover {
+  transform:
+    translateY(-1px);
+
+  background: #1c2940;
+
+  box-shadow:
+    0 6px 16px
+    rgba(
+      17,
+      26,
+      42,
+      0.12
+    );
+}
+
+.privacyDocumentLink:focus-visible {
+  outline:
+    2px solid
+    var(
+      --gold,
+      #9c7427
+    );
+
+  outline-offset: 3px;
+}
+
+.privacyDocumentInfo {
+  margin-top: 17px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+
+  padding:
+    13px
+    15px;
+
+  background: #f5f7f9;
+
+  border:
+    1px solid
+    var(
+      --border,
+      #dfe4ea
+    );
+
+  border-radius: 8px;
+}
+
+.privacyDocumentInfo strong {
+  color:
+    var(
+      --text,
+      #151c2a
+    );
+
+  font-size: 12px;
+}
+
+.privacyDocumentInfo span {
+  color:
+    var(
+      --muted,
+      #667489
+    );
+
+  font-size: 11px;
+
+  line-height: 1.55;
+}
+
+/* =========================================================
+   LINKS LEGALES EN FORMULARIOS
+========================================================= */
+
+.inlineLegalLink {
+  color:
+    var(
+      --gold,
+      #9c7427
+    );
+
+  font-weight: 800;
+
+  text-decoration: underline;
+
+  text-underline-offset: 2px;
+
+  text-decoration-thickness: 1px;
+}
+
+.inlineLegalLink:hover {
+  color: #765617;
+}
+
+/* =========================================================
+   TICKS
+========================================================= */
 
 .ticks {
   position: relative;
@@ -245,7 +494,7 @@
 
   &::before,
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     top: -4.5px;
     border: 5px solid transparent;
@@ -255,80 +504,94 @@
     left: 0;
     border-left-color: var(--border);
   }
+
   &::after {
     right: 0;
     border-right-color: var(--border);
   }
 }
 
-.privacyCard {
-  max-width: 920px;
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+  .regulatoryFooter {
+    margin-top: 16px;
+    padding-top: 15px;
+  }
+
+  .regulatoryLogos {
+    gap: 10px;
+  }
+
+  .regulatoryLogoLink {
+    width: 98px;
+    height: 46px;
+
+    padding:
+      6px
+      7px;
+  }
+
+  .regulatoryLogoCondusef {
+    max-width: 78px;
+    max-height: 27px;
+  }
+
+  .regulatoryLogoCnbv {
+    max-width: 72px;
+    max-height: 25px;
+  }
 }
 
-.privacyActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
+/* =========================================================
+   MOBILE
+========================================================= */
 
-.privacyPrimaryLink,
-.privacySecondaryLink {
-  min-height: 42px;
+@media (max-width: 700px) {
+  .regulatoryFooter {
+    gap: 9px;
+  }
 
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  .regulatoryFooterTitle {
+    font-size: 9px;
+  }
 
-  padding: 10px 16px;
+  .regulatoryLogos {
+    gap: 8px;
+  }
 
-  border-radius: 8px;
+  .regulatoryLogoLink {
+    width: 90px;
+    height: 42px;
 
-  font-size: 13px;
-  font-weight: 800;
+    padding:
+      5px
+      7px;
+  }
 
-  text-decoration: none;
-}
+  .regulatoryLogoCondusef {
+    max-width: 72px;
+    max-height: 24px;
+  }
 
-.privacyPrimaryLink {
-  background: var(--navy);
-  color: #ffffff;
-}
+  .regulatoryLogoCnbv {
+    max-width: 67px;
+    max-height: 23px;
+  }
 
-.privacySecondaryLink {
-  border: 1px solid var(--border);
-  background: #ffffff;
-  color: var(--navy);
-}
+  .privacyDocumentLink {
+    width: 100%;
 
-.privacyDocumentInfo {
-  margin-top: 20px;
+    min-height: 44px;
 
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+    margin-top: 10px;
+  }
 
-  padding: 13px 15px;
-
-  background: #f5f7f9;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.privacyDocumentInfo strong {
-  font-size: 12px;
-}
-
-.privacyDocumentInfo span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.inlineLegalLink {
-  color: var(--gold);
-  font-weight: 800;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  .privacyDocumentInfo {
+    padding:
+      12px
+      13px;
+  }
 }
