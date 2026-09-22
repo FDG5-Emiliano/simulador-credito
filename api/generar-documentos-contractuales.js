@@ -273,12 +273,6 @@ export default async function handler(req, res) {
 
     /* =====================================================
        6. SNAPSHOT VIGENTE
-
-       IMPORTANTE:
-       usamos maybeSingle porque un contrato DRAFT puede existir
-       antes de que se haya preparado su snapshot.
-
-       No permitimos que PostgREST devuelva PGRST116 al cliente.
     ===================================================== */
 
     const {
@@ -436,6 +430,13 @@ export default async function handler(req, res) {
         ? "CONTRATO_PM"
         : "CONTRATO_PF";
 
+    const allowedDocumentTypes =
+      new Set([
+        contractTemplateType,
+        "TABLA_AMORTIZACION",
+        "DOMICILIACION",
+      ]);
+
     const docxTemplates =
       (templates || []).filter(
         (template) => {
@@ -448,19 +449,9 @@ export default async function handler(req, res) {
             return false;
           }
 
-          if (
-            template.tipo_documento ===
-              "CONTRATO_PF" ||
-            template.tipo_documento ===
-              "CONTRATO_PM"
-          ) {
-            return (
-              template.tipo_documento ===
-              contractTemplateType
-            );
-          }
-
-          return true;
+          return allowedDocumentTypes.has(
+            template.tipo_documento
+          );
         }
       );
 
@@ -475,11 +466,35 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       10. GENERACIÓN IDEMPOTENTE
+       10. MODO DE SALIDA
     ===================================================== */
+
+    const outputMode =
+      String(
+        process.env.DOCUMENT_OUTPUT_MODE ||
+        "DOCX"
+      ).toUpperCase();
+
+    if (
+      outputMode !== "DOCX" &&
+      outputMode !== "PDF"
+    ) {
+      throw new Error(
+        "DOCUMENT_OUTPUT_MODE debe ser DOCX o PDF."
+      );
+    }
+
+    const expectedExtension =
+      outputMode === "PDF"
+        ? ".pdf"
+        : ".docx";
 
     const generatedDocuments = [];
     const skippedDocuments = [];
+
+    /* =====================================================
+       11. GENERAR DOCUMENTOS
+    ===================================================== */
 
     for (
       const template of
@@ -491,7 +506,7 @@ export default async function handler(req, res) {
         );
 
       /* ===================================================
-         EVITAR DUPLICADOS
+         EVITAR DUPLICADOS DEL MISMO FORMATO
       =================================================== */
 
       const {
@@ -544,18 +559,39 @@ export default async function handler(req, res) {
       if (
         existing &&
         existing.status ===
-          "GENERATED"
+          "GENERATED" &&
+        String(
+          existing.storage_path || ""
+        )
+          .toLowerCase()
+          .endsWith(
+            expectedExtension
+          )
       ) {
         skippedDocuments.push({
-          id: existing.id,
+          id:
+            existing.id,
+
           type:
             existing.document_type,
+
+          tipo:
+            existing.document_type,
+
+          document_type:
+            existing.document_type,
+
           version:
             existing.document_version,
-          reason:
-            "ALREADY_GENERATED_FOR_SNAPSHOT",
+
           storage_path:
             existing.storage_path,
+
+          reason:
+            "ALREADY_GENERATED_FOR_SNAPSHOT",
+
+          output_mode:
+            outputMode,
         });
 
         continue;
@@ -595,7 +631,7 @@ export default async function handler(req, res) {
         );
 
       /* ===================================================
-         RENDER DOCX
+         RENDERIZAR DOCX
       =================================================== */
 
       const zip =
@@ -687,7 +723,7 @@ export default async function handler(req, res) {
           : 1;
 
       /* ===================================================
-         NOMBRE DE CRÉDITO
+         NOMBRE DEL CRÉDITO
       =================================================== */
 
       const loanNumber =
@@ -706,38 +742,58 @@ export default async function handler(req, res) {
         `${template.tipo_documento}_${loanNumber}_v${documentVersion}.docx`;
 
       /* ===================================================
-         DOCX -> PDF
+         DEFINIR ARCHIVO FINAL
       =================================================== */
 
-      const pdfBuffer =
-        await convertDocxToPdf(
-          docxBuffer,
-          docxFilename
-        );
+      let finalBuffer;
+      let finalFilename;
+      let finalMimeType;
+
+      if (
+        outputMode === "PDF"
+      ) {
+        finalBuffer =
+          await convertDocxToPdf(
+            docxBuffer,
+            docxFilename
+          );
+
+        finalFilename =
+          `${template.tipo_documento}_${loanNumber}_v${documentVersion}.pdf`;
+
+        finalMimeType =
+          "application/pdf";
+      } else {
+        finalBuffer =
+          docxBuffer;
+
+        finalFilename =
+          docxFilename;
+
+        finalMimeType =
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      }
 
       /* ===================================================
-         HASH PDF
+         HASH DEL DOCUMENTO FINAL
       =================================================== */
 
       const fileHash =
         crypto
           .createHash("sha256")
-          .update(pdfBuffer)
+          .update(finalBuffer)
           .digest("hex");
-
-      const pdfFilename =
-        `${template.tipo_documento}_${loanNumber}_v${documentVersion}.pdf`;
 
       const storagePath =
         [
           "contracts",
           contract.id,
           `snapshot-${snapshot.snapshot_version}`,
-          pdfFilename,
+          finalFilename,
         ].join("/");
 
       /* ===================================================
-         GUARDAR PDF
+         GUARDAR DOCUMENTO
       =================================================== */
 
       const {
@@ -749,17 +805,18 @@ export default async function handler(req, res) {
         )
         .upload(
           storagePath,
-          pdfBuffer,
+          finalBuffer,
           {
             contentType:
-              "application/pdf",
+              finalMimeType,
+
             upsert: false,
           }
         );
 
       if (uploadError) {
         throw new Error(
-          `No se pudo guardar ${pdfFilename}: ${uploadError.message}`
+          `No se pudo guardar ${finalFilename}: ${uploadError.message}`
         );
       }
 
@@ -832,7 +889,7 @@ export default async function handler(req, res) {
         }
 
         throw new Error(
-          `No se pudo registrar ${pdfFilename}.`
+          `No se pudo registrar ${finalFilename}.`
         );
       }
 
@@ -864,7 +921,7 @@ export default async function handler(req, res) {
             usuario.id,
 
           source:
-            "TRISAL_DOCUMENT_GENERATOR_V6",
+            "TRISAL_DOCUMENT_GENERATOR_V7",
 
           payload: {
             document_id:
@@ -888,8 +945,14 @@ export default async function handler(req, res) {
             storage_path:
               storagePath,
 
+            filename:
+              finalFilename,
+
+            output_mode:
+              outputMode,
+
             mime_type:
-              "application/pdf",
+              finalMimeType,
 
             sha256:
               fileHash,
@@ -920,13 +983,16 @@ export default async function handler(req, res) {
           templateVersion,
 
         filename:
-          pdfFilename,
+          finalFilename,
 
         storage_path:
           storagePath,
 
+        output_mode:
+          outputMode,
+
         mime_type:
-          "application/pdf",
+          finalMimeType,
 
         sha256:
           fileHash,
@@ -939,7 +1005,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       11. ACTUALIZAR CONTRATO
+       12. ACTUALIZAR CONTRATO
     ===================================================== */
 
     const {
@@ -966,14 +1032,17 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       12. RESPUESTA
+       13. RESPUESTA
     ===================================================== */
 
     return res.status(200).json({
       ok: true,
 
       architecture:
-        "SNAPSHOT_V6",
+        "SNAPSHOT_V7",
+
+      output_mode:
+        outputMode,
 
       contract_id:
         contract.id,
@@ -1010,12 +1079,12 @@ export default async function handler(req, res) {
 
       message:
         generatedDocuments.length > 0
-          ? `${generatedDocuments.length} documentos PDF fueron generados.`
-          : "Los documentos de este snapshot ya habían sido generados.",
+          ? `${generatedDocuments.length} documentos ${outputMode} fueron generados.`
+          : `Los documentos ${outputMode} de este snapshot ya habían sido generados.`,
     });
   } catch (error) {
     console.error(
-      "TRISAL DOCUMENT GENERATOR V6:",
+      "TRISAL DOCUMENT GENERATOR V7:",
       error
     );
 
@@ -1031,6 +1100,7 @@ export default async function handler(req, res) {
 
 /* =========================================================
    DOCX -> PDF
+   SE CONSERVA PARA CUANDO REACTIVES CLOUDCONVERT
 ========================================================= */
 
 async function convertDocxToPdf(
@@ -1102,10 +1172,10 @@ async function convertDocxToPdf(
     cloudConvert.jobs
       .getExportUrls(job);
 
-  const pdfFile =
+  const convertedFile =
     files?.[0];
 
-  if (!pdfFile?.url) {
+  if (!convertedFile?.url) {
     throw new Error(
       "CloudConvert no devolvió el PDF convertido."
     );
@@ -1113,7 +1183,7 @@ async function convertDocxToPdf(
 
   const response =
     await fetch(
-      pdfFile.url
+      convertedFile.url
     );
 
   if (!response.ok) {
@@ -1186,7 +1256,9 @@ function buildSemanticModel(S) {
       ? S.payment_schedule
       : [];
 
-  /* IDENTIFICADORES */
+  /* =====================================================
+     IDENTIFICADORES
+  ===================================================== */
 
   const rfc =
     findIdentifier(
@@ -1200,7 +1272,9 @@ function buildSemanticModel(S) {
       "CURP"
     );
 
-  /* CONTACTOS */
+  /* =====================================================
+     CONTACTOS
+  ===================================================== */
 
   const email =
     findContact(
@@ -1218,7 +1292,9 @@ function buildSemanticModel(S) {
       "PHONE"
     );
 
-  /* DOMICILIO */
+  /* =====================================================
+     DOMICILIO
+  ===================================================== */
 
   const address =
     addresses.find(
@@ -1239,7 +1315,9 @@ function buildSemanticModel(S) {
     addresses[0] ||
     {};
 
-  /* CUENTA BANCARIA */
+  /* =====================================================
+     CUENTA BANCARIA
+  ===================================================== */
 
   const bank =
     bankAccounts.find(
@@ -1255,7 +1333,9 @@ function buildSemanticModel(S) {
     bankAccounts[0] ||
     {};
 
-  /* TASAS */
+  /* =====================================================
+     TASAS
+  ===================================================== */
 
   const annualRate =
     numberOrNull(
@@ -1277,7 +1357,9 @@ function buildSemanticModel(S) {
       terms.opening_fee_rate
     );
 
-  /* FECHA */
+  /* =====================================================
+     FECHA
+  ===================================================== */
 
   const today =
     new Date();
@@ -1297,7 +1379,9 @@ function buildSemanticModel(S) {
     "diciembre",
   ];
 
-  /* TABLA */
+  /* =====================================================
+     TABLA DE AMORTIZACIÓN
+  ===================================================== */
 
   const paymentSchedule =
     schedule.map(
@@ -1405,7 +1489,9 @@ function buildSemanticModel(S) {
       }
     );
 
-  /* TOTALES */
+  /* =====================================================
+     TOTALES
+  ===================================================== */
 
   const totalCapital =
     schedule.reduce(
@@ -1471,7 +1557,9 @@ function buildSemanticModel(S) {
       0
     );
 
-  /* DOMICILIACIÓN */
+  /* =====================================================
+     DOMICILIACIÓN
+  ===================================================== */
 
   const firstPaymentDate =
     legacyTerms.fecha_primer_pago
@@ -1493,8 +1581,14 @@ function buildSemanticModel(S) {
         )
       : 0;
 
+  /* =====================================================
+     MODELO PARA PLANTILLAS
+  ===================================================== */
+
   return {
-    /* CONTRATO */
+    /* ===================================================
+       CONTRATO
+    =================================================== */
 
     CONTRACT_ID:
       contract.contract_id ||
@@ -1519,7 +1613,9 @@ function buildSemanticModel(S) {
       institution.RECA ||
       "",
 
-    /* ACREDITADO */
+    /* ===================================================
+       ACREDITADO
+    =================================================== */
 
     BORROWER_NAME:
       borrower.display_name ||
@@ -1564,7 +1660,9 @@ function buildSemanticModel(S) {
         : person.nationality_code ||
           "",
 
-    /* DOMICILIO */
+    /* ===================================================
+       DOMICILIO
+    =================================================== */
 
     BORROWER_ADDRESS:
       buildAddress(address),
@@ -1600,7 +1698,9 @@ function buildSemanticModel(S) {
       address.postal_code ||
       "",
 
-    /* CRÉDITO */
+    /* ===================================================
+       CRÉDITO
+    =================================================== */
 
     CREDIT_APPROVED_AMOUNT:
       formatMoney(
@@ -1673,7 +1773,9 @@ function buildSemanticModel(S) {
         2
       ),
 
-    /* TOTALES */
+    /* ===================================================
+       TOTALES
+    =================================================== */
 
     MONTO_TOTAL:
       formatMoney(
@@ -1715,7 +1817,9 @@ function buildSemanticModel(S) {
         totalPagar
       ),
 
-    /* PAGOS */
+    /* ===================================================
+       PAGOS
+    =================================================== */
 
     PERIODICIDAD:
       legacyTerms.periodicidad ||
@@ -1736,7 +1840,9 @@ function buildSemanticModel(S) {
     NUMERO_PAGOS:
       schedule.length,
 
-    /* CUENTA */
+    /* ===================================================
+       CUENTA BANCARIA
+    =================================================== */
 
     DISBURSEMENT_BANK:
       bank.institution_name ||
@@ -1770,7 +1876,9 @@ function buildSemanticModel(S) {
       borrower.display_name ||
       "",
 
-    /* DOMICILIACIÓN */
+    /* ===================================================
+       DOMICILIACIÓN
+    =================================================== */
 
     DIA_CARGO:
       firstPaymentDate
@@ -1802,7 +1910,9 @@ function buildSemanticModel(S) {
         maxPayment
       ),
 
-    /* ACREDITANTE */
+    /* ===================================================
+       ACREDITANTE
+    =================================================== */
 
     LENDER_LEGAL_NAME:
       institution.RAZON_SOCIAL ||
@@ -1876,7 +1986,9 @@ function buildSemanticModel(S) {
       institution.CORREO_UNE ||
       "",
 
-    /* UNE */
+    /* ===================================================
+       UNE
+    =================================================== */
 
     LENDER_UNE_PHONE:
       institution.TELEFONO_UNE ||
@@ -1902,7 +2014,9 @@ function buildSemanticModel(S) {
       institution.HORARIO_UNE ||
       "",
 
-    /* JURISDICCIÓN */
+    /* ===================================================
+       JURISDICCIÓN
+    =================================================== */
 
     FUERO:
       institution.FUERO ||
@@ -1931,7 +2045,9 @@ function buildSemanticModel(S) {
         .filter(Boolean)
         .join(", "),
 
-    /* FIRMA */
+    /* ===================================================
+       FIRMA
+    =================================================== */
 
     CIUDAD_FIRMA:
       institution.CIUDAD_FIRMA ||
@@ -1961,7 +2077,9 @@ function buildSemanticModel(S) {
         today
       ),
 
-    /* PERSONA MORAL */
+    /* ===================================================
+       PERSONA MORAL
+    =================================================== */
 
     PM_ESCRITURA_CONSTITUTIVA:
       organization
@@ -1989,6 +2107,16 @@ function buildSemanticModel(S) {
     PM_FECHA_INSCRIPCION_RPC:
       "",
 
+    PM_REPRESENTANTE_LEGAL:
+      organization
+        .legal_representative_name ||
+      "",
+
+    PM_CARGO_REPRESENTANTE:
+      organization
+        .legal_representative_title ||
+      "",
+
     PM_ESCRITURA_PODER:
       "",
 
@@ -2004,7 +2132,9 @@ function buildSemanticModel(S) {
     PM_PLAZA_NOTARIA_PODER:
       "",
 
-    /* OBLIGADOS */
+    /* ===================================================
+       OBLIGADOS SOLIDARIOS
+    =================================================== */
 
     OBLIGADO_NOMBRE:
       "",
@@ -2024,7 +2154,9 @@ function buildSemanticModel(S) {
     OBLIGADO_2_NOMBRE:
       "",
 
-    /* TABLA */
+    /* ===================================================
+       TABLA
+    =================================================== */
 
     PAYMENT_SCHEDULE:
       paymentSchedule,
@@ -2071,7 +2203,9 @@ function findContact(
 function buildAddress(
   address
 ) {
-  if (!address) return "";
+  if (!address) {
+    return "";
+  }
 
   return [
     [
@@ -2098,6 +2232,10 @@ function buildAddress(
     .join(", ");
 }
 
+/* =========================================================
+   NÚMEROS
+========================================================= */
+
 function numberOrNull(
   value
 ) {
@@ -2117,6 +2255,10 @@ function numberOrNull(
     : null;
 }
 
+/* =========================================================
+   DINERO
+========================================================= */
+
 function formatMoney(
   value
 ) {
@@ -2132,31 +2274,65 @@ function formatMoney(
   );
 }
 
+/* =========================================================
+   PORCENTAJES
+
+   IMPORTANTE:
+   El snapshot guarda las tasas como decimal.
+
+   Ejemplo:
+   0.49 -> 49.00
+   0.03 -> 3.00
+========================================================= */
+
 function formatPercent(
   decimalRate,
   decimals = 2
 ) {
   if (
     decimalRate === null ||
-    decimalRate === undefined
+    decimalRate === undefined ||
+    decimalRate === ""
+  ) {
+    return "";
+  }
+
+  const value =
+    Number(decimalRate);
+
+  if (
+    !Number.isFinite(value)
   ) {
     return "";
   }
 
   return (
-    Number(
-      decimalRate
-    ) * 100
+    value * 100
   ).toFixed(decimals);
 }
+
+/* =========================================================
+   FECHAS
+========================================================= */
 
 function formatDateShort(
   value
 ) {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
 
   const date =
     normalizeDate(value);
+
+  if (
+    !date ||
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
 
   return date.toLocaleDateString(
     "es-MX",
@@ -2171,10 +2347,21 @@ function formatDateShort(
 function formatDateLong(
   value
 ) {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
 
   const date =
     normalizeDate(value);
+
+  if (
+    !date ||
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
 
   return date.toLocaleDateString(
     "es-MX",
@@ -2198,6 +2385,12 @@ function normalizeDate(
   const text =
     String(value);
 
+  /*
+    Si recibimos solamente YYYY-MM-DD,
+    utilizamos mediodía para evitar que
+    la zona horaria cambie el día.
+  */
+
   if (
     /^\d{4}-\d{2}-\d{2}$/.test(
       text
@@ -2210,6 +2403,14 @@ function normalizeDate(
 
   return new Date(text);
 }
+
+/* =========================================================
+   MONTO EN LETRA
+
+   POR AHORA CONSERVAMOS EL COMPORTAMIENTO ACTUAL.
+   Más adelante podemos sustituirlo por conversión real
+   de números a letras.
+========================================================= */
 
 function moneyInWordsPlaceholder(
   value
@@ -2247,6 +2448,10 @@ function normalizeContractualModel(
   return normalized;
 }
 
+/* =========================================================
+   NORMALIZAR VALORES
+========================================================= */
+
 function normalizeContractualValue(
   key,
   value
@@ -2258,14 +2463,21 @@ function normalizeContractualValue(
     return value;
   }
 
-  if (Array.isArray(value)) {
+  /* =====================================================
+     ARRAYS
+  ===================================================== */
+
+  if (
+    Array.isArray(value)
+  ) {
     return value.map(
       (item) => {
         if (
           item &&
           typeof item === "object"
         ) {
-          const normalizedItem = {};
+          const normalizedItem =
+            {};
 
           for (
             const [
@@ -2292,10 +2504,15 @@ function normalizeContractualValue(
     );
   }
 
+  /* =====================================================
+     OBJETOS
+  ===================================================== */
+
   if (
     typeof value === "object"
   ) {
-    const normalizedObject = {};
+    const normalizedObject =
+      {};
 
     for (
       const [
@@ -2317,11 +2534,19 @@ function normalizeContractualValue(
     return normalizedObject;
   }
 
+  /* =====================================================
+     NÚMEROS / BOOLEANOS
+  ===================================================== */
+
   if (
     typeof value !== "string"
   ) {
     return value;
   }
+
+  /* =====================================================
+     CAMPOS QUE NO DEBEN CONVERTIRSE A MAYÚSCULAS
+  ===================================================== */
 
   if (
     shouldPreserveContractualValue(
@@ -2336,6 +2561,10 @@ function normalizeContractualValue(
   );
 }
 
+/* =========================================================
+   CAMPOS PROTEGIDOS
+========================================================= */
+
 function shouldPreserveContractualValue(
   key
 ) {
@@ -2346,12 +2575,16 @@ function shouldPreserveContractualValue(
 
   const exactPreserveKeys =
     new Set([
+      /* IDs */
+
       "CONTRACT_ID",
       "SNAPSHOT_ID",
       "APPLICATION_ID",
       "PARTY_ID",
       "CREDIT_ACCOUNT_ID",
       "DOCUMENT_ID",
+
+      /* CORREOS */
 
       "BORROWER_EMAIL",
       "CORREO_ACREDITADO",
@@ -2360,11 +2593,15 @@ function shouldPreserveContractualValue(
       "CORREO_UNE",
       "OBLIGADO_CORREO",
 
+      /* CUENTAS */
+
       "DISBURSEMENT_ACCOUNT_NUMBER",
       "NUMERO_CUENTA",
       "DISBURSEMENT_CLABE",
       "CLABE",
       "CLABE_ULTIMOS_4",
+
+      /* TELÉFONOS */
 
       "BORROWER_PHONE",
       "TELEFONO",
@@ -2372,43 +2609,70 @@ function shouldPreserveContractualValue(
       "TELEFONO_UNE",
       "OBLIGADO_TELEFONO",
 
+      /* MONTOS Y TASAS */
+
       "CREDIT_APPROVED_AMOUNT",
       "MONTO_CREDITO",
+
       "CREDIT_TERM_MONTHS",
       "PLAZO_MESES",
+
       "CREDIT_ANNUAL_RATE",
       "TASA_ORDINARIA",
+
       "CREDIT_MORATORY_RATE",
       "TASA_MORATORIA",
+
       "CREDIT_CAT",
       "CAT",
+
       "CREDIT_OPENING_FEE_RATE",
       "COMISION_APERTURA",
+
       "MONTO_TOTAL",
+
       "TOTAL_CAPITAL",
       "TOTAL_INTERES",
       "TOTAL_IVA_INTERES",
+
       "TOTAL_COMISIONES",
       "TOTAL_IVA_COMISIONES",
       "TOTAL_COMISIONES_CON_IVA",
+
       "TOTAL_PAGAR",
+
       "NUMERO_PAGOS",
+
       "DIA_CARGO",
+
       "MONTO_MAXIMO_CARGO",
+
+      /* FIRMA */
 
       "DIA_FIRMA",
       "ANIO_FIRMA",
 
+      /* TABLA DE AMORTIZACIÓN */
+
       "NUMERO",
       "FECHA",
+
       "SALDO_INICIAL",
+
       "PRINCIPAL",
+
       "INTERES",
+
       "IVA_INTERES",
+
       "COMISIONES",
+
       "IVA_COMISION",
+
       "COMISIONES_CON_IVA",
+
       "TOTAL",
+
       "SALDO_FINAL",
     ]);
 
@@ -2419,6 +2683,10 @@ function shouldPreserveContractualValue(
   ) {
     return true;
   }
+
+  /* =====================================================
+     PROTEGER POR FRAGMENTO
+  ===================================================== */
 
   const protectedFragments = [
     "_ID",
@@ -2439,6 +2707,13 @@ function shouldPreserveContractualValue(
       )
   );
 }
+
+/* =========================================================
+   TEXTO CONTRACTUAL
+
+   Todo el texto contractual se normaliza a mayúsculas,
+   excepto los campos protegidos arriba.
+========================================================= */
 
 function normalizeContractualText(
   value
