@@ -178,6 +178,10 @@
   }
 }
 
+/* =========================================================
+   SPACER
+========================================================= */
+
 #spacer {
   height: 88px;
   border-top: 1px solid var(--border);
@@ -192,127 +196,224 @@
 ========================================================= */
 
 .regulatoryFooter {
-  width: 100% !important;
-  margin-top: 14px !important;
-  padding-top: 14px !important;
+  width: 100%;
+  margin-top: 18px;
+  padding-top: 16px;
 
-  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 
-  gap: 8px !important;
+  gap: 12px;
 }
 
 .regulatoryFooterTitle {
-  margin: 0 !important;
+  margin: 0;
 
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: rgba(255, 255, 255, 0.68);
 
-  font-size: 9px !important;
-  font-weight: 600 !important;
+  font-size: 11px;
+  font-weight: 600;
 
-  line-height: 1.2 !important;
-  text-align: center !important;
+  line-height: 1.3;
+  text-align: center;
+
+  letter-spacing: 0.01em;
 }
 
 .regulatoryLogos {
-  width: auto !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  gap: 14px;
 
-  gap: 10px !important;
-
-  flex-wrap: nowrap !important;
+  flex-wrap: wrap;
 }
 
 .regulatoryLogoLink {
-  width: 92px !important;
-  height: 42px !important;
+  width: 96px;
+  height: 48px;
 
-  min-width: 92px !important;
-  min-height: 42px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-  max-width: 92px !important;
-  max-height: 42px !important;
+  padding: 4px 6px;
 
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  overflow: hidden;
 
-  padding: 4px 6px !important;
+  background: #ffffff;
 
-  overflow: hidden !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
 
-  background: #ffffff !important;
+  text-decoration: none;
 
-  border: none !important;
-  border-radius: 5px !important;
+  box-shadow:
+    0 2px 7px
+    rgba(0, 0, 0, 0.08);
 
-  text-decoration: none !important;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
+}
 
-  box-shadow: none !important;
+.regulatoryLogoLink:hover {
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 4px 10px
+    rgba(0, 0, 0, 0.12);
 }
 
 .regulatoryLogo {
-  display: block !important;
+  display: block;
 
-  width: auto !important;
-  height: auto !important;
+  width: auto;
+  height: auto;
 
-  object-fit: contain !important;
-  object-position: center !important;
+  object-fit: contain;
+  object-position: center;
 }
 
+/*
+  Ajustamos cada logo por separado porque
+  los archivos originales tienen proporciones
+  y márgenes internos diferentes.
+*/
+
 .regulatoryLogoCondusef {
-  width: 74px !important;
-  max-width: 74px !important;
+  width: 78px;
+  height: 34px;
 
-  height: 30px !important;
-  max-height: 30px !important;
-
-  transform: none !important;
+  max-width: 78px;
+  max-height: 34px;
 }
 
 .regulatoryLogoCnbv {
-  width: 70px !important;
-  max-width: 70px !important;
+  width: 76px;
+  height: 32px;
 
-  height: 29px !important;
-  max-height: 29px !important;
-
-  transform: none !important;
+  max-width: 76px;
+  max-height: 32px;
 }
 
-@media (max-width: 700px) {
-  .regulatoryLogoLink {
-    width: 82px !important;
-    min-width: 82px !important;
-    max-width: 82px !important;
+/* =========================================================
+   PRIVACIDAD
+========================================================= */
 
-    height: 38px !important;
-    min-height: 38px !important;
-    max-height: 38px !important;
-  }
+.privacyCard {
+  width: 100%;
+  max-width: 920px;
+}
 
-  .regulatoryLogoCondusef {
-    width: 66px !important;
-    max-width: 66px !important;
+.privacyCard p {
+  line-height: 1.7;
+}
 
-    height: 26px !important;
-    max-height: 26px !important;
-  }
+.privacyDocumentLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
-  .regulatoryLogoCnbv {
-    width: 63px !important;
-    max-width: 63px !important;
+  min-height: 42px;
 
-    height: 25px !important;
-    max-height: 25px !important;
-  }
+  margin-top: 14px;
+
+  padding: 10px 17px;
+
+  border-radius: 8px;
+
+  background: var(--navy, #111a2a);
+
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 800;
+
+  line-height: 1;
+
+  text-decoration: none;
+
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.privacyDocumentLink:hover {
+  transform: translateY(-1px);
+
+  background: #1c2940;
+
+  box-shadow:
+    0 6px 16px
+    rgba(17, 26, 42, 0.12);
+}
+
+.privacyDocumentLink:focus-visible {
+  outline: 2px solid var(--gold, #9c7427);
+  outline-offset: 3px;
+}
+
+.privacyDocumentInfo {
+  margin-top: 18px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 6px;
+
+  padding: 13px 15px;
+
+  background: #f5f7f9;
+
+  border: 1px solid var(--border, #dfe4ea);
+  border-radius: 8px;
+}
+
+.privacyDocumentInfo strong {
+  display: block;
+
+  color: var(--text, #151c2a);
+
+  font-size: 12px;
+  font-weight: 800;
+
+  line-height: 1.4;
+}
+
+.privacyDocumentInfo span {
+  display: block;
+
+  color: var(--muted, #667489);
+
+  font-size: 11px;
+
+  line-height: 1.55;
+}
+
+/* =========================================================
+   LINKS LEGALES EN FORMULARIOS
+========================================================= */
+
+.inlineLegalLink {
+  color: var(--gold, #9c7427);
+
+  font-weight: 800;
+
+  text-decoration: underline;
+
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.inlineLegalLink:hover {
+  color: #765617;
 }
 
 /* =========================================================
@@ -349,7 +450,7 @@
 @media (max-width: 900px) {
   .regulatoryFooter {
     margin-top: 16px;
-    padding-top: 15px;
+    padding-top: 14px;
   }
 
   .regulatoryLogos {
@@ -357,22 +458,24 @@
   }
 
   .regulatoryLogoLink {
-    width: 98px;
-    height: 46px;
-
-    padding:
-      6px
-      7px;
+    width: 90px;
+    height: 44px;
   }
 
   .regulatoryLogoCondusef {
-    max-width: 78px;
-    max-height: 27px;
+    width: 72px;
+    height: 30px;
+
+    max-width: 72px;
+    max-height: 30px;
   }
 
   .regulatoryLogoCnbv {
-    max-width: 72px;
-    max-height: 25px;
+    width: 70px;
+    height: 29px;
+
+    max-width: 70px;
+    max-height: 29px;
   }
 }
 
@@ -386,7 +489,7 @@
   }
 
   .regulatoryFooterTitle {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .regulatoryLogos {
@@ -394,22 +497,26 @@
   }
 
   .regulatoryLogoLink {
-    width: 90px;
-    height: 42px;
+    width: 84px;
+    height: 41px;
 
-    padding:
-      5px
-      7px;
+    padding: 4px;
   }
 
   .regulatoryLogoCondusef {
-    max-width: 72px;
-    max-height: 24px;
+    width: 66px;
+    height: 27px;
+
+    max-width: 66px;
+    max-height: 27px;
   }
 
   .regulatoryLogoCnbv {
-    max-width: 67px;
-    max-height: 23px;
+    width: 64px;
+    height: 26px;
+
+    max-width: 64px;
+    max-height: 26px;
   }
 
   .privacyDocumentLink {
@@ -421,8 +528,6 @@
   }
 
   .privacyDocumentInfo {
-    padding:
-      12px
-      13px;
+    padding: 12px 13px;
   }
 }
