@@ -225,7 +225,7 @@ fechaPrimerPago: "",
     /* OFERTA DEMO */
     montoAprobado: "10000",
     plazoAprobado: "6",
-    tasaAprobada: "49",
+    tasaAprobada: "55",
     tasaMoratoriaAprobada: "73.5",
     comisionAprobada: "3",
     catAprobado: "68.5",
@@ -273,20 +273,20 @@ fechaPrimerPago: "",
     mercadoObjetivo:
       "Personas físicas con actividad empresarial, profesionistas, comerciantes y personas morales que requieran financiamiento para capital de trabajo, inventario, adquisición de equipo, liquidez u otros destinos autorizados.",
 
-    montoMinimo: 10000,
-    montoMaximo: null,
+    montoMinimo: 1000,
+    montoMaximo: 300000,
 
     plazoMinimo: 3,
     plazoMaximo: 12,
 
     tasaTipo: "Fija",
 
-    tasaMaxima: null,
-    catPromedio: null,
+    tasaMaxima: 80,
+    catPromedio: 90,
     fechaCalculoCat: null,
 
     metodologiaCat:
-      "Calculado conforme a la metodología, fórmula, componentes y supuestos aplicables establecidos por Banco de México.",
+      "CAT promedio 90.0% Sin IVA. Para fines informativos y de comparación. Calculado conforme a la metodología, fórmula, componentes y supuestos establecidos por Banco de México.",
   };
 
   /* =========================================================
