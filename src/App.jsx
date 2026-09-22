@@ -5403,7 +5403,7 @@ function Privacidad({ empresa }) {
           </strong>
 
           <span>
-            Consulta el Aviso de Privacidad de TRISAL antes de
+             Consulta el Aviso de Privacidad de TRISAL antes de
             proporcionar o autorizar el tratamiento de tus datos.
           </span>
         </div>
