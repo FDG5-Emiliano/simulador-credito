@@ -325,9 +325,10 @@ export default async function handler(req, res) {
        8. MODELO SEMÁNTICO
     ===================================================== */
 
-    const semantic =
-      buildSemanticModel(S);
-
+const semantic =
+  normalizeContractualModel(
+    buildSemanticModel(S)
+  );
 
     /* =====================================================
        9. PLANTILLAS
@@ -2234,4 +2235,353 @@ function moneyInWordsPlaceholder(
   value
 ) {
   return `${formatMoney(value)} PESOS 00/100 M.N.`;
+}
+
+/* =========================================================
+   NORMALIZACIÓN CONTRACTUAL
+========================================================= */
+
+/*
+  Esta función normaliza únicamente la representación
+  utilizada para generar documentos.
+
+  NO modifica:
+  - snapshot contractual
+  - core.parties
+  - origination
+  - Aplicaciones
+  - datos originales del cliente
+
+  El objetivo es que los documentos contractuales tengan
+  una presentación consistente en MAYÚSCULAS.
+*/
+
+function normalizeContractualModel(
+  model
+) {
+  if (
+    !model ||
+    typeof model !== "object"
+  ) {
+    return model;
+  }
+
+  const normalized = {};
+
+  for (
+    const [key, value] of
+    Object.entries(model)
+  ) {
+    normalized[key] =
+      normalizeContractualValue(
+        key,
+        value
+      );
+  }
+
+  return normalized;
+}
+
+
+/* =========================================================
+   NORMALIZAR VALOR
+========================================================= */
+
+function normalizeContractualValue(
+  key,
+  value
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return value;
+  }
+
+  /*
+    Arrays, principalmente PAYMENT_SCHEDULE / PAGOS.
+  */
+
+  if (Array.isArray(value)) {
+    return value.map(
+      (item) => {
+        if (
+          item &&
+          typeof item === "object"
+        ) {
+          const normalizedItem = {};
+
+          for (
+            const [
+              childKey,
+              childValue,
+            ] of Object.entries(
+              item
+            )
+          ) {
+            normalizedItem[
+              childKey
+            ] =
+              normalizeContractualValue(
+                childKey,
+                childValue
+              );
+          }
+
+          return normalizedItem;
+        }
+
+        return item;
+      }
+    );
+  }
+
+  /*
+    Objetos anidados.
+  */
+
+  if (
+    typeof value === "object"
+  ) {
+    const normalizedObject = {};
+
+    for (
+      const [
+        childKey,
+        childValue,
+      ] of Object.entries(
+        value
+      )
+    ) {
+      normalizedObject[
+        childKey
+      ] =
+        normalizeContractualValue(
+          childKey,
+          childValue
+        );
+    }
+
+    return normalizedObject;
+  }
+
+  /*
+    Números y booleanos nunca se transforman.
+  */
+
+  if (
+    typeof value !== "string"
+  ) {
+    return value;
+  }
+
+  /*
+    Campos que deben conservar exactamente su representación.
+
+    Muy importante:
+    NO convertimos correos, UUIDs, hashes, rutas,
+    URLs, claves técnicas ni números bancarios.
+  */
+
+  if (
+    shouldPreserveContractualValue(
+      key
+    )
+  ) {
+    return value;
+  }
+
+  /*
+    El resto de los textos contractuales se normaliza.
+  */
+
+  return normalizeContractualText(
+    value
+  );
+}
+
+
+/* =========================================================
+   CAMPOS QUE NO DEBEN CONVERTIRSE
+========================================================= */
+
+function shouldPreserveContractualValue(
+  key
+) {
+  const normalizedKey =
+    String(key || "")
+      .trim()
+      .toUpperCase();
+
+  const exactPreserveKeys =
+    new Set([
+      /*
+        Identificadores técnicos
+      */
+
+      "CONTRACT_ID",
+      "SNAPSHOT_ID",
+      "APPLICATION_ID",
+      "PARTY_ID",
+      "CREDIT_ACCOUNT_ID",
+      "DOCUMENT_ID",
+
+      /*
+        Correo
+      */
+
+      "BORROWER_EMAIL",
+      "CORREO_ACREDITADO",
+      "CORREO_ACREDITANTE",
+      "LENDER_UNE_EMAIL",
+      "CORREO_UNE",
+      "OBLIGADO_CORREO",
+
+      /*
+        Cuenta bancaria
+      */
+
+      "DISBURSEMENT_ACCOUNT_NUMBER",
+      "NUMERO_CUENTA",
+      "DISBURSEMENT_CLABE",
+      "CLABE",
+      "CLABE_ULTIMOS_4",
+
+      /*
+        Teléfonos
+      */
+
+      "BORROWER_PHONE",
+      "TELEFONO",
+      "LENDER_UNE_PHONE",
+      "TELEFONO_UNE",
+      "OBLIGADO_TELEFONO",
+
+      /*
+        Datos numéricos ya formateados
+      */
+
+      "CREDIT_APPROVED_AMOUNT",
+      "MONTO_CREDITO",
+      "CREDIT_TERM_MONTHS",
+      "PLAZO_MESES",
+      "CREDIT_ANNUAL_RATE",
+      "TASA_ORDINARIA",
+      "CREDIT_MORATORY_RATE",
+      "TASA_MORATORIA",
+      "CREDIT_CAT",
+      "CAT",
+      "CREDIT_OPENING_FEE_RATE",
+      "COMISION_APERTURA",
+      "MONTO_TOTAL",
+      "TOTAL_CAPITAL",
+      "TOTAL_INTERES",
+      "TOTAL_IVA_INTERES",
+      "TOTAL_COMISIONES",
+      "TOTAL_IVA_COMISIONES",
+      "TOTAL_COMISIONES_CON_IVA",
+      "TOTAL_PAGAR",
+      "NUMERO_PAGOS",
+      "DIA_CARGO",
+      "MONTO_MAXIMO_CARGO",
+
+      /*
+        Fechas numéricas o partes de fecha
+      */
+
+      "DIA_FIRMA",
+      "ANIO_FIRMA",
+
+      /*
+        Tabla de amortización
+      */
+
+      "NUMERO",
+      "FECHA",
+      "SALDO_INICIAL",
+      "PRINCIPAL",
+      "INTERES",
+      "IVA_INTERES",
+      "COMISIONES",
+      "IVA_COMISION",
+      "COMISIONES_CON_IVA",
+      "TOTAL",
+      "SALDO_FINAL",
+    ]);
+
+  if (
+    exactPreserveKeys.has(
+      normalizedKey
+    )
+  ) {
+    return true;
+  }
+
+  /*
+    Protección adicional para futuras variables técnicas.
+  */
+
+  const protectedFragments = [
+    "_ID",
+    "UUID",
+    "HASH",
+    "SHA256",
+    "STORAGE_PATH",
+    "URL",
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+  ];
+
+  return protectedFragments.some(
+    (fragment) =>
+      normalizedKey.includes(
+        fragment
+      )
+  );
+}
+
+
+/* =========================================================
+   NORMALIZACIÓN DE TEXTO
+========================================================= */
+
+function normalizeContractualText(
+  value
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  return String(value)
+    /*
+      Normalización Unicode.
+
+      Evita inconsistencias de caracteres equivalentes
+      provenientes de diferentes navegadores/dispositivos.
+    */
+    .normalize("NFC")
+
+    /*
+      Quitamos espacios sobrantes al inicio/final.
+    */
+    .trim()
+
+    /*
+      Evitamos múltiples espacios accidentales.
+    */
+    .replace(
+      /\s+/g,
+      " "
+    )
+
+    /*
+      Presentación contractual.
+    */
+    .toLocaleUpperCase(
+      "es-MX"
+    );
 }

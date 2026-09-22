@@ -128,8 +128,6 @@ export default function App() {
 
   const [guardando, setGuardando] = useState(false);
 
-  const [documentosContractuales, setDocumentosContractuales] = useState({});
-
   const [archivos, setArchivos] = useState({});
 
   const yaRecuperoRef = useRef(false);
@@ -583,8 +581,22 @@ fechaPrimerPago: "",
         password: "",
       };
 
+      /*
+        Toda fila de Aplicaciones necesita folio desde que nace como DRAFT.
+        Esto evita que el auto-guardado falle antes de enviar la solicitud.
+      */
+      const folioBorrador =
+        folio ||
+        `TRI-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      if (!folio) {
+        setFolio(folioBorrador);
+      }
+
       const payload = {
         user_id: usuario.id,
+
+        folio: folioBorrador,
 
         tipo_persona: datos.tipoPersona || null,
 
@@ -974,124 +986,6 @@ if (data.estado === "DISBURSED") {
   }
 
   /* =========================================================
-     DOCUMENTOS CONTRACTUALES
-  ========================================================= */
-
-  async function cargarDocumentosContractuales() {
-    try {
-      if (!solicitudId) {
-        setDocumentosContractuales({});
-        return;
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        setDocumentosContractuales({});
-        return;
-      }
-
-      const response = await fetch(
-        `/api/documentos-contractuales?aplicacion_id=${encodeURIComponent(
-          solicitudId
-        )}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      const body = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          body?.error ||
-            `Error ${response.status} recuperando documentos contractuales.`
-        );
-      }
-
-      const latest = {};
-
-      for (const documento of body?.documents || []) {
-        if (!latest[documento.document_type]) {
-          latest[documento.document_type] = documento;
-        }
-      }
-
-      setDocumentosContractuales(latest);
-    } catch (error) {
-      console.error("Error cargando documentos contractuales:", error);
-      setDocumentosContractuales({});
-    }
-  }
-
-  async function abrirDocumento(tipoDocumento) {
-    const nuevaVentana = window.open("about:blank", "_blank");
-
-    try {
-      if (!solicitudId) {
-        throw new Error("No encontramos el ID de la solicitud.");
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
-      }
-
-      const response = await fetch(
-        `/api/documentos-contractuales?aplicacion_id=${encodeURIComponent(
-          solicitudId
-        )}&tipo_documento=${encodeURIComponent(tipoDocumento)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      const body = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          body?.error || `Error ${response.status} abriendo el documento.`
-        );
-      }
-
-      if (!body?.document?.signed_url) {
-        throw new Error("No se pudo generar la liga segura del documento.");
-      }
-
-      if (nuevaVentana) {
-        nuevaVentana.opener = null;
-        nuevaVentana.location.href = body.document.signed_url;
-      } else {
-        window.location.href = body.document.signed_url;
-      }
-    } catch (error) {
-      if (nuevaVentana) {
-        nuevaVentana.close();
-      }
-
-      console.error("Error abriendo documento contractual:", error);
-      alert(error?.message || "No se pudo abrir el documento.");
-    }
-  }
-
-  useEffect(() => {
-    if (pantalla === "contratos" && solicitudId) {
-      cargarDocumentosContractuales();
-    }
-  }, [pantalla, solicitudId]);
-
-  /* =========================================================
      FORM HELPERS
   ========================================================= */
 
@@ -1144,11 +1038,6 @@ async function prepararContratacion() {
       return false;
     }
 
-    if (!datos.fechaPrimerPago) {
-      mostrarError("Selecciona la fecha del primer pago.");
-      return false;
-    }
-
     const titular =
       datos.tipoPersona === "moral"
         ? datos.razonSocial?.trim()
@@ -1189,7 +1078,6 @@ async function prepararContratacion() {
       await supabase.functions.invoke("generar-expediente", {
         body: {
           aplicacion_id: solicitudId,
-          fecha_primer_pago: datos.fechaPrimerPago,
         },
       });
 
@@ -2607,11 +2495,8 @@ async function prepararContratacion() {
             ir={ir}
             regresar={() => regresarA("cuentaBanco")}
             solicitudId={solicitudId}
-            guardando={guardando}
-            setGuardando={setGuardando}
-            documentosContractuales={documentosContractuales}
-            abrirDocumento={abrirDocumento}
-            recargarDocumentos={cargarDocumentosContractuales}
+guardando={guardando}
+setGuardando={setGuardando}
             trackerProps={{
               pasoActual: 6,
               pasoMaximo,
@@ -3856,12 +3741,6 @@ function DeclaracionPep({
             patrimoniales con una PEP.
           </p>
 
-          <p>
-            La mayoría de las personas no se encuentran dentro de esta
-            categoría. Si nunca has desempeñado una función pública de alta
-            relevancia y no tienes alguno de estos vínculos, normalmente
-            deberás seleccionar “No”.
-          </p>
         </div>
 
         <SectionDivider
@@ -4961,7 +4840,7 @@ function CuentaBanco({
   return (
     <Pagina
       titulo="Cuenta bancaria"
-      subtitulo="Confirma la cuenta donde deseas recibir el crédito y prepara tu calendario de pagos."
+      subtitulo="Confirma la cuenta donde deseas recibir el crédito. El calendario de pagos se calculará automáticamente con las condiciones aprobadas."
     >
       <Tracker {...trackerProps} />
 
@@ -4985,17 +4864,10 @@ function CuentaBanco({
           }
         />
 
-        <Campo
-          label="Fecha del primer pago *"
-          type="date"
-          value={datos.fechaPrimerPago}
-          onChange={(v) =>
-            actualizar(
-              "fechaPrimerPago",
-              v
-            )
-          }
-        />
+        <div className="notice">
+          La fecha del primer pago y el calendario se determinarán automáticamente
+          al preparar el expediente contractual. No necesitas seleccionar una fecha.
+        </div>
 
         {datos.clabe.length > 0 && (
           <div className="notice">
@@ -5040,7 +4912,6 @@ function Contratos({
   setGuardando,
   documentosContractuales,
   abrirDocumento,
-  recargarDocumentos,
 }) {
     return (
     <Pagina
@@ -5072,6 +4943,81 @@ function Contratos({
   disponible={Boolean(documentosContractuales?.DOMICILIACION)}
   onVer={() => abrirDocumento("DOMICILIACION")}
 />
+
+<div style={{ marginTop: "24px", marginBottom: "16px" }}>
+  <button
+    type="button"
+    className="primary"
+    disabled={guardando}
+    onClick={async () => {
+      try {
+        setGuardando(true);
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          alert("No hay una sesión activa.");
+          return;
+        }
+
+        if (!solicitudId) {
+          alert("No encontramos el ID de la solicitud.");
+          return;
+        }
+
+        const response = await fetch(
+          "/api/generar-documentos-contractuales",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              aplicacion_id: solicitudId,
+            }),
+          }
+        );
+
+        const body = await response.json();
+
+        if (!response.ok) {
+          console.error("ERROR GENERADOR:", body);
+
+          alert(
+            body?.error ||
+              `Error ${response.status} generando documentos.`
+          );
+
+          return;
+        }
+
+        console.log("DOCUMENTOS GENERADOS:", body);
+
+   alert(
+  `Generación terminada. Se generaron ${
+    body?.documents?.length || 0
+  } documentos.`
+);
+      } catch (error) {
+        console.error("ERROR:", error);
+
+        alert(
+          error?.message ||
+            "Ocurrió un error generando los documentos."
+        );
+      } finally {
+        setGuardando(false);
+      }
+    }}
+  >
+    {guardando
+      ? "Generando documentos..."
+      : "Probar generación de documentos"}
+  </button>
+</div>
 
         <NavButtons
           atras={regresar}
