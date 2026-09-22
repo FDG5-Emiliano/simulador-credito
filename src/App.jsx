@@ -2126,6 +2126,31 @@ async function prepararContratacion() {
     datos.plazoAprobado,
   ]);
 
+  function abrirDocumento(tipo) {
+  const documento = documentosContractuales[tipo];
+
+  if (!documento) {
+    alert("El documento todavía no está disponible.");
+    return;
+  }
+
+  const url =
+    documento.url ||
+    documento.signedUrl ||
+    documento.signed_url;
+
+  if (!url) {
+    alert("No encontramos el enlace del documento.");
+    return;
+  }
+
+  window.open(
+    url,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
+
   if (cargandoSesion) {
     return (
       <div className="app">
@@ -2507,6 +2532,7 @@ async function prepararContratacion() {
   guardando={guardando}
   setGuardando={setGuardando}
   documentosContractuales={documentosContractuales}
+  setDocumentosContractuales={setDocumentosContractuales}
   abrirDocumento={abrirDocumento}
   trackerProps={{
     pasoActual: 6,
@@ -3391,26 +3417,27 @@ function Consentimientos({
     >
       <Tracker {...trackerProps} />
 
-<CheckControl
-  texto={
-    <>
-      He leído y acepto el{" "}
-      <a
-        href="/aviso-privacidad-trisal-v1.pdf"
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-      >
-        Aviso de Privacidad
-      </a>
-      . *
-    </>
-  }
-  checked={consentimientos.privacidad}
-  onChange={(v) =>
-    actualizar("privacidad", v)
-  }
-/>
+      <div className="card">
+        <CheckControl
+          texto={
+            <>
+              He leído y acepto el{" "}
+              <a
+                href="/aviso-privacidad-trisal-v1.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Aviso de Privacidad
+              </a>
+              . *
+            </>
+          }
+          checked={consentimientos.privacidad}
+          onChange={(v) =>
+            actualizar("privacidad", v)
+          }
+        />
 
         <CheckControl
           texto="Autorizo la consulta de información crediticia. *"
@@ -4943,6 +4970,7 @@ function Contratos({
   guardando,
   setGuardando,
   documentosContractuales,
+  setDocumentosContractuales,
   abrirDocumento,
 }) {
     return (
@@ -5147,31 +5175,6 @@ function TesoreriaCliente({
         </button>
       </div>
     </Pagina>
-  );
-}
-
-function abrirDocumento(tipo) {
-  const documento = documentosContractuales[tipo];
-
-  if (!documento) {
-    alert("El documento todavía no está disponible.");
-    return;
-  }
-
-  const url =
-    documento.url ||
-    documento.signedUrl ||
-    documento.signed_url;
-
-  if (!url) {
-    alert("No encontramos el enlace del documento.");
-    return;
-  }
-
-  window.open(
-    url,
-    "_blank",
-    "noopener,noreferrer"
   );
 }
 
