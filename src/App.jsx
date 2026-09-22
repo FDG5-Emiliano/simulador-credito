@@ -2356,9 +2356,9 @@ async function abrirDocumento(tipo) {
   try {
     setMensajeError("");
 
-    if (!solicitud?.id) {
+    if (!aplicacionId) {
       mostrarError(
-        "No encontramos la solicitud."
+        "No encontramos la solicitud actual."
       );
       return;
     }
@@ -2366,8 +2366,7 @@ async function abrirDocumento(tipo) {
     const {
       data: sessionData,
       error: sessionError,
-    } =
-      await supabase.auth.getSession();
+    } = await supabase.auth.getSession();
 
     if (sessionError) {
       throw sessionError;
@@ -2400,7 +2399,7 @@ async function abrirDocumento(tipo) {
 
           body: JSON.stringify({
             aplicacion_id:
-              solicitud.id,
+              aplicacionId,
 
             tipo_documento:
               tipo,
@@ -2422,6 +2421,11 @@ async function abrirDocumento(tipo) {
       {
         status:
           response.status,
+
+        tipo,
+
+        aplicacionId,
+
         body,
       }
     );
