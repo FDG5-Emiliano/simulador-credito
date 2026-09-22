@@ -4843,7 +4843,6 @@ function Oferta({
 /* =========================================================
    FIRMA
 ========================================================= */
-
 function CuentaBanco({
   datos,
   actualizar,
@@ -4855,7 +4854,7 @@ function CuentaBanco({
   return (
     <Pagina
       titulo="Cuenta bancaria"
-      subtitulo="Confirma la cuenta donde deseas recibir el crédito. El calendario de pagos se calculará automáticamente con las condiciones aprobadas."
+      subtitulo="Confirma la cuenta donde deseas recibir el crédito."
     >
       <Tracker {...trackerProps} />
 
@@ -4879,36 +4878,12 @@ function CuentaBanco({
           }
         />
 
-        <div className="notice">
-          La fecha del primer pago y el calendario se determinarán automáticamente
-          al preparar el expediente contractual. No necesitas seleccionar una fecha.
-        </div>
-
-        {datos.clabe.length > 0 && (
-          <div className="notice">
-            La CLABE debe contener 18 dígitos.
-            Terminación:{" "}
-            <strong>
-              {datos.clabe.length >= 4
-                ? datos.clabe.slice(-4)
-                : "----"}
-            </strong>
-          </div>
-        )}
-
-        <div className="importantNotice">
-          La autorización para domiciliar los pagos se
-          presentará por separado dentro de tus documentos
-          contractuales. Registrar esta cuenta no sustituye
-          dicha autorización.
-        </div>
-
         <NavButtons
           atras={regresar}
           continuar={continuar}
           textoContinuar={
             guardando
-              ? "Preparando contrato..."
+              ? "Preparando documentos..."
               : "Continuar a documentos"
           }
           disabled={guardando}
@@ -4917,6 +4892,7 @@ function CuentaBanco({
     </Pagina>
   );
 }
+
 
 function Contratos({
   ir,
