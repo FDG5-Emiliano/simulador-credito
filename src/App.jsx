@@ -6027,7 +6027,7 @@ function Footer({
             aria-label="CONDUSEF"
           >
             <img
-              src="/logo-condusef.png"
+              src="/logo-condusef.jpg"
               alt="CONDUSEF"
               className="regulatoryLogo regulatoryLogoCondusef"
             />
@@ -8769,7 +8769,7 @@ button:disabled {
   max-width: 62px;
   max-height: 25px;
 }
-  
+
   .loginPrompt {
     flex-direction: column;
 
