@@ -5983,63 +5983,74 @@ function Footer({
         </div>
 
         <div className="footerLinks">
-          <button onClick={() => ir("une")}>
+          <button
+            type="button"
+            onClick={() => ir("une")}
+          >
             UNE
           </button>
 
-          <button onClick={() => ir("normatividad")}>
+          <button
+            type="button"
+            onClick={() => ir("normatividad")}
+          >
             Normatividad
           </button>
 
-          <button onClick={() => ir("buro")}>
+          <button
+            type="button"
+            onClick={() => ir("buro")}
+          >
             Buró de Entidades Financieras
           </button>
 
-          <button onClick={() => ir("privacidad")}>
+          <button
+            type="button"
+            onClick={() => ir("privacidad")}
+          >
             Aviso de privacidad
           </button>
         </div>
       </div>
 
-<div className="regulatoryFooter">
-  <span className="regulatoryFooterTitle">
-    Información y autoridades financieras
-  </span>
+      <div className="regulatoryFooter">
+        <span className="regulatoryFooterTitle">
+          Información y autoridades financieras
+        </span>
 
-  <div className="regulatoryLogos">
-    <a
-      className="regulatoryLogoLink"
-      href="https://www.condusef.gob.mx/"
-      target="_blank"
-      rel="noreferrer"
-      aria-label="CONDUSEF"
-    >
-      <img
-        src="/logo-condusef.png"
-        alt="CONDUSEF"
-        className="regulatoryLogo regulatoryLogoCondusef"
-      />
-    </a>
+        <div className="regulatoryLogos">
+          <a
+            className="regulatoryLogoLink"
+            href="https://www.condusef.gob.mx/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="CONDUSEF"
+          >
+            <img
+              src="/logo-condusef.png"
+              alt="CONDUSEF"
+              className="regulatoryLogo regulatoryLogoCondusef"
+            />
+          </a>
 
-    <a
-      className="regulatoryLogoLink"
-      href="https://www.gob.mx/cnbv"
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Comisión Nacional Bancaria y de Valores"
-    >
-      <img
-        src="/logo-cnbv.png"
-        alt="Comisión Nacional Bancaria y de Valores"
-        className="regulatoryLogo regulatoryLogoCnbv"
-      />
-    </a>
-  </div>
-</div>
+          <a
+            className="regulatoryLogoLink"
+            href="https://www.gob.mx/cnbv"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Comisión Nacional Bancaria y de Valores"
+          >
+            <img
+              src="/logo-cnbv.png"
+              alt="Comisión Nacional Bancaria y de Valores"
+              className="regulatoryLogo regulatoryLogoCnbv"
+            />
+          </a>
+        </div>
+      </div>
     </footer>
   );
 }
-
 
 /* =========================================================
    CÁLCULOS
@@ -8084,6 +8095,104 @@ button:disabled {
 }
 
 /* =========================================================
+   FOOTER REGULATORIO
+========================================================= */
+
+.regulatoryFooter {
+  width: 100%;
+
+  margin-top: 24px;
+  padding-top: 18px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 12px;
+}
+
+.regulatoryFooterTitle {
+  margin: 0;
+
+  color: rgba(255, 255, 255, 0.7);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  line-height: 1.3;
+
+  text-align: center;
+}
+
+.regulatoryLogos {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  flex-wrap: wrap;
+}
+
+.regulatoryLogoLink {
+  width: 92px;
+  height: 44px;
+
+  flex: 0 0 92px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 4px;
+
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border-radius: 6px;
+
+  text-decoration: none;
+
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.regulatoryLogo {
+  display: block;
+
+  object-fit: contain;
+  object-position: center;
+}
+
+.regulatoryLogoCondusef {
+  width: 72px;
+  height: 30px;
+
+  max-width: 72px;
+  max-height: 30px;
+}
+
+.regulatoryLogoCnbv {
+  width: 70px;
+  height: 29px;
+
+  max-width: 70px;
+  max-height: 29px;
+}
+
+.regulatoryLogoLink:hover {
+  transform: translateY(-1px);
+
+  opacity: 0.92;
+}
+
+
+/* =========================================================
    PEP + ESTADO DOCUMENTAL
 ========================================================= */
 
@@ -8623,6 +8732,44 @@ button:disabled {
     max-width: none;
   }
 
+  .regulatoryFooter {
+  margin-top: 18px;
+  padding-top: 15px;
+
+  gap: 9px;
+}
+
+.regulatoryFooterTitle {
+  font-size: 10px;
+}
+
+.regulatoryLogos {
+  gap: 9px;
+}
+
+.regulatoryLogoLink {
+  width: 82px;
+  height: 40px;
+
+  flex-basis: 82px;
+}
+
+.regulatoryLogoCondusef {
+  width: 64px;
+  height: 26px;
+
+  max-width: 64px;
+  max-height: 26px;
+}
+
+.regulatoryLogoCnbv {
+  width: 62px;
+  height: 25px;
+
+  max-width: 62px;
+  max-height: 25px;
+}
+  
   .loginPrompt {
     flex-direction: column;
 
