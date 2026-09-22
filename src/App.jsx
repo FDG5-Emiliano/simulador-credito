@@ -2356,88 +2356,98 @@ async function abrirDocumento(tipo) {
   try {
     setMensajeError("");
 
-    const documento =
-      documentosContractuales?.[tipo];
-
-    if (!documento) {
+    if (!solicitud?.id) {
       mostrarError(
-        "El documento todavía no está disponible."
+        "No encontramos la solicitud."
       );
       return;
     }
 
-    const storagePath =
-      documento.storage_path ||
-      documento.storagePath;
+    const {
+      data: sessionData,
+      error: sessionError,
+    } =
+      await supabase.auth.getSession();
 
-    if (!storagePath) {
-      console.error(
-        "DOCUMENTO SIN STORAGE PATH:",
-        documento
-      );
+    if (sessionError) {
+      throw sessionError;
+    }
 
+    const token =
+      sessionData?.session
+        ?.access_token;
+
+    if (!token) {
       mostrarError(
-        "No encontramos la ubicación del documento."
+        "Tu sesión expiró. Inicia sesión nuevamente."
       );
       return;
+    }
+
+    const response =
+      await fetch(
+        "/api/abrir-documento-contractual",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          body: JSON.stringify({
+            aplicacion_id:
+              solicitud.id,
+
+            tipo_documento:
+              tipo,
+          }),
+        }
+      );
+
+    let body = null;
+
+    try {
+      body =
+        await response.json();
+    } catch {
+      body = null;
     }
 
     console.log(
-      "ABRIENDO DOCUMENTO:",
+      "RESPUESTA ABRIR DOCUMENTO:",
       {
-        tipo,
-        bucket:
-          "expedientes-contractuales",
-        storagePath,
-        documento,
+        status:
+          response.status,
+        body,
       }
     );
 
-    const {
-      data,
-      error,
-    } = await supabase.storage
-      .from(
-        "expedientes-contractuales"
-      )
-      .createSignedUrl(
-        storagePath,
-        60 * 10,
-        {
-          download:
-            storagePath
-              .split("/")
-              .pop(),
-        }
+    if (
+      !response.ok ||
+      !body?.ok
+    ) {
+      throw new Error(
+        body?.error ||
+        `No pudimos abrir el documento (${response.status}).`
       );
-
-    if (error) {
-      console.error(
-        "ERROR CREANDO SIGNED URL:",
-        {
-          error,
-          tipo,
-          storagePath,
-        }
-      );
-
-      mostrarError(
-        `No pudimos abrir el documento: ${error.message}`
-      );
-
-      return;
     }
 
-    if (!data?.signedUrl) {
-      mostrarError(
-        "No pudimos generar el enlace del documento."
-      );
+    const url =
+      body?.document?.url;
 
-      return;
+    if (!url) {
+      throw new Error(
+        "No recibimos el enlace del documento."
+      );
     }
 
-    window.location.href =
-      data.signedUrl;
+    window.location.assign(
+      url
+    );
   } catch (error) {
     console.error(
       "ERROR ABRIENDO DOCUMENTO:",
@@ -2450,7 +2460,6 @@ async function abrirDocumento(tipo) {
     );
   }
 }
-
 
   if (cargandoSesion) {
     return (
