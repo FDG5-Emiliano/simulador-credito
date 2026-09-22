@@ -4,9 +4,8 @@ import Docxtemplater from "docxtemplater";
 import crypto from "crypto";
 import CloudConvert from "cloudconvert";
 
-
 /* =========================================================
-   SUPABASE ADMIN
+   CONFIG
 ========================================================= */
 
 const supabaseAdmin = createClient(
@@ -20,15 +19,9 @@ const supabaseAdmin = createClient(
   }
 );
 
-
-/* =========================================================
-   CLOUDCONVERT
-========================================================= */
-
 const cloudConvert = new CloudConvert(
   process.env.CLOUDCONVERT_API_KEY
 );
-
 
 /* =========================================================
    API
@@ -79,7 +72,6 @@ export default async function handler(req, res) {
 
     const usuario = authData.user;
 
-
     /* =====================================================
        2. INPUT
     ===================================================== */
@@ -102,7 +94,6 @@ export default async function handler(req, res) {
       });
     }
 
-
     /* =====================================================
        3. RESOLVER APPLICATION
     ===================================================== */
@@ -120,11 +111,12 @@ export default async function handler(req, res) {
         .eq("id", application_id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       application = data;
     }
-
 
     if (
       !application &&
@@ -143,11 +135,12 @@ export default async function handler(req, res) {
         )
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       application = data;
     }
-
 
     /* =====================================================
        4. RESOLVER CONTRATO
@@ -166,7 +159,9 @@ export default async function handler(req, res) {
         .eq("id", contract_id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       contract = data;
     } else if (application) {
@@ -183,16 +178,19 @@ export default async function handler(req, res) {
         )
         .order(
           "created_at",
-          { ascending: false }
+          {
+            ascending: false,
+          }
         )
         .limit(1)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       contract = data;
     }
-
 
     if (!contract) {
       return res.status(404).json({
@@ -201,7 +199,6 @@ export default async function handler(req, res) {
           "No existe un contrato normalizado para esta solicitud.",
       });
     }
-
 
     if (!application) {
       const {
@@ -215,13 +212,22 @@ export default async function handler(req, res) {
           "id",
           contract.application_id
         )
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        return res.status(404).json({
+          ok: false,
+          error:
+            "No existe la aplicación normalizada asociada al contrato.",
+        });
+      }
 
       application = data;
     }
-
 
     /* =====================================================
        5. VALIDAR PROPIEDAD
@@ -240,12 +246,19 @@ export default async function handler(req, res) {
         "id",
         application.borrower_party_id
       )
-      .single();
+      .maybeSingle();
 
     if (borrowerError) {
       throw borrowerError;
     }
 
+    if (!borrower) {
+      return res.status(404).json({
+        ok: false,
+        error:
+          "No existe el acreditado normalizado asociado a esta solicitud.",
+      });
+    }
 
     if (
       borrower.auth_user_id !==
@@ -258,9 +271,14 @@ export default async function handler(req, res) {
       });
     }
 
-
     /* =====================================================
        6. SNAPSHOT VIGENTE
+
+       IMPORTANTE:
+       usamos maybeSingle porque un contrato DRAFT puede existir
+       antes de que se haya preparado su snapshot.
+
+       No permitimos que PostgREST devuelva PGRST116 al cliente.
     ===================================================== */
 
     const {
@@ -270,7 +288,15 @@ export default async function handler(req, res) {
       .schema("contracts")
       .from("contract_snapshots")
       .select(
-        "id, contract_id, snapshot_version, schema_version, sha256, snapshot_data, created_at"
+        `
+        id,
+        contract_id,
+        snapshot_version,
+        schema_version,
+        sha256,
+        snapshot_data,
+        created_at
+        `
       )
       .eq(
         "contract_id",
@@ -278,57 +304,104 @@ export default async function handler(req, res) {
       )
       .order(
         "snapshot_version",
-        { ascending: false }
+        {
+          ascending: false,
+        }
       )
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (snapshotError) {
       throw snapshotError;
     }
 
-    if (!snapshot?.snapshot_data) {
-      throw new Error(
-        "El contrato no tiene snapshot contractual."
-      );
+    if (!snapshot) {
+      return res.status(409).json({
+        ok: false,
+        code: "CONTRACT_SNAPSHOT_MISSING",
+        error:
+          "El expediente contractual todavía no ha sido preparado.",
+        contract_id:
+          contract.id,
+        contract_number:
+          contract.contract_number,
+      });
     }
 
+    if (!snapshot.snapshot_data) {
+      return res.status(409).json({
+        ok: false,
+        code: "CONTRACT_SNAPSHOT_EMPTY",
+        error:
+          "El expediente contractual no contiene información para generar documentos.",
+        snapshot_id:
+          snapshot.id,
+      });
+    }
 
     const S =
       snapshot.snapshot_data;
-
 
     /* =====================================================
        7. VALIDAR SNAPSHOT
     ===================================================== */
 
     if (
+      String(
+        snapshot.schema_version ||
+        S.schema_version ||
+        ""
+      ) !== "2.0"
+    ) {
+      return res.status(409).json({
+        ok: false,
+        code:
+          "CONTRACT_SNAPSHOT_VERSION_UNSUPPORTED",
+        error:
+          "El expediente contractual no tiene la versión requerida para generar documentos.",
+        snapshot_version:
+          snapshot.snapshot_version,
+        schema_version:
+          snapshot.schema_version ||
+          S.schema_version ||
+          null,
+      });
+    }
+
+    if (
       !Array.isArray(
         S.payment_schedule
       )
     ) {
-      throw new Error(
-        "El snapshot contractual no contiene la tabla de amortización."
-      );
+      return res.status(409).json({
+        ok: false,
+        code:
+          "PAYMENT_SCHEDULE_MISSING",
+        error:
+          "El expediente contractual no contiene la tabla de amortización.",
+      });
     }
 
     if (
       S.payment_schedule.length === 0
     ) {
-      throw new Error(
-        "La tabla de amortización contractual está vacía."
-      );
+      return res.status(409).json({
+        ok: false,
+        code:
+          "PAYMENT_SCHEDULE_EMPTY",
+        error:
+          "La tabla de amortización contractual está vacía.",
+      });
     }
-
 
     /* =====================================================
        8. MODELO SEMÁNTICO
     ===================================================== */
 
-const semantic =
-  normalizeContractualModel(
-    buildSemanticModel(S)
-  );
+    const semantic =
+      normalizeContractualModel(
+        buildSemanticModel(S)
+      );
 
     /* =====================================================
        9. PLANTILLAS
@@ -343,67 +416,63 @@ const semantic =
       .eq("activa", true)
       .order(
         "tipo_documento",
-        { ascending: true }
+        {
+          ascending: true,
+        }
       );
 
     if (templatesError) {
       throw templatesError;
     }
 
+    const borrowerPartyType =
+      String(
+        S.borrower?.party_type || ""
+      ).toUpperCase();
 
-/* =====================================================
-   SELECCIONAR PLANTILLAS SEGÚN TIPO DE PERSONA
-===================================================== */
+    const contractTemplateType =
+      borrowerPartyType ===
+      "ORGANIZATION"
+        ? "CONTRATO_PM"
+        : "CONTRATO_PF";
 
-const borrowerPartyType =
-  String(
-    S.borrower?.party_type || ""
-  ).toUpperCase();
+    const docxTemplates =
+      (templates || []).filter(
+        (template) => {
+          const isDocx =
+            template.storage_path
+              ?.toLowerCase()
+              .endsWith(".docx");
 
-const contractTemplateType =
-  borrowerPartyType === "ORGANIZATION"
-    ? "CONTRATO_PM"
-    : "CONTRATO_PF";
+          if (!isDocx) {
+            return false;
+          }
 
-const docxTemplates =
-  (templates || []).filter(
-    (template) => {
-      const isDocx =
-        template.storage_path
-          ?.toLowerCase()
-          .endsWith(".docx");
+          if (
+            template.tipo_documento ===
+              "CONTRATO_PF" ||
+            template.tipo_documento ===
+              "CONTRATO_PM"
+          ) {
+            return (
+              template.tipo_documento ===
+              contractTemplateType
+            );
+          }
 
-      if (!isDocx) {
-        return false;
-      }
+          return true;
+        }
+      );
 
-      /*
-        Sólo utilizar el contrato correspondiente
-        al tipo de cliente.
-      */
-
-      if (
-        template.tipo_documento ===
-          "CONTRATO_PF" ||
-        template.tipo_documento ===
-          "CONTRATO_PM"
-      ) {
-        return (
-          template.tipo_documento ===
-          contractTemplateType
-        );
-      }
-
-      /*
-        Las demás plantillas aplican a ambos:
-        - Tabla de amortización
-        - Domiciliación
-      */
-
-      return true;
+    if (docxTemplates.length === 0) {
+      return res.status(409).json({
+        ok: false,
+        code:
+          "NO_ACTIVE_CONTRACT_TEMPLATES",
+        error:
+          "No existen plantillas contractuales activas para esta operación.",
+      });
     }
-  );
-
 
     /* =====================================================
        10. GENERACIÓN IDEMPOTENTE
@@ -411,7 +480,6 @@ const docxTemplates =
 
     const generatedDocuments = [];
     const skippedDocuments = [];
-
 
     for (
       const template of
@@ -421,7 +489,6 @@ const docxTemplates =
         String(
           template.version || ""
         );
-
 
       /* ===================================================
          EVITAR DUPLICADOS
@@ -463,7 +530,9 @@ const docxTemplates =
         )
         .order(
           "document_version",
-          { ascending: false }
+          {
+            ascending: false,
+          }
         )
         .limit(1)
         .maybeSingle();
@@ -472,14 +541,15 @@ const docxTemplates =
         throw existingError;
       }
 
-
       if (
         existing &&
-        existing.status === "GENERATED"
+        existing.status ===
+          "GENERATED"
       ) {
         skippedDocuments.push({
           id: existing.id,
-          type: existing.document_type,
+          type:
+            existing.document_type,
           version:
             existing.document_version,
           reason:
@@ -490,7 +560,6 @@ const docxTemplates =
 
         continue;
       }
-
 
       /* ===================================================
          DESCARGAR PLANTILLA
@@ -514,12 +583,16 @@ const docxTemplates =
         );
       }
 
+      if (!templateBlob) {
+        throw new Error(
+          `La plantilla ${template.tipo_documento} no contiene datos.`
+        );
+      }
 
       const templateBuffer =
         Buffer.from(
           await templateBlob.arrayBuffer()
         );
-
 
       /* ===================================================
          RENDER DOCX
@@ -548,7 +621,6 @@ const docxTemplates =
           }
         );
 
-
       const templateData = {
         ...semantic,
 
@@ -556,11 +628,9 @@ const docxTemplates =
           semantic.PAYMENT_SCHEDULE,
       };
 
-
       doc.render(
         templateData
       );
-
 
       const docxBuffer =
         doc
@@ -570,7 +640,6 @@ const docxTemplates =
             compression:
               "DEFLATE",
           });
-
 
       /* ===================================================
          VERSIÓN DOCUMENTAL
@@ -609,7 +678,6 @@ const docxTemplates =
         throw previousError;
       }
 
-
       const documentVersion =
         previousDocuments?.length
           ? Number(
@@ -617,7 +685,6 @@ const docxTemplates =
                 .document_version
             ) + 1
           : 1;
-
 
       /* ===================================================
          NOMBRE DE CRÉDITO
@@ -629,10 +696,14 @@ const docxTemplates =
         contract.legacy_credit_number ||
         contract.contract_number;
 
+      if (!loanNumber) {
+        throw new Error(
+          "No existe un número contractual para nombrar los documentos."
+        );
+      }
 
       const docxFilename =
         `${template.tipo_documento}_${loanNumber}_v${documentVersion}.docx`;
-
 
       /* ===================================================
          DOCX -> PDF
@@ -644,7 +715,6 @@ const docxTemplates =
           docxFilename
         );
 
-
       /* ===================================================
          HASH PDF
       =================================================== */
@@ -655,10 +725,8 @@ const docxTemplates =
           .update(pdfBuffer)
           .digest("hex");
 
-
       const pdfFilename =
         `${template.tipo_documento}_${loanNumber}_v${documentVersion}.pdf`;
-
 
       const storagePath =
         [
@@ -667,7 +735,6 @@ const docxTemplates =
           `snapshot-${snapshot.snapshot_version}`,
           pdfFilename,
         ].join("/");
-
 
       /* ===================================================
          GUARDAR PDF
@@ -686,7 +753,6 @@ const docxTemplates =
           {
             contentType:
               "application/pdf",
-
             upsert: false,
           }
         );
@@ -697,14 +763,15 @@ const docxTemplates =
         );
       }
 
-
       /* ===================================================
          REGISTRAR DOCUMENTO
       =================================================== */
 
       const {
-        data: registeredDocument,
-        error: documentError,
+        data:
+          registeredDocument,
+        error:
+          documentError,
       } = await supabaseAdmin
         .schema("contracts")
         .from(
@@ -745,9 +812,12 @@ const docxTemplates =
               .toISOString(),
         })
         .select("*")
-        .single();
+        .maybeSingle();
 
-      if (documentError) {
+      if (
+        documentError ||
+        !registeredDocument
+      ) {
         await supabaseAdmin
           .storage
           .from(
@@ -757,9 +827,14 @@ const docxTemplates =
             storagePath,
           ]);
 
-        throw documentError;
-      }
+        if (documentError) {
+          throw documentError;
+        }
 
+        throw new Error(
+          `No se pudo registrar ${pdfFilename}.`
+        );
+      }
 
       /* ===================================================
          AUDITORÍA
@@ -789,7 +864,7 @@ const docxTemplates =
             usuario.id,
 
           source:
-            "TRISAL_DOCUMENT_GENERATOR_V5",
+            "TRISAL_DOCUMENT_GENERATOR_V6",
 
           payload: {
             document_id:
@@ -825,12 +900,17 @@ const docxTemplates =
         throw eventError;
       }
 
-
       generatedDocuments.push({
         id:
           registeredDocument.id,
 
         type:
+          template.tipo_documento,
+
+        tipo:
+          template.tipo_documento,
+
+        document_type:
           template.tipo_documento,
 
         version:
@@ -858,13 +938,13 @@ const docxTemplates =
       });
     }
 
-
     /* =====================================================
        11. ACTUALIZAR CONTRATO
     ===================================================== */
 
     const {
-      error: contractUpdateError,
+      error:
+        contractUpdateError,
     } = await supabaseAdmin
       .schema("contracts")
       .from("contracts")
@@ -885,7 +965,6 @@ const docxTemplates =
       throw contractUpdateError;
     }
 
-
     /* =====================================================
        12. RESPUESTA
     ===================================================== */
@@ -894,7 +973,7 @@ const docxTemplates =
       ok: true,
 
       architecture:
-        "SNAPSHOT_V5",
+        "SNAPSHOT_V6",
 
       contract_id:
         contract.id,
@@ -905,7 +984,8 @@ const docxTemplates =
       loan_number:
         S.contract
           ?.legacy_credit_number ||
-        contract.legacy_credit_number,
+        contract.legacy_credit_number ||
+        contract.contract_number,
 
       snapshot_id:
         snapshot.id,
@@ -935,7 +1015,7 @@ const docxTemplates =
     });
   } catch (error) {
     console.error(
-      "TRISAL DOCUMENT GENERATOR V5:",
+      "TRISAL DOCUMENT GENERATOR V6:",
       error
     );
 
@@ -948,7 +1028,6 @@ const docxTemplates =
     });
   }
 }
-
 
 /* =========================================================
    DOCX -> PDF
@@ -966,7 +1045,6 @@ async function convertDocxToPdf(
       "Falta CLOUDCONVERT_API_KEY en las variables de entorno."
     );
   }
-
 
   let job =
     await cloudConvert.jobs.create({
@@ -1007,12 +1085,10 @@ async function convertDocxToPdf(
       },
     });
 
-
   job =
     await cloudConvert.jobs.wait(
       job.id
     );
-
 
   if (
     job.status !== "finished"
@@ -1022,15 +1098,12 @@ async function convertDocxToPdf(
     );
   }
 
-
   const files =
     cloudConvert.jobs
       .getExportUrls(job);
 
-
   const pdfFile =
     files?.[0];
-
 
   if (!pdfFile?.url) {
     throw new Error(
@@ -1038,12 +1111,10 @@ async function convertDocxToPdf(
     );
   }
 
-
   const response =
     await fetch(
       pdfFile.url
     );
-
 
   if (!response.ok) {
     throw new Error(
@@ -1051,16 +1122,13 @@ async function convertDocxToPdf(
     );
   }
 
-
   const arrayBuffer =
     await response.arrayBuffer();
-
 
   return Buffer.from(
     arrayBuffer
   );
 }
-
 
 /* =========================================================
    SEMANTIC MODEL
@@ -1118,10 +1186,7 @@ function buildSemanticModel(S) {
       ? S.payment_schedule
       : [];
 
-
-  /* =====================================================
-     IDENTIFICADORES
-  ===================================================== */
+  /* IDENTIFICADORES */
 
   const rfc =
     findIdentifier(
@@ -1135,10 +1200,7 @@ function buildSemanticModel(S) {
       "CURP"
     );
 
-
-  /* =====================================================
-     CONTACTOS
-  ===================================================== */
+  /* CONTACTOS */
 
   const email =
     findContact(
@@ -1156,10 +1218,7 @@ function buildSemanticModel(S) {
       "PHONE"
     );
 
-
-  /* =====================================================
-     DOMICILIO
-  ===================================================== */
+  /* DOMICILIO */
 
   const address =
     addresses.find(
@@ -1180,10 +1239,7 @@ function buildSemanticModel(S) {
     addresses[0] ||
     {};
 
-
-  /* =====================================================
-     CUENTA BANCARIA
-  ===================================================== */
+  /* CUENTA BANCARIA */
 
   const bank =
     bankAccounts.find(
@@ -1199,10 +1255,7 @@ function buildSemanticModel(S) {
     bankAccounts[0] ||
     {};
 
-
-  /* =====================================================
-     TASAS
-  ===================================================== */
+  /* TASAS */
 
   const annualRate =
     numberOrNull(
@@ -1224,10 +1277,7 @@ function buildSemanticModel(S) {
       terms.opening_fee_rate
     );
 
-
-  /* =====================================================
-     FECHA DE ELABORACIÓN
-  ===================================================== */
+  /* FECHA */
 
   const today =
     new Date();
@@ -1247,10 +1297,7 @@ function buildSemanticModel(S) {
     "diciembre",
   ];
 
-
-  /* =====================================================
-     TABLA DE AMORTIZACIÓN
-  ===================================================== */
+  /* TABLA */
 
   const paymentSchedule =
     schedule.map(
@@ -1300,7 +1347,6 @@ function buildSemanticModel(S) {
         const comisionesConIva =
           comision +
           ivaComision;
-
 
         return {
           numero:
@@ -1359,10 +1405,7 @@ function buildSemanticModel(S) {
       }
     );
 
-
-  /* =====================================================
-     TOTALES TABLA
-  ===================================================== */
+  /* TOTALES */
 
   const totalCapital =
     schedule.reduce(
@@ -1428,10 +1471,7 @@ function buildSemanticModel(S) {
       0
     );
 
-
-  /* =====================================================
-     DOMICILIACIÓN
-  ===================================================== */
+  /* DOMICILIACIÓN */
 
   const firstPaymentDate =
     legacyTerms.fecha_primer_pago
@@ -1440,7 +1480,6 @@ function buildSemanticModel(S) {
             .fecha_primer_pago
         )
       : null;
-
 
   const maxPayment =
     schedule.length > 0
@@ -1454,15 +1493,8 @@ function buildSemanticModel(S) {
         )
       : 0;
 
-
-  /* =====================================================
-     RETURN
-  ===================================================== */
-
   return {
-    /* ===================================================
-       CONTRATO
-    =================================================== */
+    /* CONTRATO */
 
     CONTRACT_ID:
       contract.contract_id ||
@@ -1487,10 +1519,7 @@ function buildSemanticModel(S) {
       institution.RECA ||
       "",
 
-
-    /* ===================================================
-       ACREDITADO
-    =================================================== */
+    /* ACREDITADO */
 
     BORROWER_NAME:
       borrower.display_name ||
@@ -1535,10 +1564,7 @@ function buildSemanticModel(S) {
         : person.nationality_code ||
           "",
 
-
-    /* ===================================================
-       DOMICILIO
-    =================================================== */
+    /* DOMICILIO */
 
     BORROWER_ADDRESS:
       buildAddress(address),
@@ -1574,10 +1600,7 @@ function buildSemanticModel(S) {
       address.postal_code ||
       "",
 
-
-    /* ===================================================
-       CRÉDITO
-    =================================================== */
+    /* CRÉDITO */
 
     CREDIT_APPROVED_AMOUNT:
       formatMoney(
@@ -1650,10 +1673,7 @@ function buildSemanticModel(S) {
         2
       ),
 
-
-    /* ===================================================
-       TOTALES
-    =================================================== */
+    /* TOTALES */
 
     MONTO_TOTAL:
       formatMoney(
@@ -1695,10 +1715,7 @@ function buildSemanticModel(S) {
         totalPagar
       ),
 
-
-    /* ===================================================
-       PAGOS
-    =================================================== */
+    /* PAGOS */
 
     PERIODICIDAD:
       legacyTerms.periodicidad ||
@@ -1719,10 +1736,7 @@ function buildSemanticModel(S) {
     NUMERO_PAGOS:
       schedule.length,
 
-
-    /* ===================================================
-       CUENTA BANCARIA
-    =================================================== */
+    /* CUENTA */
 
     DISBURSEMENT_BANK:
       bank.institution_name ||
@@ -1756,10 +1770,7 @@ function buildSemanticModel(S) {
       borrower.display_name ||
       "",
 
-
-    /* ===================================================
-       DOMICILIACIÓN
-    =================================================== */
+    /* DOMICILIACIÓN */
 
     DIA_CARGO:
       firstPaymentDate
@@ -1791,10 +1802,7 @@ function buildSemanticModel(S) {
         maxPayment
       ),
 
-
-    /* ===================================================
-       ACREDITANTE
-    =================================================== */
+    /* ACREDITANTE */
 
     LENDER_LEGAL_NAME:
       institution.RAZON_SOCIAL ||
@@ -1868,10 +1876,7 @@ function buildSemanticModel(S) {
       institution.CORREO_UNE ||
       "",
 
-
-    /* ===================================================
-       UNE
-    =================================================== */
+    /* UNE */
 
     LENDER_UNE_PHONE:
       institution.TELEFONO_UNE ||
@@ -1897,10 +1902,7 @@ function buildSemanticModel(S) {
       institution.HORARIO_UNE ||
       "",
 
-
-    /* ===================================================
-       JURISDICCIÓN
-    =================================================== */
+    /* JURISDICCIÓN */
 
     FUERO:
       institution.FUERO ||
@@ -1929,10 +1931,7 @@ function buildSemanticModel(S) {
         .filter(Boolean)
         .join(", "),
 
-
-    /* ===================================================
-       FIRMA / FECHA
-    =================================================== */
+    /* FIRMA */
 
     CIUDAD_FIRMA:
       institution.CIUDAD_FIRMA ||
@@ -1962,10 +1961,7 @@ function buildSemanticModel(S) {
         today
       ),
 
-
-    /* ===================================================
-       PERSONA MORAL
-    =================================================== */
+    /* PERSONA MORAL */
 
     PM_ESCRITURA_CONSTITUTIVA:
       organization
@@ -2008,10 +2004,7 @@ function buildSemanticModel(S) {
     PM_PLAZA_NOTARIA_PODER:
       "",
 
-
-    /* ===================================================
-       OBLIGADOS SOLIDARIOS
-    =================================================== */
+    /* OBLIGADOS */
 
     OBLIGADO_NOMBRE:
       "",
@@ -2031,10 +2024,7 @@ function buildSemanticModel(S) {
     OBLIGADO_2_NOMBRE:
       "",
 
-
-    /* ===================================================
-       TABLA
-    =================================================== */
+    /* TABLA */
 
     PAYMENT_SCHEDULE:
       paymentSchedule,
@@ -2043,7 +2033,6 @@ function buildSemanticModel(S) {
       paymentSchedule,
   };
 }
-
 
 /* =========================================================
    HELPERS
@@ -2064,7 +2053,6 @@ function findIdentifier(
   );
 }
 
-
 function findContact(
   contacts,
   type
@@ -2079,7 +2067,6 @@ function findContact(
     )?.value || ""
   );
 }
-
 
 function buildAddress(
   address
@@ -2111,7 +2098,6 @@ function buildAddress(
     .join(", ");
 }
 
-
 function numberOrNull(
   value
 ) {
@@ -2131,7 +2117,6 @@ function numberOrNull(
     : null;
 }
 
-
 function formatMoney(
   value
 ) {
@@ -2146,7 +2131,6 @@ function formatMoney(
     }
   );
 }
-
 
 function formatPercent(
   decimalRate,
@@ -2166,7 +2150,6 @@ function formatPercent(
   ).toFixed(decimals);
 }
 
-
 function formatDateShort(
   value
 ) {
@@ -2185,7 +2168,6 @@ function formatDateShort(
   );
 }
 
-
 function formatDateLong(
   value
 ) {
@@ -2203,7 +2185,6 @@ function formatDateLong(
     }
   );
 }
-
 
 function normalizeDate(
   value
@@ -2230,7 +2211,6 @@ function normalizeDate(
   return new Date(text);
 }
 
-
 function moneyInWordsPlaceholder(
   value
 ) {
@@ -2240,21 +2220,6 @@ function moneyInWordsPlaceholder(
 /* =========================================================
    NORMALIZACIÓN CONTRACTUAL
 ========================================================= */
-
-/*
-  Esta función normaliza únicamente la representación
-  utilizada para generar documentos.
-
-  NO modifica:
-  - snapshot contractual
-  - core.parties
-  - origination
-  - Aplicaciones
-  - datos originales del cliente
-
-  El objetivo es que los documentos contractuales tengan
-  una presentación consistente en MAYÚSCULAS.
-*/
 
 function normalizeContractualModel(
   model
@@ -2282,11 +2247,6 @@ function normalizeContractualModel(
   return normalized;
 }
 
-
-/* =========================================================
-   NORMALIZAR VALOR
-========================================================= */
-
 function normalizeContractualValue(
   key,
   value
@@ -2297,10 +2257,6 @@ function normalizeContractualValue(
   ) {
     return value;
   }
-
-  /*
-    Arrays, principalmente PAYMENT_SCHEDULE / PAGOS.
-  */
 
   if (Array.isArray(value)) {
     return value.map(
@@ -2336,10 +2292,6 @@ function normalizeContractualValue(
     );
   }
 
-  /*
-    Objetos anidados.
-  */
-
   if (
     typeof value === "object"
   ) {
@@ -2365,23 +2317,11 @@ function normalizeContractualValue(
     return normalizedObject;
   }
 
-  /*
-    Números y booleanos nunca se transforman.
-  */
-
   if (
     typeof value !== "string"
   ) {
     return value;
   }
-
-  /*
-    Campos que deben conservar exactamente su representación.
-
-    Muy importante:
-    NO convertimos correos, UUIDs, hashes, rutas,
-    URLs, claves técnicas ni números bancarios.
-  */
 
   if (
     shouldPreserveContractualValue(
@@ -2391,19 +2331,10 @@ function normalizeContractualValue(
     return value;
   }
 
-  /*
-    El resto de los textos contractuales se normaliza.
-  */
-
   return normalizeContractualText(
     value
   );
 }
-
-
-/* =========================================================
-   CAMPOS QUE NO DEBEN CONVERTIRSE
-========================================================= */
 
 function shouldPreserveContractualValue(
   key
@@ -2415,20 +2346,12 @@ function shouldPreserveContractualValue(
 
   const exactPreserveKeys =
     new Set([
-      /*
-        Identificadores técnicos
-      */
-
       "CONTRACT_ID",
       "SNAPSHOT_ID",
       "APPLICATION_ID",
       "PARTY_ID",
       "CREDIT_ACCOUNT_ID",
       "DOCUMENT_ID",
-
-      /*
-        Correo
-      */
 
       "BORROWER_EMAIL",
       "CORREO_ACREDITADO",
@@ -2437,29 +2360,17 @@ function shouldPreserveContractualValue(
       "CORREO_UNE",
       "OBLIGADO_CORREO",
 
-      /*
-        Cuenta bancaria
-      */
-
       "DISBURSEMENT_ACCOUNT_NUMBER",
       "NUMERO_CUENTA",
       "DISBURSEMENT_CLABE",
       "CLABE",
       "CLABE_ULTIMOS_4",
 
-      /*
-        Teléfonos
-      */
-
       "BORROWER_PHONE",
       "TELEFONO",
       "LENDER_UNE_PHONE",
       "TELEFONO_UNE",
       "OBLIGADO_TELEFONO",
-
-      /*
-        Datos numéricos ya formateados
-      */
 
       "CREDIT_APPROVED_AMOUNT",
       "MONTO_CREDITO",
@@ -2485,16 +2396,8 @@ function shouldPreserveContractualValue(
       "DIA_CARGO",
       "MONTO_MAXIMO_CARGO",
 
-      /*
-        Fechas numéricas o partes de fecha
-      */
-
       "DIA_FIRMA",
       "ANIO_FIRMA",
-
-      /*
-        Tabla de amortización
-      */
 
       "NUMERO",
       "FECHA",
@@ -2517,10 +2420,6 @@ function shouldPreserveContractualValue(
     return true;
   }
 
-  /*
-    Protección adicional para futuras variables técnicas.
-  */
-
   const protectedFragments = [
     "_ID",
     "UUID",
@@ -2541,11 +2440,6 @@ function shouldPreserveContractualValue(
   );
 }
 
-
-/* =========================================================
-   NORMALIZACIÓN DE TEXTO
-========================================================= */
-
 function normalizeContractualText(
   value
 ) {
@@ -2557,30 +2451,12 @@ function normalizeContractualText(
   }
 
   return String(value)
-    /*
-      Normalización Unicode.
-
-      Evita inconsistencias de caracteres equivalentes
-      provenientes de diferentes navegadores/dispositivos.
-    */
     .normalize("NFC")
-
-    /*
-      Quitamos espacios sobrantes al inicio/final.
-    */
     .trim()
-
-    /*
-      Evitamos múltiples espacios accidentales.
-    */
     .replace(
       /\s+/g,
       " "
     )
-
-    /*
-      Presentación contractual.
-    */
     .toLocaleUpperCase(
       "es-MX"
     );
