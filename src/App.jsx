@@ -2356,7 +2356,12 @@ async function abrirDocumento(tipo) {
   try {
     setMensajeError("");
 
-    if (!aplicacionId) {
+    /*
+      solicitudId es el ID real de public.Aplicaciones.
+      Ejemplo:
+      e04a3436-496f-4990-b22c-fcfc52cb9743
+    */
+    if (!solicitudId) {
       mostrarError(
         "No encontramos la solicitud actual."
       );
@@ -2364,7 +2369,7 @@ async function abrirDocumento(tipo) {
     }
 
     const {
-      data: sessionData,
+      data: { session },
       error: sessionError,
     } = await supabase.auth.getSession();
 
@@ -2372,46 +2377,42 @@ async function abrirDocumento(tipo) {
       throw sessionError;
     }
 
-    const token =
-      sessionData?.session
-        ?.access_token;
-
-    if (!token) {
+    if (!session?.access_token) {
       mostrarError(
         "Tu sesión expiró. Inicia sesión nuevamente."
       );
       return;
     }
 
-    const response =
-      await fetch(
-        "/api/abrir-documento-contractual",
-        {
-          method: "POST",
+    console.log(
+      "ABRIENDO DOCUMENTO CONTRACTUAL:",
+      {
+        aplicacion_id: solicitudId,
+        tipo_documento: tipo,
+      }
+    );
 
-          headers: {
-            "Content-Type":
-              "application/json",
+    const response = await fetch(
+      "/api/abrir-documento-contractual",
+      {
+        method: "POST",
 
-            Authorization:
-              `Bearer ${token}`,
-          },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
 
-          body: JSON.stringify({
-            aplicacion_id:
-              aplicacionId,
-
-            tipo_documento:
-              tipo,
-          }),
-        }
-      );
+        body: JSON.stringify({
+          aplicacion_id: solicitudId,
+          tipo_documento: tipo,
+        }),
+      }
+    );
 
     let body = null;
 
     try {
-      body =
-        await response.json();
+      body = await response.json();
     } catch {
       body = null;
     }
@@ -2419,24 +2420,17 @@ async function abrirDocumento(tipo) {
     console.log(
       "RESPUESTA ABRIR DOCUMENTO:",
       {
-        status:
-          response.status,
-
+        status: response.status,
         tipo,
-
-        aplicacionId,
-
+        solicitudId,
         body,
       }
     );
 
-    if (
-      !response.ok ||
-      !body?.ok
-    ) {
+    if (!response.ok || !body?.ok) {
       throw new Error(
         body?.error ||
-        `No pudimos abrir el documento (${response.status}).`
+          `No pudimos abrir el documento (${response.status}).`
       );
     }
 
@@ -2445,13 +2439,11 @@ async function abrirDocumento(tipo) {
 
     if (!url) {
       throw new Error(
-        "No recibimos el enlace del documento."
+        "El servidor no devolvió el enlace del documento."
       );
     }
 
-    window.location.assign(
-      url
-    );
+    window.location.assign(url);
   } catch (error) {
     console.error(
       "ERROR ABRIENDO DOCUMENTO:",
@@ -2464,6 +2456,7 @@ async function abrirDocumento(tipo) {
     );
   }
 }
+
 
   if (cargandoSesion) {
     return (
