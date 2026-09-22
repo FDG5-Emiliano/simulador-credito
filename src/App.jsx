@@ -5398,12 +5398,8 @@ function Privacidad({ empresa }) {
         </a>
 
         <div className="privacyDocumentInfo">
-          <strong>
-            Documento oficial vigente
-          </strong>
-
           <span>
-             Consulta el Aviso de Privacidad de TRISAL antes de
+            Consulta el Aviso de Privacidad de TRISAL antes de
             proporcionar o autorizar el tratamiento de tus datos.
           </span>
         </div>
