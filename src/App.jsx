@@ -5134,30 +5134,37 @@ function Contratos({
   documentosContractuales,
   abrirDocumento,
 }) {
-const tipoContrato =
-  documentosContractuales?.CONTRATO_PF
-    ? "CONTRATO_PF"
-    : documentosContractuales?.CONTRATO_PM
-    ? "CONTRATO_PM"
-    : documentosContractuales?.CONTRATO
-    ? "CONTRATO"
-    : null;
+  const tipoContrato =
+    documentosContractuales?.CONTRATO_PF
+      ? "CONTRATO_PF"
+      : documentosContractuales?.CONTRATO_PM
+      ? "CONTRATO_PM"
+      : documentosContractuales?.CONTRATO
+      ? "CONTRATO"
+      : null;
 
-const contratoDisponible =
-  Boolean(tipoContrato);
+  const contratoDisponible =
+    Boolean(tipoContrato);
 
   const tablaDisponible =
     Boolean(
-      documentosContractuales
-        ?.TABLA_AMORTIZACION
+      documentosContractuales?.TABLA_AMORTIZACION
+    );
+
+  const pagareDisponible =
+    Boolean(
+      documentosContractuales?.PAGARE
     );
 
   const domiciliacionDisponible =
     Boolean(
-      documentosContractuales
-        ?.DOMICILIACION
+      documentosContractuales?.DOMICILIACION
     );
 
+  /*
+    Por ahora no hacemos obligatorio el pagaré para continuar,
+    porque todavía estamos confirmando su plantilla/generación.
+  */
   const documentosListos =
     contratoDisponible &&
     tablaDisponible &&
@@ -5170,50 +5177,54 @@ const contratoDisponible =
     >
       <Tracker {...trackerProps} />
 
-<Documento
-  titulo="Contrato de crédito"
-  disponible={contratoDisponible}
-  onVer={() => {
-    if (tipoContrato) {
-      abrirDocumento(tipoContrato);
-    }
-  }}
-/>
+      <div className="card">
+        <Documento
+          titulo="Contrato de crédito"
+          disponible={contratoDisponible}
+          onVer={() => {
+            if (tipoContrato) {
+              abrirDocumento(tipoContrato);
+            }
+          }}
+        />
 
         <Documento
           titulo="Tabla de amortización"
-          disponible={
-            tablaDisponible
-          }
-          onVer={() =>
-            abrirDocumento(
-              "TABLA_AMORTIZACION"
-            )
-          }
+          disponible={tablaDisponible}
+          onVer={() => {
+            if (tablaDisponible) {
+              abrirDocumento(
+                "TABLA_AMORTIZACION"
+              );
+            }
+          }}
         />
 
         <Documento
           titulo="Pagaré"
-          disponible={false}
+          disponible={pagareDisponible}
+          onVer={() => {
+            if (pagareDisponible) {
+              abrirDocumento("PAGARE");
+            }
+          }}
         />
 
         <Documento
           titulo="Autorización de domiciliación"
-          disponible={
-            domiciliacionDisponible
-          }
-          onVer={() =>
-            abrirDocumento(
-              "DOMICILIACION"
-            )
-          }
+          disponible={domiciliacionDisponible}
+          onVer={() => {
+            if (domiciliacionDisponible) {
+              abrirDocumento(
+                "DOMICILIACION"
+              );
+            }
+          }}
         />
 
         <NavButtons
           atras={regresar}
-          continuar={() =>
-            ir("firma")
-          }
+          continuar={() => ir("firma")}
           textoContinuar="Continuar"
           disabled={!documentosListos}
         />
@@ -5221,6 +5232,7 @@ const contratoDisponible =
     </Pagina>
   );
 }
+
 
 function Firma({
   regresar,
