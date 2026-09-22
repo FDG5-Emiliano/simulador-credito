@@ -2732,39 +2732,40 @@ ir("revision");
 />
         )}
 
-        {pantalla === "contratos" && (
-<Contratos
-  ir={ir}
-  regresar={() =>
-    regresarA("cuentaBanco")
-  }
-  documentosContractuales={
-    documentosContractuales
-  }
-  abrirDocumento={
-    abrirDocumento
-  }
-  trackerProps={{
-    pasoActual: 6,
-    pasoMaximo,
-    navegarPorTracker,
-    estadoSolicitud,
-  }}
-/>
+      {pantalla === "contratos" && (
+  <Contratos
+    ir={ir}
+    regresar={() =>
+      regresarA("cuentaBanco")
+    }
+    documentosContractuales={
+      documentosContractuales
+    }
+    abrirDocumento={
+      abrirDocumento
+    }
+    trackerProps={{
+      pasoActual: 6,
+      pasoMaximo,
+      navegarPorTracker,
+      estadoSolicitud,
+    }}
+  />
+)}
 
-
-        {pantalla === "firma" && (
-          <Firma
-            ir={ir}
-            regresar={() => regresarA("contratos")}
-            trackerProps={{
-              pasoActual: 6,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
+{pantalla === "firma" && (
+  <Firma
+    regresar={() =>
+      regresarA("contratos")
+    }
+    trackerProps={{
+      pasoActual: 6,
+      pasoMaximo,
+      navegarPorTracker,
+      estadoSolicitud,
+    }}
+  />
+)}
 
         {pantalla === "tesoreriaCliente" && (
           <TesoreriaCliente
