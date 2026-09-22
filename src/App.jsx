@@ -130,6 +130,9 @@ export default function App() {
 
   const [archivos, setArchivos] = useState({});
 
+  const [documentosContractuales, setDocumentosContractuales] =
+  useState({});
+
   const yaRecuperoRef = useRef(false);
 
   const [consentimientos, setConsentimientos] = useState({
@@ -228,7 +231,7 @@ fechaPrimerPago: "",
     tasaAprobada: "55",
     tasaMoratoriaAprobada: "73.5",
     comisionAprobada: "3",
-    catAprobado: "68.5",
+    catAprobado: "",
   });
 
   const empresa = {
@@ -2497,19 +2500,21 @@ async function prepararContratacion() {
         )}
 
         {pantalla === "contratos" && (
-          <Contratos
-            ir={ir}
-            regresar={() => regresarA("cuentaBanco")}
-            solicitudId={solicitudId}
-guardando={guardando}
-setGuardando={setGuardando}
-            trackerProps={{
-              pasoActual: 6,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
+<Contratos
+  ir={ir}
+  regresar={() => regresarA("cuentaBanco")}
+  solicitudId={solicitudId}
+  guardando={guardando}
+  setGuardando={setGuardando}
+  documentosContractuales={documentosContractuales}
+  abrirDocumento={abrirDocumento}
+  trackerProps={{
+    pasoActual: 6,
+    pasoMaximo,
+    navegarPorTracker,
+    estadoSolicitud,
+  }}
+/>
         )}
 
         {pantalla === "firma" && (
@@ -2836,8 +2841,13 @@ function Producto({ producto, ir }) {
 />
 
 <ProductData
-  titulo="Tasa anual promedio"
+  titulo="Tasa anual de referencia"
   valor={`${Number(producto.tasaPromedio).toFixed(1)}%`}
+/>
+
+<ProductData
+  titulo="Comisión por apertura"
+  valor={`${producto.comisionAperturaMinima}% a ${producto.comisionAperturaMaxima}%`}
 />
       </div>
 
@@ -3381,14 +3391,26 @@ function Consentimientos({
     >
       <Tracker {...trackerProps} />
 
-      <div className="card">
-        <CheckControl
-          texto="He leído y acepto el Aviso de Privacidad. *"
-          checked={consentimientos.privacidad}
-          onChange={(v) =>
-            actualizar("privacidad", v)
-          }
-        />
+<CheckControl
+  texto={
+    <>
+      He leído y acepto el{" "}
+      <a
+        href="/aviso-privacidad-trisal-v1.pdf"
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Aviso de Privacidad
+      </a>
+      . *
+    </>
+  }
+  checked={consentimientos.privacidad}
+  onChange={(v) =>
+    actualizar("privacidad", v)
+  }
+/>
 
         <CheckControl
           texto="Autorizo la consulta de información crediticia. *"
@@ -4770,14 +4792,18 @@ function Oferta({
         />
 
         <OfertaDato
-          titulo="Comisión"
+          titulo="Comisión por apertura"
           valor={`${Number(datos.comisionAprobada).toFixed(1)}%`}
         />
 
-        <OfertaDato
-          titulo="CAT"
-          valor={`${Number(datos.catAprobado).toFixed(1)}%`}
-        />
+<OfertaDato
+  titulo="CAT"
+  valor={
+    datos.catAprobado !== ""
+      ? `${Number(datos.catAprobado).toFixed(1)}%`
+      : "Pendiente"
+  }
+/>
 
         <OfertaDato
           titulo="Garantía"
@@ -4789,17 +4815,17 @@ function Oferta({
         />
       </div>
 
-      <div className="catDisclosure">
-        <strong>
-          CAT {Number(datos.catAprobado).toFixed(1)}% Sin IVA
-        </strong>
+{datos.catAprobado !== "" && (
+  <div className="catDisclosure">
+    <strong>
+      CAT {Number(datos.catAprobado).toFixed(1)}% Sin IVA
+    </strong>
 
-        <p>
-          Para fines informativos y de comparación. En producción
-          se calculará automáticamente con las condiciones
-          específicas de la operación.
-        </p>
-      </div>
+    <p>
+      Para fines informativos y de comparación.
+    </p>
+  </div>
+)}
 
       <div className="warningBox">
         <strong>Información importante</strong>
@@ -5000,9 +5026,19 @@ function Contratos({
           return;
         }
 
-        console.log("DOCUMENTOS GENERADOS:", body);
+console.log("DOCUMENTOS GENERADOS:", body);
 
-   alert(
+const documentosGenerados = {};
+
+(body?.documents || []).forEach((documento) => {
+  if (documento?.tipo) {
+    documentosGenerados[documento.tipo] = documento;
+  }
+});
+
+setDocumentosContractuales(documentosGenerados);
+
+alert(
   `Generación terminada. Se generaron ${
     body?.documents?.length || 0
   } documentos.`
@@ -5114,6 +5150,31 @@ function TesoreriaCliente({
   );
 }
 
+function abrirDocumento(tipo) {
+  const documento = documentosContractuales[tipo];
+
+  if (!documento) {
+    alert("El documento todavía no está disponible.");
+    return;
+  }
+
+  const url =
+    documento.url ||
+    documento.signedUrl ||
+    documento.signed_url;
+
+  if (!url) {
+    alert("No encontramos el enlace del documento.");
+    return;
+  }
+
+  window.open(
+    url,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
+
 function Dispersado({ ir }) {
   return (
     <Pagina
@@ -5190,115 +5251,91 @@ function UNE({ empresa }) {
       <div className="card legalText">
         <SectionDivider titulo="UNE de TRISAL" />
 
-        <Resumen titulo="Entidad" valor={empresa.razonSocial} />
-        <Resumen titulo="Titular de la UNE" valor={empresa.uneTitular} />
-        <Resumen titulo="Domicilio" valor={empresa.uneDireccion} />
-        <Resumen titulo="Teléfono UNE" valor={empresa.uneTelefono} />
-        <Resumen titulo="Correo UNE" valor={empresa.uneCorreo} />
-        <Resumen titulo="Horario de atención" valor={empresa.uneHorario} />
-        <Resumen titulo="Entidad federativa" valor={empresa.uneEntidad} />
-        <Resumen titulo="Sucursales u oficinas de atención" valor={empresa.uneSucursales} />
-        <Resumen titulo="Medio de recepción o canal" valor={empresa.uneCanal} />
+        <Resumen
+          titulo="Entidad"
+          valor={empresa.razonSocial}
+        />
 
-<div className="legalActions">
-  <a
-    className="legalActionPrimary"
-    href={`tel:${empresa.uneTelefono}`}
-  >
-    Llamar a la UNE
-  </a>
+        <Resumen
+          titulo="Titular de la UNE"
+          valor={empresa.uneTitular}
+        />
 
-  <a
-    className="legalActionSecondary"
-    href={`mailto:${empresa.uneCorreo}`}
-  >
-    Escribir a la UNE
-  </a>
-</div>
+        <Resumen
+          titulo="Domicilio"
+          valor={empresa.uneDireccion}
+        />
+
+        <Resumen
+          titulo="Teléfono UNE"
+          valor={empresa.uneTelefono}
+        />
+
+        <Resumen
+          titulo="Correo UNE"
+          valor={empresa.uneCorreo}
+        />
+
+        <Resumen
+          titulo="Horario de atención"
+          valor={empresa.uneHorario}
+        />
+
+        <Resumen
+          titulo="Entidad federativa"
+          valor={empresa.uneEntidad}
+        />
+
+        <Resumen
+          titulo="Sucursales u oficinas de atención"
+          valor={empresa.uneSucursales}
+        />
+
+        <Resumen
+          titulo="Medio de recepción o canal"
+          valor={empresa.uneCanal}
+        />
+
+        <div className="legalActions">
+          <a
+            className="legalActionPrimary"
+            href={`tel:${empresa.uneTelefono}`}
+          >
+            Llamar a la UNE
+          </a>
+
+          <a
+            className="legalActionSecondary"
+            href={`mailto:${empresa.uneCorreo}`}
+          >
+            Escribir a la UNE
+          </a>
+        </div>
+      </div>
 
       <div className="card legalText">
         <SectionDivider titulo="CONDUSEF" />
 
-        <Resumen titulo="Teléfono" valor={empresa.condusefTelefono} />
-        <Resumen titulo="Correo" valor={empresa.condusefCorreo} />
+        <Resumen
+          titulo="Teléfono"
+          valor={empresa.condusefTelefono}
+        />
 
-<div className="legalActions">
-  <a
-    className="legalActionPrimary"
-    href="https://www.condusef.gob.mx/"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    Consultar sitio de CONDUSEF
-  </a>
-</div>
-      </div>
-    </Pagina>
-  );
-}
+        <Resumen
+          titulo="Correo"
+          valor={empresa.condusefCorreo}
+        />
 
-function Normatividad({ empresa }) {
-  return (
-    <Pagina
-      titulo="Normatividad y transparencia"
-      subtitulo="Información institucional y contractual relevante para nuestros usuarios."
-    >
-      <div className="card legalText">
-        <SectionDivider titulo="Información institucional" />
-
-<Resumen
-  titulo="Razón social"
-  valor={empresa.razonSocial}
-/>
-
-<Resumen
-  titulo="Domicilio"
-  valor={empresa.direccion}
-/>
-
-<Resumen
-  titulo="Página de internet"
-  valor="trisalmx.com"
-/>
-      </div>
-
-      <div className="card legalText">
-        <SectionDivider titulo="Información del contrato" />
-
-        <Resumen titulo="Número de registro RECA" valor={empresa.reca} />
-        <Resumen titulo="Lugar de firma" valor={empresa.ciudadFirma} />
-        <Resumen titulo="Jurisdicción pactada" valor={empresa.jurisdiccion} />
-
-        <p>
-          Para la constitución y operación de {empresa.razonSocial}{" "}
-          con tal carácter, no requiere de autorización de la Secretaría
-          de Hacienda y Crédito Público.
-        </p>
-
-        <p>
-          {empresa.razonSocial} se encuentra sujeta a la supervisión
-          de la Comisión Nacional Bancaria y de Valores únicamente
-          para los efectos previstos en la legislación aplicable a las
-          sociedades financieras de objeto múltiple, entidades no reguladas.
-        </p>
-      </div>
-
-      <div className="card legalText">
-        <SectionDivider titulo="UNE" />
-        <Resumen titulo="Titular" valor={empresa.uneTitular} />
-        <Resumen titulo="Teléfono" valor={empresa.uneTelefono} />
-        <Resumen titulo="Correo" valor={empresa.uneCorreo} />
-        <Resumen titulo="Horario" valor={empresa.uneHorario} />
-      </div>
-
-      <div className="card legalText">
-        <SectionDivider titulo="Despachos de cobranza" />
-
-        <p>
-          Los datos de los despachos de cobranza que correspondan
-          se publicarán y mantendrán actualizados conforme a la
-          regulación aplicable.
-        </p>
+        <div className="legalActions">
+          <a
+            className="legalActionPrimary"
+            href="https://www.condusef.gob.mx/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Consultar sitio de CONDUSEF
+          </a>
+        </div>
       </div>
     </Pagina>
   );
