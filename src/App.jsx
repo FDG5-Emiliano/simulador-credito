@@ -5368,9 +5368,9 @@ function Privacidad({ empresa }) {
   return (
     <Pagina
       titulo="Aviso de privacidad"
-      subtitulo="Información sobre el tratamiento de datos personales."
+      subtitulo="Consulta el Aviso de Privacidad integral de TRISAL."
     >
-      <div className="card legalText">
+      <div className="card legalText privacyCard">
         <SectionDivider titulo="Responsable" />
 
         <p>
@@ -5379,25 +5379,40 @@ function Privacidad({ empresa }) {
           recabe.
         </p>
 
-        <SectionDivider titulo="Finalidades" />
+        <SectionDivider titulo="Aviso de Privacidad integral" />
 
         <p>
-          Los datos podrán utilizarse para identificación, integración
-          del expediente, análisis de crédito, contratación,
-          administración, cumplimiento regulatorio y prevención
-          de fraude.
+          Consulta el documento completo para conocer las finalidades
+          del tratamiento de tus datos personales, transferencias,
+          mecanismos para ejercer derechos ARCO, medios de contacto,
+          cambios al aviso y demás información aplicable.
         </p>
 
-        <SectionDivider titulo="Derechos ARCO" />
+        <div className="privacyActions">
+          <a
+            className="privacyPrimaryLink"
+            href="/aviso-privacidad.pdf"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Consultar Aviso de Privacidad
+          </a>
 
-        <p>
-          El titular podrá ejercer los derechos correspondientes
-          conforme al procedimiento establecido por la entidad.
-        </p>
+          <a
+            className="privacySecondaryLink"
+            href="/aviso-privacidad.pdf"
+            download
+          >
+            Descargar PDF
+          </a>
+        </div>
 
-        <div className="importantNotice">
-          Esta es una versión de prototipo. Sustituye este texto por
-          el Aviso de Privacidad definitivo validado por el área legal.
+        <div className="privacyDocumentInfo">
+          <strong>Documento oficial</strong>
+          <span>
+            El PDF publicado en esta sección corresponde al Aviso de
+            Privacidad vigente de TRISAL.
+          </span>
         </div>
       </div>
     </Pagina>

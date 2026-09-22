@@ -162,18 +162,18 @@
 }
 
 .regulatoryFooter {
-  margin-top: 28px;
-  padding-top: 22px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .regulatoryFooterTitle {
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
   font-weight: 700;
   text-align: center;
 }
@@ -182,17 +182,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .regulatoryLogos a {
+  width: 118px;
+  height: 52px;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 14px;
+
+  padding: 7px 10px;
+
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 7px;
+
+  opacity: 0.92;
+
   transition:
     transform 0.18s ease,
     opacity 0.18s ease;
@@ -200,25 +208,34 @@
 
 .regulatoryLogos a:hover {
   transform: translateY(-1px);
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .regulatoryLogo {
   display: block;
+
+  max-width: 94px;
+  max-height: 34px;
+
   width: auto;
-  max-width: 180px;
-  height: 46px;
+  height: auto;
+
   object-fit: contain;
 }
 
 @media (max-width: 700px) {
   .regulatoryLogos {
-    gap: 12px;
+    gap: 9px;
+  }
+
+  .regulatoryLogos a {
+    width: 105px;
+    height: 48px;
   }
 
   .regulatoryLogo {
-    max-width: 135px;
-    height: 38px;
+    max-width: 84px;
+    max-height: 30px;
   }
 }
 
@@ -242,4 +259,76 @@
     right: 0;
     border-right-color: var(--border);
   }
+}
+
+.privacyCard {
+  max-width: 920px;
+}
+
+.privacyActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.privacyPrimaryLink,
+.privacySecondaryLink {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px 16px;
+
+  border-radius: 8px;
+
+  font-size: 13px;
+  font-weight: 800;
+
+  text-decoration: none;
+}
+
+.privacyPrimaryLink {
+  background: var(--navy);
+  color: #ffffff;
+}
+
+.privacySecondaryLink {
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--navy);
+}
+
+.privacyDocumentInfo {
+  margin-top: 20px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  padding: 13px 15px;
+
+  background: #f5f7f9;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.privacyDocumentInfo strong {
+  font-size: 12px;
+}
+
+.privacyDocumentInfo span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.inlineLegalLink {
+  color: var(--gold);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
