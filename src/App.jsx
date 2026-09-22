@@ -2352,29 +2352,79 @@ ir("revision");
     datos.plazoAprobado,
   ]);
 
-  function abrirDocumento(tipo) {
-  const documento = documentosContractuales[tipo];
+async function abrirDocumento(tipo) {
+  try {
+    const documento =
+      documentosContractuales?.[tipo];
 
-  if (!documento) {
-    alert("El documento todavía no está disponible.");
-    return;
+    if (!documento) {
+      mostrarError(
+        "El documento todavía no está disponible."
+      );
+      return;
+    }
+
+    const storagePath =
+      documento.storage_path ||
+      documento.storagePath;
+
+    if (!storagePath) {
+      console.error(
+        "DOCUMENTO SIN STORAGE PATH:",
+        documento
+      );
+
+      mostrarError(
+        "No encontramos la ubicación del documento."
+      );
+      return;
+    }
+
+    const {
+      data,
+      error,
+    } = await supabase.storage
+      .from("expedientes-contractuales")
+      .createSignedUrl(
+        storagePath,
+        60 * 10
+      );
+
+    if (error) {
+      console.error(
+        "ERROR CREANDO SIGNED URL:",
+        error
+      );
+
+      mostrarError(
+        `No pudimos abrir el documento: ${error.message}`
+      );
+      return;
+    }
+
+    if (!data?.signedUrl) {
+      mostrarError(
+        "No pudimos generar el enlace del documento."
+      );
+      return;
+    }
+
+    window.open(
+      data.signedUrl,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  } catch (error) {
+    console.error(
+      "ERROR ABRIENDO DOCUMENTO:",
+      error
+    );
+
+    mostrarError(
+      error?.message ||
+        "No pudimos abrir el documento."
+    );
   }
-
-  const url =
-    documento.url ||
-    documento.signedUrl ||
-    documento.signed_url;
-
-  if (!url) {
-    alert("No encontramos el enlace del documento.");
-    return;
-  }
-
-  window.open(
-    url,
-    "_blank",
-    "noopener,noreferrer"
-  );
 }
 
   if (cargandoSesion) {
@@ -5084,10 +5134,17 @@ function Contratos({
   documentosContractuales,
   abrirDocumento,
 }) {
-  const contratoDisponible =
-    Boolean(
-      documentosContractuales?.CONTRATO
-    );
+const tipoContrato =
+  documentosContractuales?.CONTRATO_PF
+    ? "CONTRATO_PF"
+    : documentosContractuales?.CONTRATO_PM
+    ? "CONTRATO_PM"
+    : documentosContractuales?.CONTRATO
+    ? "CONTRATO"
+    : null;
+
+const contratoDisponible =
+  Boolean(tipoContrato);
 
   const tablaDisponible =
     Boolean(
@@ -5113,16 +5170,15 @@ function Contratos({
     >
       <Tracker {...trackerProps} />
 
-      <div className="card">
-        <Documento
-          titulo="Contrato de crédito"
-          disponible={
-            contratoDisponible
-          }
-          onVer={() =>
-            abrirDocumento("CONTRATO")
-          }
-        />
+<Documento
+  titulo="Contrato de crédito"
+  disponible={contratoDisponible}
+  onVer={() => {
+    if (tipoContrato) {
+      abrirDocumento(tipoContrato);
+    }
+  }}
+/>
 
         <Documento
           titulo="Tabla de amortización"
