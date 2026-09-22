@@ -4824,32 +4824,6 @@ function Oferta({
         />
       </div>
 
-{datos.catAprobado !== "" && (
-  <div className="catDisclosure">
-    <strong>
-      CAT {Number(datos.catAprobado).toFixed(1)}% Sin IVA
-    </strong>
-
-    <p>
-      Para fines informativos y de comparación.
-    </p>
-  </div>
-)}
-
-      <div className="warningBox">
-        <strong>Información importante</strong>
-
-        <p>
-          Contratar créditos que excedan tu capacidad de pago
-          afecta tu historial crediticio.
-        </p>
-
-        <p>
-          Incumplir tus obligaciones puede generar intereses
-          moratorios y comisiones cuando correspondan.
-        </p>
-      </div>
-
       <div className="buttonRow">
         <button
           className="primary"
@@ -5067,7 +5041,7 @@ alert(
   >
     {guardando
       ? "Generando documentos..."
-      : "Probar generación de documentos"}
+      : "Generar documentos"}
   </button>
 </div>
 
@@ -5082,14 +5056,13 @@ alert(
 }
 
 function Firma({
-  ir,
   regresar,
   trackerProps,
 }) {
   return (
     <Pagina
-      titulo="Firma tus documentos"
-      subtitulo="Último paso antes de enviar la operación a tesorería."
+      titulo="Firma de documentos"
+      subtitulo="Tus documentos están listos para formalización."
     >
       <Tracker {...trackerProps} />
 
@@ -5098,34 +5071,46 @@ function Firma({
 
         <div>
           <p className="cardEyebrow">
-            FIRMA
+            FIRMA PENDIENTE
           </p>
 
-          <h2>Firma del solicitante</h2>
+          <h2>
+            Tus documentos están pendientes de firma.
+          </h2>
 
           <p>
-            Se registrará evidencia de firma y versión documental.
+            Un ejecutivo de TRISAL coordinará contigo la firma
+            física o el proceso de firma correspondiente.
+          </p>
+
+          <p>
+            Cuando la documentación haya sido confirmada,
+            el estado de tu crédito se actualizará
+            automáticamente.
           </p>
         </div>
       </div>
 
-      <NavButtons
-        atras={regresar}
-        continuar={() => ir("tesoreriaCliente")}
-        textoContinuar="Simular firma"
-      />
+      <div className="buttonRow">
+        <button
+          type="button"
+          className="secondary"
+          onClick={regresar}
+        >
+          ← Regresar a documentos
+        </button>
+      </div>
     </Pagina>
   );
 }
 
 function TesoreriaCliente({
-  ir,
   trackerProps,
 }) {
   return (
     <Pagina
       titulo="Todo listo"
-      subtitulo="Tu crédito pasó a las validaciones finales de tesorería."
+      subtitulo="Tu crédito se encuentra en proceso de dispersión."
     >
       <Tracker {...trackerProps} />
 
@@ -5134,27 +5119,24 @@ function TesoreriaCliente({
 
         <div>
           <p className="cardEyebrow">
-            DOCUMENTACIÓN COMPLETA
+            LISTO PARA DISPERSIÓN
           </p>
 
           <h2>
-            La operación está lista para dispersión.
+            La documentación de tu crédito está completa.
           </h2>
 
           <p>
-            Tesorería realizará las últimas validaciones antes
-            de transferir los recursos.
+            TRISAL realizará las validaciones operativas finales
+            y la dispersión de los recursos a la cuenta bancaria
+            registrada.
+          </p>
+
+          <p>
+            Cuando la dispersión sea confirmada, el estado de tu
+            crédito se actualizará automáticamente.
           </p>
         </div>
-      </div>
-
-      <div className="demoArea">
-        <button
-          className="demoButton"
-          onClick={() => ir("dispersado")}
-        >
-          DEMO: Simular dispersión
-        </button>
       </div>
     </Pagina>
   );
