@@ -1066,45 +1066,73 @@ async function prepararContratacion() {
     setMensajeError("");
     setMensajeInfo("");
 
+    /* =========================================
+       1. VALIDAR SESIÓN
+    ========================================= */
+
     const {
       data: { session },
       error: errorSession,
     } = await supabase.auth.getSession();
 
-    if (errorSession) throw errorSession;
+    if (errorSession) {
+      throw errorSession;
+    }
 
-    if (!session?.user) {
-      mostrarError("Tu sesión expiró. Inicia sesión nuevamente.");
+    if (!session?.user || !session?.access_token) {
+      mostrarError(
+        "Tu sesión expiró. Inicia sesión nuevamente."
+      );
       return false;
     }
+
+    /* =========================================
+       2. VALIDAR SOLICITUD
+    ========================================= */
 
     if (!solicitudId) {
-      mostrarError("No encontramos la solicitud asociada a tu cuenta.");
+      mostrarError(
+        "No encontramos la solicitud asociada a tu cuenta."
+      );
       return false;
     }
 
+    /* =========================================
+       3. VALIDAR CUENTA BANCARIA
+    ========================================= */
+
     if (!datos.banco?.trim()) {
-      mostrarError("Ingresa el nombre del banco.");
+      mostrarError(
+        "Ingresa el nombre del banco."
+      );
       return false;
     }
 
     if (!/^\d{18}$/.test(String(datos.clabe || ""))) {
-      mostrarError("La CLABE debe contener exactamente 18 dígitos.");
+      mostrarError(
+        "La CLABE debe contener exactamente 18 dígitos."
+      );
       return false;
     }
+
+    /* =========================================
+       4. DETERMINAR TITULAR
+    ========================================= */
 
     const titular =
       datos.tipoPersona === "moral"
-        ? datos.razonSocial?.trim()
-        : [datos.nombre, datos.apellidoPaterno, datos.apellidoMaterno]
+        ? datos.razonSocial
+        : [
+            datos.nombre,
+            datos.apellidoPaterno,
+            datos.apellidoMaterno,
+          ]
             .filter(Boolean)
-            .join(" ")
-            .trim();
+            .join(" ");
 
-    if (!titular) {
-      mostrarError("No pudimos determinar el titular de la cuenta.");
-      return false;
-    }
+    /* =========================================
+       5. GUARDAR CUENTA BANCARIA
+    ========================================= */
 
     const { error: errorCuenta } = await supabase
       .from("CuentasBancarias")
@@ -1120,84 +1148,236 @@ async function prepararContratacion() {
           verificada: false,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "aplicacion_id,uso" }
+        {
+          onConflict: "aplicacion_id,uso",
+        }
       );
 
     if (errorCuenta) {
-      console.error("ERROR CUENTA:", errorCuenta);
-      mostrarError(`No pudimos guardar la cuenta bancaria: ${errorCuenta.message}`);
+      console.error(
+        "ERROR CUENTA:",
+        errorCuenta
+      );
+
+      mostrarError(
+        `No pudimos guardar la cuenta bancaria: ${errorCuenta.message}`
+      );
+
       return false;
     }
 
-    const { data: expediente, error: errorExpediente } =
-      await supabase.functions.invoke("generar-expediente", {
+    /* =========================================
+       6. PREPARAR EXPEDIENTE / SNAPSHOT
+    ========================================= */
+
+    const {
+      data: expediente,
+      error: errorExpediente,
+    } = await supabase.functions.invoke(
+      "generar-expediente",
+      {
         body: {
           aplicacion_id: solicitudId,
         },
-      });
+      }
+    );
 
     if (errorExpediente) {
-      console.error("EDGE FUNCTION ERROR:", errorExpediente);
+      console.error(
+        "EDGE FUNCTION ERROR:",
+        errorExpediente
+      );
+
       mostrarError(
         `No pudimos preparar el expediente contractual: ${
-          errorExpediente.message || "Error en generar-expediente"
+          errorExpediente.message ||
+          "Error en generar-expediente"
         }`
       );
+
       return false;
     }
 
     if (expediente?.error) {
-      console.error("ERROR DEL SERVIDOR:", expediente.error);
+      console.error(
+        "ERROR DEL SERVIDOR:",
+        expediente.error
+      );
+
       mostrarError(expediente.error);
+
       return false;
     }
 
-    const ahora = new Date().toISOString();
-    const nuevoHistorial = { ...ultimaPantallaPorPaso, 6: "contratos" };
-    const datosSeguros = { ...datos, password: "", clabe: "" };
+    /* =========================================
+       7. GENERAR DOCUMENTOS CONTRACTUALES
+       AUTOMÁTICAMENTE
+    ========================================= */
 
-    const { data: solicitudActualizada, error: errorAplicacion } =
-      await supabase
-        .from("Aplicaciones")
-        .update({
-          estado: "CONTRACTING",
-          pantalla_actual: "contratos",
-          datos_borrador: {
-            datos: datosSeguros,
-            consentimientos,
-            pasoMaximo: 6,
-            ultimaPantallaPorPaso: nuevoHistorial,
-          },
-          actualizado_en: ahora,
-        })
-        .eq("id", solicitudId)
-        .select("id, estado, pantalla_actual")
-        .single();
+    const responseDocumentos = await fetch(
+      "/api/generar-documentos-contractuales",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+
+        body: JSON.stringify({
+          aplicacion_id: solicitudId,
+        }),
+      }
+    );
+
+    const bodyDocumentos =
+      await responseDocumentos.json();
+
+    if (!responseDocumentos.ok) {
+      console.error(
+        "ERROR GENERANDO DOCUMENTOS:",
+        bodyDocumentos
+      );
+
+      mostrarError(
+        bodyDocumentos?.error ||
+          `Error ${responseDocumentos.status} generando documentos contractuales.`
+      );
+
+      return false;
+    }
+
+    console.log(
+      "DOCUMENTOS GENERADOS:",
+      bodyDocumentos
+    );
+
+    /* =========================================
+       8. GUARDAR DOCUMENTOS EN EL STATE
+    ========================================= */
+
+    const documentosGenerados = {};
+
+    (bodyDocumentos?.documents || []).forEach(
+      (documento) => {
+        const tipo =
+          documento?.tipo ||
+          documento?.tipo_documento ||
+          documento?.document_type;
+
+        if (tipo) {
+          documentosGenerados[tipo] =
+            documento;
+        }
+      }
+    );
+
+    setDocumentosContractuales(
+      documentosGenerados
+    );
+
+    /* =========================================
+       9. CAMBIAR SOLICITUD A CONTRACTING
+    ========================================= */
+
+    const ahora =
+      new Date().toISOString();
+
+    const nuevoHistorial = {
+      ...ultimaPantallaPorPaso,
+      6: "contratos",
+    };
+
+    const datosSeguros = {
+      ...datos,
+      password: "",
+      clabe: "",
+    };
+
+    const {
+      data: solicitudActualizada,
+      error: errorAplicacion,
+    } = await supabase
+      .from("Aplicaciones")
+      .update({
+        estado: "CONTRACTING",
+        pantalla_actual: "contratos",
+
+        datos_borrador: {
+          datos: datosSeguros,
+          consentimientos,
+          pasoMaximo: 6,
+          ultimaPantallaPorPaso:
+            nuevoHistorial,
+        },
+
+        actualizado_en: ahora,
+      })
+      .eq("id", solicitudId)
+      .select(
+        "id, estado, pantalla_actual"
+      )
+      .single();
 
     if (errorAplicacion) {
-      console.error("ERROR ACTUALIZANDO APLICACIÓN:", errorAplicacion);
-      mostrarError(
-        `El expediente fue generado, pero no pudimos actualizar la solicitud: ${errorAplicacion.message}`
+      console.error(
+        "ERROR ACTUALIZANDO APLICACIÓN:",
+        errorAplicacion
       );
+
+      mostrarError(
+        `Los documentos fueron generados, pero no pudimos actualizar la solicitud: ${errorAplicacion.message}`
+      );
+
       return false;
     }
 
     if (!solicitudActualizada) {
-      mostrarError("Supabase no confirmó la actualización de la solicitud.");
+      mostrarError(
+        "Supabase no confirmó la actualización de la solicitud."
+      );
+
       return false;
     }
 
+    /* =========================================
+       10. ACTUALIZAR FRONTEND
+    ========================================= */
+
     setEstadoSolicitud("CONTRACTING");
+
     setPasoMaximo(6);
-    setUltimaPantallaPorPaso(nuevoHistorial);
-    setMensajeInfo("Tu expediente contractual fue preparado correctamente.");
+
+    setUltimaPantallaPorPaso(
+      nuevoHistorial
+    );
+
+    setMensajeInfo(
+      "Tus documentos contractuales fueron preparados correctamente."
+    );
+
+    /* =========================================
+       11. PASAR DIRECTAMENTE A DOCUMENTOS
+    ========================================= */
+
     ir("contratos");
 
-    console.log("CONTRATACIÓN TERMINADA");
+    console.log(
+      "CONTRATACIÓN Y DOCUMENTOS TERMINADOS"
+    );
+
     return true;
   } catch (error) {
-    console.error("ERROR PREPARANDO CONTRATACIÓN:", error);
-    mostrarError(error?.message || "Ocurrió un error al preparar la contratación.");
+    console.error(
+      "ERROR PREPARANDO CONTRATACIÓN:",
+      error
+    );
+
+    mostrarError(
+      error?.message ||
+        "Ocurrió un error al preparar la contratación."
+    );
+
     return false;
   } finally {
     setGuardando(false);
@@ -2555,13 +2735,15 @@ ir("revision");
         {pantalla === "contratos" && (
 <Contratos
   ir={ir}
-  regresar={() => regresarA("cuentaBanco")}
-  solicitudId={solicitudId}
-  guardando={guardando}
-  setGuardando={setGuardando}
-  documentosContractuales={documentosContractuales}
-  setDocumentosContractuales={setDocumentosContractuales}
-  abrirDocumento={abrirDocumento}
+  regresar={() =>
+    regresarA("cuentaBanco")
+  }
+  documentosContractuales={
+    documentosContractuales
+  }
+  abrirDocumento={
+    abrirDocumento
+  }
   trackerProps={{
     pasoActual: 6,
     pasoMaximo,
@@ -2569,7 +2751,7 @@ ir("revision");
     estadoSolicitud,
   }}
 />
-        )}
+
 
         {pantalla === "firma" && (
           <Firma
@@ -4898,133 +5080,85 @@ function Contratos({
   ir,
   regresar,
   trackerProps,
-  solicitudId,
-  guardando,
-  setGuardando,
   documentosContractuales,
-  setDocumentosContractuales,
   abrirDocumento,
 }) {
-    return (
+  const contratoDisponible =
+    Boolean(
+      documentosContractuales?.CONTRATO
+    );
+
+  const tablaDisponible =
+    Boolean(
+      documentosContractuales
+        ?.TABLA_AMORTIZACION
+    );
+
+  const domiciliacionDisponible =
+    Boolean(
+      documentosContractuales
+        ?.DOMICILIACION
+    );
+
+  const documentosListos =
+    contratoDisponible &&
+    tablaDisponible &&
+    domiciliacionDisponible;
+
+  return (
     <Pagina
       titulo="Documentos contractuales"
-      subtitulo="Revisa los documentos antes de firmar."
+      subtitulo="Revisa tus documentos contractuales antes de continuar."
     >
       <Tracker {...trackerProps} />
 
       <div className="card">
-<Documento
-  titulo="Contrato de crédito"
-  disponible={Boolean(documentosContractuales?.CONTRATO)}
-  onVer={() => abrirDocumento("CONTRATO")}
-/>
-
-<Documento
-  titulo="Tabla de amortización"
-  disponible={Boolean(documentosContractuales?.TABLA_AMORTIZACION)}
-  onVer={() => abrirDocumento("TABLA_AMORTIZACION")}
-/>
-
-<Documento
-  titulo="Pagaré"
-  disponible={false}
-/>
-
-<Documento
-  titulo="Autorización de domiciliación"
-  disponible={Boolean(documentosContractuales?.DOMICILIACION)}
-  onVer={() => abrirDocumento("DOMICILIACION")}
-/>
-
-<div style={{ marginTop: "24px", marginBottom: "16px" }}>
-  <button
-    type="button"
-    className="primary"
-    disabled={guardando}
-    onClick={async () => {
-      try {
-        setGuardando(true);
-
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
-          alert("No hay una sesión activa.");
-          return;
-        }
-
-        if (!solicitudId) {
-          alert("No encontramos el ID de la solicitud.");
-          return;
-        }
-
-        const response = await fetch(
-          "/api/generar-documentos-contractuales",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              aplicacion_id: solicitudId,
-            }),
+        <Documento
+          titulo="Contrato de crédito"
+          disponible={
+            contratoDisponible
           }
-        );
+          onVer={() =>
+            abrirDocumento("CONTRATO")
+          }
+        />
 
-        const body = await response.json();
+        <Documento
+          titulo="Tabla de amortización"
+          disponible={
+            tablaDisponible
+          }
+          onVer={() =>
+            abrirDocumento(
+              "TABLA_AMORTIZACION"
+            )
+          }
+        />
 
-        if (!response.ok) {
-          console.error("ERROR GENERADOR:", body);
+        <Documento
+          titulo="Pagaré"
+          disponible={false}
+        />
 
-          alert(
-            body?.error ||
-              `Error ${response.status} generando documentos.`
-          );
-
-          return;
-        }
-
-console.log("DOCUMENTOS GENERADOS:", body);
-
-const documentosGenerados = {};
-
-(body?.documents || []).forEach((documento) => {
-  if (documento?.tipo) {
-    documentosGenerados[documento.tipo] = documento;
-  }
-});
-
-setDocumentosContractuales(documentosGenerados);
-
-alert(
-  `Generación terminada. Se generaron ${
-    body?.documents?.length || 0
-  } documentos.`
-);
-      } catch (error) {
-        console.error("ERROR:", error);
-
-        alert(
-          error?.message ||
-            "Ocurrió un error generando los documentos."
-        );
-      } finally {
-        setGuardando(false);
-      }
-    }}
-  >
-    {guardando
-      ? "Generando documentos..."
-      : "Generar documentos"}
-  </button>
-</div>
+        <Documento
+          titulo="Autorización de domiciliación"
+          disponible={
+            domiciliacionDisponible
+          }
+          onVer={() =>
+            abrirDocumento(
+              "DOMICILIACION"
+            )
+          }
+        />
 
         <NavButtons
           atras={regresar}
-          continuar={() => ir("firma")}
-          textoContinuar="Continuar a firma"
+          continuar={() =>
+            ir("firma")
+          }
+          textoContinuar="Continuar"
+          disabled={!documentosListos}
         />
       </div>
     </Pagina>
