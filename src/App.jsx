@@ -5390,15 +5390,17 @@ function Privacidad({ empresa }) {
 
         <a
           className="privacyDocumentLink"
-          href="/aviso-privacidad.pdf"
+          href="/aviso-privacidad-trisal-v1.pdf"
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
         >
           Aviso de Privacidad
         </a>
 
         <div className="privacyDocumentInfo">
-          <strong>Documento oficial vigente</strong>
+          <strong>
+            Documento oficial vigente
+          </strong>
 
           <span>
             Consulta el Aviso de Privacidad de TRISAL antes de
@@ -5999,7 +6001,7 @@ function Footer({
         </div>
       </div>
 
-      <div className="regulatoryFooter">
+<div className="regulatoryFooter">
   <span className="regulatoryFooterTitle">
     Información y autoridades financieras
   </span>
