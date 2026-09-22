@@ -2354,6 +2354,8 @@ ir("revision");
 
 async function abrirDocumento(tipo) {
   try {
+    setMensajeError("");
+
     const documento =
       documentosContractuales?.[tipo];
 
@@ -2380,25 +2382,49 @@ async function abrirDocumento(tipo) {
       return;
     }
 
+    console.log(
+      "ABRIENDO DOCUMENTO:",
+      {
+        tipo,
+        bucket:
+          "expedientes-contractuales",
+        storagePath,
+        documento,
+      }
+    );
+
     const {
       data,
       error,
     } = await supabase.storage
-      .from("expedientes-contractuales")
+      .from(
+        "expedientes-contractuales"
+      )
       .createSignedUrl(
         storagePath,
-        60 * 10
+        60 * 10,
+        {
+          download:
+            storagePath
+              .split("/")
+              .pop(),
+        }
       );
 
     if (error) {
       console.error(
         "ERROR CREANDO SIGNED URL:",
-        error
+        {
+          error,
+          tipo,
+          storagePath,
+        }
       );
 
       mostrarError(
         `No pudimos abrir el documento: ${error.message}`
       );
+
       return;
     }
 
@@ -2406,14 +2432,12 @@ async function abrirDocumento(tipo) {
       mostrarError(
         "No pudimos generar el enlace del documento."
       );
+
       return;
     }
 
-    window.open(
-      data.signedUrl,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.location.href =
+      data.signedUrl;
   } catch (error) {
     console.error(
       "ERROR ABRIENDO DOCUMENTO:",
@@ -2426,6 +2450,7 @@ async function abrirDocumento(tipo) {
     );
   }
 }
+
 
   if (cargandoSesion) {
     return (
