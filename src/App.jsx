@@ -57,7 +57,6 @@ const PASO_POR_PANTALLA = {
   tipoCredito: 3,
   garantia: 3,
   obligado: 3,
-  garantiaStatus: 3,
 
   revision: 4,
   enRevision: 4,
@@ -540,6 +539,42 @@ const producto = {
     }
   }
 
+    /* =========================================================
+     para consultar cada 1o seg si se aprobo o no
+  ========================================================= */
+
+  useEffect(() => {
+  if (
+    pantalla !== "enRevision" ||
+    !usuario?.id
+  ) {
+    return;
+  }
+
+  const revisarEstado = async () => {
+    try {
+      await recuperarSolicitud(usuario.id);
+    } catch (error) {
+      console.error(
+        "Error actualizando estado de solicitud:",
+        error
+      );
+    }
+  };
+
+  revisarEstado();
+
+  const intervalo = setInterval(
+    revisarEstado,
+    10000
+  );
+
+  return () => {
+    clearInterval(intervalo);
+  };
+}, [pantalla, usuario?.id]);
+
+
   /* =========================================================
      AUTO-GUARDADO SUPABASE
   ========================================================= */
@@ -944,9 +979,20 @@ const producto = {
         return true;
       }
 
-      if (data.estado === "APPROVED") {
-  setPasoMaximo((prev) => Math.max(prev, 5));
+if (data.estado === "APPROVED") {
+  await cargarDecisionCredito(data.id);
+
+  setPasoMaximo((prev) =>
+    Math.max(prev, 5)
+  );
+
+  setUltimaPantallaPorPaso((prev) => ({
+    ...prev,
+    5: "oferta",
+  }));
+
   setPantalla("oferta");
+
   return true;
 }
 
@@ -1807,7 +1853,7 @@ async function prepararContratacion() {
       return;
     }
 
-    ir("garantiaStatus");
+ir("revision");
   }
 
   function validarObligado() {
@@ -1830,7 +1876,7 @@ async function prepararContratacion() {
       return;
     }
 
-    ir("garantiaStatus");
+ir("revision");
   }
 
   /* =========================================================
@@ -2432,24 +2478,6 @@ async function prepararContratacion() {
             actualizar={actualizar}
             continuar={validarObligado}
             regresar={() => regresarA("garantia")}
-            trackerProps={{
-              pasoActual: 3,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
-
-        {pantalla === "garantiaStatus" && (
-          <GarantiaStatus
-            datos={datos}
-            ir={ir}
-            regresar={() =>
-              datos.tipoGarantia === "Obligado solidario"
-                ? regresarA("obligado")
-                : regresarA("garantia")
-            }
             trackerProps={{
               pasoActual: 3,
               pasoMaximo,
@@ -4587,49 +4615,6 @@ function Obligado({
   );
 }
 
-function GarantiaStatus({
-  datos,
-  ir,
-  regresar,
-  trackerProps,
-}) {
-  return (
-    <Pagina
-      titulo="Validación de garantía"
-      subtitulo="Podrás consultar el estado sin visualizar información privada de terceros."
-    >
-      <Tracker {...trackerProps} />
-
-      <div className="card">
-        <div className="statusRow">
-          <div>
-            <span className="summaryLabel">
-              Garantía
-            </span>
-
-            <h2>{datos.tipoGarantia}</h2>
-          </div>
-
-          <span className="yellowStatus">
-            En proceso
-          </span>
-        </div>
-
-        <div className="demoNotice">
-          Para continuar con el prototipo, puedes simular la
-          validación.
-        </div>
-
-        <NavButtons
-          atras={regresar}
-          continuar={() => ir("revision")}
-          textoContinuar="Simular garantía validada"
-        />
-      </div>
-    </Pagina>
-  );
-}
-
 /* =========================================================
    REVISIÓN
 ========================================================= */
@@ -4718,7 +4703,6 @@ function Revision({
 function EnRevision({
   datos,
   folio,
-  ir,
   trackerProps,
 }) {
   return (
@@ -4741,9 +4725,9 @@ function EnRevision({
           </h2>
 
           <p>
-            Nuestro equipo revisará tu información para
-            determinar las condiciones que, en su caso,
-            puedan ofrecerse.
+            Un ejecutivo revisará tu expediente completo.
+            Cuando exista una resolución, esta pantalla se
+            actualizará automáticamente.
           </p>
         </div>
       </div>
@@ -4760,17 +4744,15 @@ function EnRevision({
         />
       </div>
 
-      <div className="demoArea">
-        <button
-          className="demoButton"
-          onClick={() => ir("oferta")}
-        >
-          DEMO: Simular aprobación
-        </button>
+      <div className="notice">
+        No necesitas realizar ninguna acción por ahora.
+        Mantén esta página abierta o vuelve a iniciar sesión
+        posteriormente para consultar el resultado.
       </div>
     </Pagina>
   );
 }
+
 
 /* =========================================================
    OFERTA
