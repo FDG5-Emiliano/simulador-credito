@@ -265,29 +265,35 @@ fechaPrimerPago: "",
     condusefCorreo: "asesoria@condusef.gob.mx",
   };
 
-  const producto = {
-    nombre: "Crédito Simple TRISAL",
+const producto = {
+  nombre: "Crédito Simple TRISAL",
 
-    tipo: "Crédito simple con tasa de interés fija.",
+  tipo: "Crédito simple con tasa de interés fija.",
 
-    mercadoObjetivo:
-      "Personas físicas con actividad empresarial, profesionistas, comerciantes y personas morales que requieran financiamiento para capital de trabajo, inventario, adquisición de equipo, liquidez u otros destinos autorizados.",
+  mercadoObjetivo:
+    "Personas físicas con actividad empresarial, profesionistas, comerciantes y personas morales que requieran financiamiento para capital de trabajo, inventario, adquisición de equipo, liquidez u otros destinos autorizados.",
 
-    montoMinimo: 1000,
-    montoMaximo: 300000,
+  montoMinimo: 10000,
+  montoMaximo: 200000,
 
-    plazoMinimo: 3,
-    plazoMaximo: 12,
+  plazoMinimo: 3,
+  plazoMaximo: 12,
 
-    tasaTipo: "Fija",
+  tasaTipo: "Fija",
 
-    tasaMaxima: 80,
-    catPromedio: 90,
-    fechaCalculoCat: null,
+  tasaPromedio: 55,
+  tasaMaxima: 80,
 
-    metodologiaCat:
-      "CAT promedio 90.0% Sin IVA. Para fines informativos y de comparación. Calculado conforme a la metodología, fórmula, componentes y supuestos establecidos por Banco de México.",
-  };
+  catPromedio: 90.9,
+  fechaCalculoCat: "22/09/2026",
+
+  comisionAperturaMinima: 0,
+  comisionAperturaMaxima: 5,
+  comisionAperturaReferencia: 3,
+
+  metodologiaCat:
+    "CAT PROMEDIO 90.9% Sin IVA. Para fines informativos y de comparación. Calculado utilizando condiciones representativas del producto conforme a la metodología aplicable de Banco de México.",
+};
 
   /* =========================================================
      HELPERS NUMÉRICOS
@@ -2824,15 +2830,15 @@ function Producto({ producto, ir }) {
           }
         />
 
-        <ProductData
-          titulo="Plazos"
-          valor={`${producto.plazoMinimo} a ${producto.plazoMaximo} meses`}
-        />
+<ProductData
+  titulo="Plazos"
+  valor={`${producto.plazoMinimo} a ${producto.plazoMaximo} meses`}
+/>
 
-        <ProductData
-          titulo="Tasa anual máxima"
-          valor={tasaMaxima}
-        />
+<ProductData
+  titulo="Tasa anual promedio"
+  valor={`${Number(producto.tasaPromedio).toFixed(1)}%`}
+/>
       </div>
 
       <div className="catPublicCard">
@@ -5194,20 +5200,21 @@ function UNE({ empresa }) {
         <Resumen titulo="Sucursales u oficinas de atención" valor={empresa.uneSucursales} />
         <Resumen titulo="Medio de recepción o canal" valor={empresa.uneCanal} />
 
-        <a
-          className="legalLink"
-          href={`tel:${empresa.uneTelefono}`}
-        >
-          Llamar a la UNE →
-        </a>
+<div className="legalActions">
+  <a
+    className="legalActionPrimary"
+    href={`tel:${empresa.uneTelefono}`}
+  >
+    Llamar a la UNE
+  </a>
 
-        <a
-          className="legalLink"
-          href={`mailto:${empresa.uneCorreo}`}
-        >
-          Escribir a la UNE →
-        </a>
-      </div>
+  <a
+    className="legalActionSecondary"
+    href={`mailto:${empresa.uneCorreo}`}
+  >
+    Escribir a la UNE
+  </a>
+</div>
 
       <div className="card legalText">
         <SectionDivider titulo="CONDUSEF" />
@@ -5215,14 +5222,16 @@ function UNE({ empresa }) {
         <Resumen titulo="Teléfono" valor={empresa.condusefTelefono} />
         <Resumen titulo="Correo" valor={empresa.condusefCorreo} />
 
-        <a
-          className="legalLink"
-          href="https://www.condusef.gob.mx/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Consultar sitio de CONDUSEF →
-        </a>
+<div className="legalActions">
+  <a
+    className="legalActionPrimary"
+    href="https://www.condusef.gob.mx/"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    Consultar sitio de CONDUSEF
+  </a>
+</div>
       </div>
     </Pagina>
   );
@@ -5237,14 +5246,20 @@ function Normatividad({ empresa }) {
       <div className="card legalText">
         <SectionDivider titulo="Información institucional" />
 
-        <Resumen titulo="Razón social" valor={empresa.razonSocial} />
-        <Resumen titulo="Folio Mercantil Electrónico" valor={empresa.folioMercantil} />
-        <Resumen titulo="Escritura constitutiva" valor={empresa.escrituraConstitutiva} />
-        <Resumen titulo="Fecha de escritura constitutiva" valor={empresa.fechaEscrituraConstitutiva} />
-        <Resumen titulo="Fecha de inscripción en el RPC" valor={empresa.fechaInscripcionRpc} />
-        <Resumen titulo="Representante legal" valor={empresa.representanteLegal} />
-        <Resumen titulo="Domicilio" valor={empresa.direccion} />
-        <Resumen titulo="Página de internet" valor="trisalmx.com" />
+<Resumen
+  titulo="Razón social"
+  valor={empresa.razonSocial}
+/>
+
+<Resumen
+  titulo="Domicilio"
+  valor={empresa.direccion}
+/>
+
+<Resumen
+  titulo="Página de internet"
+  valor="trisalmx.com"
+/>
       </div>
 
       <div className="card legalText">
@@ -7973,14 +7988,73 @@ button:disabled {
   line-height: 1.7;
 }
 
-.legalLink {
-  display: inline-block;
+.legalActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 
-  margin-top: 15px;
+  gap: 10px;
+
+  margin-top: 20px;
+}
+
+.legalActionPrimary,
+.legalActionSecondary {
+  min-height: 43px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px 17px;
+
+  border-radius: 9px;
+
+  font-size: 13px;
+  font-weight: 850;
+
+  line-height: 1;
+
+  text-decoration: none;
+
+  transition:
+    transform .18s ease,
+    background .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.legalActionPrimary {
+  background: var(--navy);
+
+  color: white;
+
+  border: 1px solid var(--navy);
+}
+
+.legalActionPrimary:hover {
+  background: #202b3e;
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 6px 16px rgba(17,26,42,.12);
+}
+
+.legalActionSecondary {
+  background: white;
 
   color: var(--navy);
 
-  font-weight: 850;
+  border: 1px solid #cbd3dd;
+}
+
+.legalActionSecondary:hover {
+  border-color: var(--gold);
+
+  color: #76591f;
+
+  transform: translateY(-1px);
 }
 
 .buroLogoMock {
@@ -8564,6 +8638,17 @@ button:disabled {
 
     font-weight: 800;
   }
+
+  .legalActions {
+  flex-direction: column;
+
+  align-items: stretch;
+}
+
+.legalActionPrimary,
+.legalActionSecondary {
+  width: 100%;
+}
 
   .mobileStepCurrent {
     background: var(--navy);
