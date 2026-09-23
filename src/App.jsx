@@ -1658,6 +1658,38 @@ async function prepararContratacion() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
+  function normalizarRFC(valor) {
+  return String(valor || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+function normalizarCURP(valor) {
+  return String(valor || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+function rfcPersonaFisicaValido(valor) {
+  const rfc = normalizarRFC(valor);
+
+  return /^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$/.test(rfc);
+}
+
+function rfcPersonaMoralValido(valor) {
+  const rfc = normalizarRFC(valor);
+
+  return /^[A-ZÑ&]{3}\d{6}[A-Z0-9]{3}$/.test(rfc);
+}
+
+function curpValida(valor) {
+  const curp = normalizarCURP(valor);
+
+  return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(curp);
+}
+
   function documentoExiste(nombre) {
     const documento = archivos[nombre];
 
@@ -1723,60 +1755,139 @@ async function prepararContratacion() {
     ir("datosSolicitante");
   }
 
-  function validarDatosSolicitante() {
-    if (datos.tipoPersona === "fisica") {
+function validarDatosSolicitante() {
+  if (datos.tipoPersona === "fisica") {
+    if (
+      !datos.nombre.trim() ||
+      !datos.apellidoPaterno.trim() ||
+      !datos.curp.trim() ||
+      !datos.rfc.trim() ||
+      !datos.nacimiento ||
+      !datos.estadoCivil
+    ) {
+      mostrarError(
+        "Completa todos los datos obligatorios de la Persona Física."
+      );
+      return;
+    }
+
+    const curpNormalizada =
+      normalizarCURP(datos.curp);
+
+    const rfcNormalizado =
+      normalizarRFC(datos.rfc);
+
+    if (!curpValida(curpNormalizada)) {
+      mostrarError(
+        "La CURP debe contener 18 caracteres y tener un formato válido."
+      );
+      return;
+    }
+
+    if (!rfcPersonaFisicaValido(rfcNormalizado)) {
+      mostrarError(
+        "El RFC de Persona Física debe contener 13 caracteres y tener un formato válido."
+      );
+      return;
+    }
+
+    /*
+      Dejamos los identificadores normalizados
+      antes de continuar.
+    */
+    setDatos((prev) => ({
+      ...prev,
+      curp: curpNormalizada,
+      rfc: rfcNormalizado,
+    }));
+
+    if (
+      datos.estadoCivil === "Casado" &&
+      !datos.regimenMatrimonial
+    ) {
+      mostrarError(
+        "Selecciona el régimen matrimonial."
+      );
+      return;
+    }
+
+    if (
+      datos.estadoCivil === "Casado" &&
+      datos.regimenMatrimonial === "Sociedad conyugal"
+    ) {
       if (
-        !datos.nombre.trim() ||
-        !datos.apellidoPaterno.trim() ||
-        !datos.curp.trim() ||
-        !datos.rfc.trim() ||
-        !datos.nacimiento ||
-        !datos.estadoCivil
+        !datos.conyugeNombre.trim() ||
+        !datos.conyugeCurp.trim() ||
+        !datos.conyugeRfc.trim()
       ) {
         mostrarError(
-          "Completa todos los datos obligatorios de la Persona Física."
+          "Completa la información del cónyuge."
         );
         return;
       }
 
       if (
-        datos.estadoCivil === "Casado" &&
-        !datos.regimenMatrimonial
-      ) {
-        mostrarError("Selecciona el régimen matrimonial.");
-        return;
-      }
-
-      if (
-        datos.estadoCivil === "Casado" &&
-        datos.regimenMatrimonial === "Sociedad conyugal" &&
-        (!datos.conyugeNombre.trim() ||
-          !datos.conyugeCurp.trim() ||
-          !datos.conyugeRfc.trim())
-      ) {
-        mostrarError("Completa la información del cónyuge.");
-        return;
-      }
-    }
-
-    if (datos.tipoPersona === "moral") {
-      if (
-        !datos.razonSocial.trim() ||
-        !datos.rfcEmpresa.trim() ||
-        !datos.fechaConstitucion ||
-        !datos.actividadEconomica.trim() ||
-        !datos.representanteLegal.trim() ||
-        !datos.propietarioReal.trim()
+        !curpValida(datos.conyugeCurp)
       ) {
         mostrarError(
-          "Completa todos los datos obligatorios de la Persona Moral."
+          "La CURP del cónyuge no tiene un formato válido."
+        );
+        return;
+      }
+
+      if (
+        !rfcPersonaFisicaValido(
+          datos.conyugeRfc
+        )
+      ) {
+        mostrarError(
+          "El RFC del cónyuge no tiene un formato válido."
         );
         return;
       }
     }
-
-    ir("pep");
   }
+
+  if (datos.tipoPersona === "moral") {
+    if (
+      !datos.razonSocial.trim() ||
+      !datos.rfcEmpresa.trim() ||
+      !datos.fechaConstitucion ||
+      !datos.actividadEconomica.trim() ||
+      !datos.representanteLegal.trim() ||
+      !datos.propietarioReal.trim()
+    ) {
+      mostrarError(
+        "Completa todos los datos obligatorios de la Persona Moral."
+      );
+      return;
+    }
+
+    const rfcNormalizado =
+      normalizarRFC(
+        datos.rfcEmpresa
+      );
+
+    if (
+      !rfcPersonaMoralValido(
+        rfcNormalizado
+      )
+    ) {
+      mostrarError(
+        "El RFC de Persona Moral debe contener 12 caracteres y tener un formato válido."
+      );
+      return;
+    }
+
+    setDatos((prev) => ({
+      ...prev,
+      rfcEmpresa:
+        rfcNormalizado,
+    }));
+  }
+
+  ir("pep");
+}
 
   async function validarPep() {
     if (datos.esPep !== "si" && datos.esPep !== "no") {
@@ -3795,13 +3906,16 @@ function DatosSolicitante({
               }
             />
 
-            <Campo
-              label="RFC *"
-              value={datos.rfcEmpresa}
-              onChange={(v) =>
-                actualizar("rfcEmpresa", v)
-              }
-            />
+<Campo
+  label="RFC *"
+  value={datos.rfcEmpresa}
+  onChange={(v) =>
+    actualizar(
+      "rfcEmpresa",
+      normalizarRFC(v).slice(0, 12)
+    )
+  }
+/>
 
             <Campo
               label="Fecha de constitución *"
@@ -3929,17 +4043,27 @@ function DatosSolicitante({
             }
           />
 
-          <Campo
-            label="CURP *"
-            value={datos.curp}
-            onChange={(v) => actualizar("curp", v)}
-          />
+<Campo
+  label="CURP *"
+  value={datos.curp}
+  onChange={(v) =>
+    actualizar(
+      "curp",
+      normalizarCURP(v).slice(0, 18)
+    )
+  }
+/>
 
-          <Campo
-            label="RFC *"
-            value={datos.rfc}
-            onChange={(v) => actualizar("rfc", v)}
-          />
+<Campo
+  label="RFC *"
+  value={datos.rfc}
+  onChange={(v) =>
+    actualizar(
+      "rfc",
+      normalizarRFC(v).slice(0, 13)
+    )
+  }
+/>
 
           <Campo
             label="Fecha de nacimiento *"
