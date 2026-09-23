@@ -54,12 +54,11 @@ const PASO_POR_PANTALLA = {
   documentosFinancieros: 2,
   solicitud: 2,
 
-  tipoCredito: 3,
-  garantia: 3,
-  obligado: 3,
+  revision: 3,
+  enRevision: 3,
 
-  revision: 4,
-  enRevision: 4,
+  garantia: 4,
+  obligado: 4,
 
   oferta: 5,
 
@@ -111,16 +110,25 @@ export default function App() {
 
   const [estadoSolicitud, setEstadoSolicitud] = useState("DRAFT");
 
+const [requiereGarantia, setRequiereGarantia] =
+  useState(null);
+
+const [tipoGarantiaSolicitada, setTipoGarantiaSolicitada] =
+  useState("");
+
+const [garantiaSolicitadaEn, setGarantiaSolicitadaEn] =
+  useState(null);
+
   const [pasoMaximo, setPasoMaximo] = useState(1);
 
-  const [ultimaPantallaPorPaso, setUltimaPantallaPorPaso] = useState({
-    1: "simulacion",
-    2: "tipoPersona",
-    3: "tipoCredito",
-    4: "revision",
-    5: "oferta",
-    6: "cuentaBanco",
-  });
+const [ultimaPantallaPorPaso, setUltimaPantallaPorPaso] = useState({
+  1: "simulacion",
+  2: "tipoPersona",
+  3: "enRevision",
+  4: "garantia",
+  5: "oferta",
+  6: "cuentaBanco",
+});
 
   const [mensajeError, setMensajeError] = useState("");
   const [mensajeInfo, setMensajeInfo] = useState("");
@@ -425,16 +433,14 @@ const producto = {
       return;
     }
 
-    if (
-      ESTADOS_ENVIADOS.includes(estadoSolicitud) &&
-      numeroPaso < 4
-    ) {
-      /*
-        Una solicitud enviada ya no debe reabrirse
-        como editable desde el tracker.
-      */
-      return;
-    }
+if (
+  ESTADOS_ENVIADOS.includes(
+    estadoSolicitud
+  ) &&
+  numeroPaso < 3
+) {
+  return;
+}
 
     const destino =
       ultimaPantallaPorPaso[numeroPaso] ||
@@ -863,21 +869,25 @@ const producto = {
     try {
       const { data, error } = await supabase
         .from("Aplicaciones")
-        .select(
-          `
-          id,
-          folio,
-          estado,
-          pantalla_actual,
-          datos_borrador,
-          es_pep,
-          tipo_pep,
-          detalle_pep,
-          declaracion_pep_aceptada,
-          declaracion_pep_fecha,
-          actualizado_en
-        `
-        )
+.select(
+  `
+  id,
+  folio,
+  estado,
+  pantalla_actual,
+  datos_borrador,
+  tipo_credito,
+  tipo_garantia,
+  requiere_garantia,
+  garantia_solicitada_en,
+  es_pep,
+  tipo_pep,
+  detalle_pep,
+  declaracion_pep_aceptada,
+  declaracion_pep_fecha,
+  actualizado_en
+  `
+)
         .eq("user_id", userId)
         .in("estado", [
           "DRAFT",
@@ -908,6 +918,22 @@ const producto = {
 
       setSolicitudId(data.id);
       setEstadoSolicitud(data.estado || "DRAFT");
+
+      setRequiereGarantia(
+  data.requiere_garantia === true
+    ? true
+    : data.requiere_garantia === false
+      ? false
+      : null
+);
+
+setTipoGarantiaSolicitada(
+  data.tipo_garantia || ""
+);
+
+setGarantiaSolicitadaEn(
+  data.garantia_solicitada_en || null
+);
 
       await cargarDocumentos(data.id);
 
@@ -970,25 +996,120 @@ const producto = {
         return true;
       }
 
-      if (
-        data.estado === "SUBMITTED" ||
-        data.estado === "IN_REVIEW"
-      ) {
-        setPasoMaximo((prev) => Math.max(prev, 4));
-        setPantalla("enRevision");
-        return true;
-      }
+if (
+  data.estado === "SUBMITTED" ||
+  data.estado === "IN_REVIEW"
+) {
+  /*
+    El analista todavía no ha solicitado garantía.
+    El cliente permanece esperando en Revisión.
+  */
+  if (data.requiere_garantia !== true) {
+    setPasoMaximo((prev) =>
+      Math.max(prev, 3)
+    );
+
+    setUltimaPantallaPorPaso((prev) => ({
+      ...prev,
+      3: "enRevision",
+    }));
+
+    setPantalla("enRevision");
+
+    return true;
+  }
+
+  /*
+    El analista determinó que sí requiere garantía.
+  */
+  setPasoMaximo((prev) =>
+    Math.max(prev, 4)
+  );
+
+  setUltimaPantallaPorPaso((prev) => ({
+    ...prev,
+    3: "enRevision",
+    4:
+      data.tipo_garantia === "Obligado solidario"
+        ? "obligado"
+        : "garantia",
+  }));
+
+  /*
+    Guardamos también el tipo solicitado
+    dentro de datos para que la pantalla
+    pueda utilizarlo.
+  */
+  setDatos((prev) => ({
+    ...prev,
+
+    tipoCredito: "con",
+
+    tipoGarantia:
+      data.tipo_garantia ||
+      prev.tipoGarantia,
+  }));
+
+  setPantalla(
+    data.tipo_garantia === "Obligado solidario"
+      ? "obligado"
+      : "garantia"
+  );
+
+  return true;
+}
 
 if (data.estado === "APPROVED") {
-  await cargarDecisionCredito(data.id);
+  await cargarDecisionCredito(
+    data.id
+  );
+
+  /*
+    Internamente Oferta continúa siendo
+    paso 5.
+
+    Si no hubo garantía, Tracker la
+    mostrará visualmente como paso 4.
+  */
 
   setPasoMaximo((prev) =>
     Math.max(prev, 5)
   );
 
-  setUltimaPantallaPorPaso((prev) => ({
+  setUltimaPantallaPorPaso(
+    (prev) => ({
+      ...prev,
+
+      3: "enRevision",
+
+      ...(data.requiere_garantia ===
+      true
+        ? {
+            4:
+              data.tipo_garantia ===
+              "Obligado solidario"
+                ? "obligado"
+                : "garantia",
+          }
+        : {}),
+
+      5: "oferta",
+    })
+  );
+
+  setDatos((prev) => ({
     ...prev,
-    5: "oferta",
+
+    tipoCredito:
+      data.requiere_garantia === true
+        ? "con"
+        : "sin",
+
+    tipoGarantia:
+      data.requiere_garantia === true
+        ? data.tipo_garantia ||
+          prev.tipoGarantia
+        : "",
   }));
 
   setPantalla("oferta");
@@ -2085,20 +2206,20 @@ function validarDatosSolicitante() {
     ir("solicitud");
   }
 
-  function validarSolicitud() {
-    if (
-      !esNumeroPositivo(datos.montoSolicitado) ||
-      !esNumeroPositivo(datos.plazoSolicitado) ||
-      !datos.destino
-    ) {
-      mostrarError(
-        "Completa monto, plazo y destino del crédito."
-      );
-      return;
-    }
-
-    ir("tipoCredito");
+function validarSolicitud() {
+  if (
+    !esNumeroPositivo(datos.montoSolicitado) ||
+    !esNumeroPositivo(datos.plazoSolicitado) ||
+    !datos.destino
+  ) {
+    mostrarError(
+      "Completa monto, plazo y destino del crédito."
+    );
+    return;
   }
+
+  ir("revision");
+}
 
   function validarTipoCredito() {
     if (!datos.tipoCredito) {
@@ -2368,11 +2489,11 @@ ir("revision");
           datos: datosSeguros,
           consentimientos,
 
-          pasoMaximo: Math.max(pasoMaximo, 4),
+          pasoMaximo: Math.max(pasoMaximo, 3),
 
           ultimaPantallaPorPaso: {
             ...ultimaPantallaPorPaso,
-            4: "enRevision",
+            3: "enRevision",
           },
         },
 
@@ -2827,79 +2948,98 @@ async function abrirDocumento(tipo) {
           />
         )}
 
-        {pantalla === "garantia" && (
-          <Garantia
-            datos={datos}
-            actualizar={actualizar}
-            archivos={archivos}
-            seleccionarArchivo={seleccionarArchivo}
-            continuar={validarGarantia}
-            regresar={() => regresarA("tipoCredito")}
-            trackerProps={{
-              pasoActual: 3,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
+{pantalla === "garantia" &&
+  requiereGarantia === true && (
+    <Garantia
+      datos={datos}
+      actualizar={actualizar}
+      archivos={archivos}
+      seleccionarArchivo={seleccionarArchivo}
+      continuar={validarGarantia}
+      regresar={() =>
+        regresarA("enRevision")
+      }
+      trackerProps={{
+        pasoActual: 4,
+        pasoMaximo,
+        navegarPorTracker,
+        estadoSolicitud,
+        requiereGarantia,
+      }}
+    />
+  )}
 
-        {pantalla === "obligado" && (
-          <Obligado
-            datos={datos}
-            actualizar={actualizar}
-            continuar={validarObligado}
-            regresar={() => regresarA("garantia")}
-            trackerProps={{
-              pasoActual: 3,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
+{pantalla === "obligado" &&
+  requiereGarantia === true && (
+    <Obligado
+      datos={datos}
+      actualizar={actualizar}
+      continuar={validarObligado}
+      regresar={() =>
+        regresarA("enRevision")
+      }
+      trackerProps={{
+        pasoActual: 4,
+        pasoMaximo,
+        navegarPorTracker,
+        estadoSolicitud,
+        requiereGarantia,
+      }}
+    />
+  )}
 
-        {pantalla === "revision" && (
-          <Revision
-            datos={datos}
-            guardar={guardarSolicitudSupabase}
-            guardando={guardando}
-            regresar={() => regresarA("tipoCredito")}
-            trackerProps={{
-              pasoActual: 4,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
 
-        {pantalla === "enRevision" && (
-          <EnRevision
-            datos={datos}
-            folio={folio}
-            ir={ir}
-            trackerProps={{
-              pasoActual: 4,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
+{pantalla === "revision" && (
+  <Revision
+    datos={datos}
+    guardar={guardarSolicitudSupabase}
+    guardando={guardando}
+    regresar={() =>
+      regresarA("solicitud")
+    }
+    trackerProps={{
+      pasoActual: 3,
+      pasoMaximo,
+      navegarPorTracker,
+      estadoSolicitud,
+      requiereGarantia,
+    }}
+  />
+)}
+
+{pantalla === "enRevision" && (
+  <EnRevision
+    datos={datos}
+    folio={folio}
+    trackerProps={{
+      pasoActual: 3,
+      pasoMaximo,
+      navegarPorTracker,
+      estadoSolicitud,
+      requiereGarantia,
+    }}
+  />
+)}
 
         {pantalla === "oferta" && (
-          <Oferta
-            datos={datos}
-            pagoOferta={pagoOferta}
-            ir={ir}
-            trackerProps={{
-              pasoActual: 5,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
+<Oferta
+  datos={datos}
+  pagoOferta={pagoOferta}
+  ir={ir}
+  requiereGarantia={
+    requiereGarantia
+  }
+  tipoGarantiaSolicitada={
+    tipoGarantiaSolicitada
+  }
+  trackerProps={{
+    pasoActual: 5,
+    pasoMaximo,
+    navegarPorTracker,
+    estadoSolicitud,
+    requiereGarantia,
+  }}
+/>
         )}
 
         {pantalla === "cuentaBanco" && (
@@ -2915,12 +3055,13 @@ async function abrirDocumento(tipo) {
   regresar={() =>
     regresarA("oferta")
   }
-  trackerProps={{
-    pasoActual: 6,
-    pasoMaximo,
-    navegarPorTracker,
-    estadoSolicitud,
-  }}
+trackerProps={{
+  pasoActual: 6,
+  pasoMaximo,
+  navegarPorTracker,
+  estadoSolicitud,
+  requiereGarantia,
+}}
 />
         )}
 
@@ -2936,12 +3077,13 @@ async function abrirDocumento(tipo) {
     abrirDocumento={
       abrirDocumento
     }
-    trackerProps={{
-      pasoActual: 6,
-      pasoMaximo,
-      navegarPorTracker,
-      estadoSolicitud,
-    }}
+trackerProps={{
+  pasoActual: 6,
+  pasoMaximo,
+  navegarPorTracker,
+  estadoSolicitud,
+  requiereGarantia,
+}}
   />
 )}
 
@@ -2950,24 +3092,26 @@ async function abrirDocumento(tipo) {
     regresar={() =>
       regresarA("contratos")
     }
-    trackerProps={{
-      pasoActual: 6,
-      pasoMaximo,
-      navegarPorTracker,
-      estadoSolicitud,
-    }}
+trackerProps={{
+  pasoActual: 6,
+  pasoMaximo,
+  navegarPorTracker,
+  estadoSolicitud,
+  requiereGarantia,
+}}
   />
 )}
 
         {pantalla === "tesoreriaCliente" && (
           <TesoreriaCliente
             ir={ir}
-            trackerProps={{
-              pasoActual: 6,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
+trackerProps={{
+  pasoActual: 6,
+  pasoMaximo,
+  navegarPorTracker,
+  estadoSolicitud,
+  requiereGarantia,
+}}
           />
         )}
 
@@ -3349,37 +3493,39 @@ function Producto({ producto, ir }) {
 ========================================================= */
 
 function ComoFunciona({ ir }) {
-  const pasos = [
-    {
-      titulo: "Simula",
-      texto: "Elige cuánto necesitas y el plazo que prefieres.",
-    },
-    {
-      titulo: "Completa tu solicitud",
-      texto:
-        "Selecciona Persona Física o Persona Moral y completa tu expediente.",
-    },
-    {
-      titulo: "Garantía",
-      texto:
-        "Si la operación la requiere, te indicaremos la información necesaria.",
-    },
-    {
-      titulo: "Revisión",
-      texto:
-        "TRISAL analiza tu información y capacidad de pago.",
-    },
-    {
-      titulo: "Oferta",
-      texto:
-        "Si la solicitud es aprobada, conocerás las condiciones del crédito.",
-    },
-    {
-      titulo: "Firma y recibe",
-      texto:
-        "Acepta las condiciones, firma y recibe tu crédito.",
-    },
-  ];
+const PASOS = [
+  {
+    numero: 1,
+    nombre: "Simula",
+    pantallaBase: "simulacion",
+  },
+  {
+    numero: 2,
+    nombre: "Solicitud",
+    pantallaBase: "tipoPersona",
+  },
+  {
+    numero: 3,
+    nombre: "Revisión",
+    pantallaBase: "enRevision",
+  },
+  {
+    numero: 4,
+    nombre: "Garantía",
+    pantallaBase: "garantia",
+    condicional: "garantia",
+  },
+  {
+    numero: 5,
+    nombre: "Oferta",
+    pantallaBase: "oferta",
+  },
+  {
+    numero: 6,
+    nombre: "Firma",
+    pantallaBase: "cuentaBanco",
+  },
+];
 
   return (
     <Pagina
@@ -5057,14 +5203,6 @@ function Revision({
             valor={datos.destino}
           />
 
-          <SummaryCard
-            titulo="Garantía"
-            valor={
-              datos.tipoCredito === "con"
-                ? datos.tipoGarantia
-                : "No requerida"
-            }
-          />
         </div>
 
         <div className="importantNotice">
@@ -5151,6 +5289,8 @@ function Oferta({
   pagoOferta,
   ir,
   trackerProps,
+  requiereGarantia,
+  tipoGarantiaSolicitada,
 }) {
   return (
     <Pagina
@@ -5202,14 +5342,16 @@ function Oferta({
   }
 />
 
-        <OfertaDato
-          titulo="Garantía"
-          valor={
-            datos.tipoCredito === "con"
-              ? datos.tipoGarantia
-              : "No requerida"
-          }
-        />
+<OfertaDato
+  titulo="Garantía"
+  valor={
+    requiereGarantia === true
+      ? tipoGarantiaSolicitada ||
+        datos.tipoGarantia ||
+        "Requerida"
+      : "No requerida"
+  }
+/>
       </div>
 
       <div className="buttonRow">
@@ -5851,15 +5993,131 @@ function Tracker({
   pasoMaximo,
   navegarPorTracker,
   estadoSolicitud,
+  requiereGarantia = false,
 }) {
-  function bloqueado(numero) {
-    if (numero > pasoMaximo) {
+  /*
+    Si NO requiere garantía:
+    1 Simula
+    2 Solicitud
+    3 Revisión
+    4 Oferta
+    5 Firma
+
+    Si SÍ requiere garantía:
+    1 Simula
+    2 Solicitud
+    3 Revisión
+    4 Garantía
+    5 Oferta
+    6 Firma
+  */
+
+  const pasosVisibles =
+    requiereGarantia === true
+      ? [
+          {
+            numero: 1,
+            numeroReal: 1,
+            nombre: "Simula",
+          },
+          {
+            numero: 2,
+            numeroReal: 2,
+            nombre: "Solicitud",
+          },
+          {
+            numero: 3,
+            numeroReal: 3,
+            nombre: "Revisión",
+          },
+          {
+            numero: 4,
+            numeroReal: 4,
+            nombre: "Garantía",
+          },
+          {
+            numero: 5,
+            numeroReal: 5,
+            nombre: "Oferta",
+          },
+          {
+            numero: 6,
+            numeroReal: 6,
+            nombre: "Firma",
+          },
+        ]
+      : [
+          {
+            numero: 1,
+            numeroReal: 1,
+            nombre: "Simula",
+          },
+          {
+            numero: 2,
+            numeroReal: 2,
+            nombre: "Solicitud",
+          },
+          {
+            numero: 3,
+            numeroReal: 3,
+            nombre: "Revisión",
+          },
+          {
+            numero: 4,
+            numeroReal: 5,
+            nombre: "Oferta",
+          },
+          {
+            numero: 5,
+            numeroReal: 6,
+            nombre: "Firma",
+          },
+        ];
+
+  /*
+    pasoActual continúa usando la numeración
+    interna de la aplicación.
+
+    Convertimos esa numeración al número
+    que debe ver el usuario.
+  */
+
+  function obtenerPasoVisual(numeroReal) {
+    const encontrado =
+      pasosVisibles.find(
+        (paso) =>
+          paso.numeroReal === numeroReal
+      );
+
+    return encontrado?.numero || 1;
+  }
+
+  const pasoVisualActual =
+    obtenerPasoVisual(pasoActual);
+
+  function bloqueado(paso) {
+    /*
+      La disponibilidad real sigue utilizando
+      pasoMaximo interno.
+    */
+
+    if (
+      paso.numeroReal > pasoMaximo
+    ) {
       return true;
     }
 
+    /*
+      Una solicitud enviada no debe permitir
+      regresar a las pantallas editables
+      de Simulación/Solicitud.
+    */
+
     if (
-      ESTADOS_ENVIADOS.includes(estadoSolicitud) &&
-      numero < 4
+      ESTADOS_ENVIADOS.includes(
+        estadoSolicitud
+      ) &&
+      paso.numeroReal < 3
     ) {
       return true;
     }
@@ -5870,84 +6128,101 @@ function Tracker({
   return (
     <>
       <div className="desktopTracker">
-        {PASOS.map((paso, index) => {
-          const completado =
-            paso.numero < pasoActual;
+        {pasosVisibles.map(
+          (paso, index) => {
+            const completado =
+              paso.numero <
+              pasoVisualActual;
 
-          const actual =
-            paso.numero === pasoActual;
+            const actual =
+              paso.numero ===
+              pasoVisualActual;
 
-          const disabled =
-            bloqueado(paso.numero);
+            const disabled =
+              bloqueado(paso);
 
-          return (
-            <div
-              className="trackerItem"
-              key={paso.numero}
-            >
-              <button
-                type="button"
-                disabled={disabled}
-                className={
-                  completado
-                    ? "trackerDot completed trackerClickable"
-                    : actual
-                    ? "trackerDot current trackerClickable"
-                    : disabled
-                    ? "trackerDot trackerDisabled"
-                    : "trackerDot trackerClickable"
-                }
-                onClick={() =>
-                  navegarPorTracker(paso.numero)
-                }
-                title={
-                  disabled
-                    ? "Completa primero las etapas anteriores"
-                    : `Ir a ${paso.nombre}`
-                }
+            return (
+              <div
+                className="trackerItem"
+                key={paso.numeroReal}
               >
-                {completado ? "✓" : paso.numero}
-              </button>
-
-              <button
-                type="button"
-                disabled={disabled}
-                className={
-                  actual
-                    ? "trackerTextButton trackerTextActive"
-                    : disabled
-                    ? "trackerTextButton trackerTextDisabled"
-                    : "trackerTextButton"
-                }
-                onClick={() =>
-                  navegarPorTracker(paso.numero)
-                }
-              >
-                {paso.nombre}
-              </button>
-
-              {index < PASOS.length - 1 && (
-                <div
+                <button
+                  type="button"
+                  disabled={disabled}
                   className={
                     completado
-                      ? "trackerLine completedLine"
-                      : "trackerLine"
+                      ? "trackerDot completed trackerClickable"
+                      : actual
+                      ? "trackerDot current trackerClickable"
+                      : disabled
+                      ? "trackerDot trackerDisabled"
+                      : "trackerDot trackerClickable"
                   }
-                />
-              )}
-            </div>
-          );
-        })}
+                  onClick={() =>
+                    navegarPorTracker(
+                      paso.numeroReal
+                    )
+                  }
+                  title={
+                    disabled
+                      ? "Completa primero las etapas anteriores"
+                      : `Ir a ${paso.nombre}`
+                  }
+                >
+                  {completado
+                    ? "✓"
+                    : paso.numero}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className={
+                    actual
+                      ? "trackerTextButton trackerTextActive"
+                      : disabled
+                      ? "trackerTextButton trackerTextDisabled"
+                      : "trackerTextButton"
+                  }
+                  onClick={() =>
+                    navegarPorTracker(
+                      paso.numeroReal
+                    )
+                  }
+                >
+                  {paso.nombre}
+                </button>
+
+                {index <
+                  pasosVisibles.length -
+                    1 && (
+                  <div
+                    className={
+                      completado
+                        ? "trackerLine completedLine"
+                        : "trackerLine"
+                    }
+                  />
+                )}
+              </div>
+            );
+          }
+        )}
       </div>
 
       <div className="mobileTracker">
         <div className="mobileTrackerHeader">
           <strong>
-            Paso {pasoActual} de 6
+            Paso {pasoVisualActual} de{" "}
+            {pasosVisibles.length}
           </strong>
 
           <span>
-            {PASOS[pasoActual - 1]?.nombre}
+            {
+              pasosVisibles[
+                pasoVisualActual - 1
+              ]?.nombre
+            }
           </span>
         </div>
 
@@ -5955,36 +6230,51 @@ function Tracker({
           <div
             className="mobileProgressFill"
             style={{
-              width: `${(pasoActual / 6) * 100}%`,
+              width: `${
+                (pasoVisualActual /
+                  pasosVisibles.length) *
+                100
+              }%`,
             }}
           />
         </div>
 
-        <div className="mobileStepButtons">
-          {PASOS.map((paso) => {
-            const disabled =
-              bloqueado(paso.numero);
+        <div
+          className="mobileStepButtons"
+          style={{
+            gridTemplateColumns: `repeat(${pasosVisibles.length}, 1fr)`,
+          }}
+        >
+          {pasosVisibles.map(
+            (paso) => {
+              const disabled =
+                bloqueado(paso);
 
-            return (
-              <button
-                key={paso.numero}
-                type="button"
-                disabled={disabled}
-                className={
-                  paso.numero === pasoActual
-                    ? "mobileStepButton mobileStepCurrent"
-                    : paso.numero < pasoActual
-                    ? "mobileStepButton mobileStepCompleted"
-                    : "mobileStepButton"
-                }
-                onClick={() =>
-                  navegarPorTracker(paso.numero)
-                }
-              >
-                {paso.numero}
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={paso.numeroReal}
+                  type="button"
+                  disabled={disabled}
+                  className={
+                    paso.numero ===
+                    pasoVisualActual
+                      ? "mobileStepButton mobileStepCurrent"
+                      : paso.numero <
+                        pasoVisualActual
+                      ? "mobileStepButton mobileStepCompleted"
+                      : "mobileStepButton"
+                  }
+                  onClick={() =>
+                    navegarPorTracker(
+                      paso.numeroReal
+                    )
+                  }
+                >
+                  {paso.numero}
+                </button>
+              );
+            }
+          )}
         </div>
       </div>
     </>
