@@ -618,161 +618,333 @@ if (
     estadoSolicitud,
   ]);
 
-  async function guardarBorradorSupabase() {
-    if (!usuario) {
-      return;
+  async function obtenerOCrearDraft(userId) {
+  if (!userId) {
+    throw new Error(
+      "No hay un usuario autenticado."
+    );
+  }
+
+  /*
+    Si React ya conoce la solicitud,
+    reutilizamos ese ID.
+  */
+  if (solicitudId) {
+    return solicitudId;
+  }
+
+  /*
+    Primero buscamos el único DRAFT
+    permitido para este usuario.
+  */
+  const {
+    data: draftExistente,
+    error: buscarError,
+  } = await supabase
+    .from("Aplicaciones")
+    .select(
+      `
+      id,
+      folio,
+      estado,
+      pantalla_actual,
+      datos_borrador,
+      actualizado_en
+      `
+    )
+    .eq("user_id", userId)
+    .eq("estado", "DRAFT")
+    .order("actualizado_en", {
+      ascending: false,
+    })
+    .limit(1)
+    .maybeSingle();
+
+  if (buscarError) {
+    throw buscarError;
+  }
+
+  if (draftExistente?.id) {
+    setSolicitudId(
+      draftExistente.id
+    );
+
+    if (draftExistente.folio) {
+      setFolio(
+        draftExistente.folio
+      );
     }
 
-    try {
-      const nombreSolicitud = obtenerNombreSolicitud();
+    return draftExistente.id;
+  }
 
-      const datosSeguros = {
-        ...datos,
-        password: "",
-      };
+  /*
+    No existe: intentamos crear uno.
+  */
+
+  const nuevoFolio =
+    folio ||
+    `TRI-${String(
+      Math.floor(
+        100000 +
+          Math.random() * 900000
+      )
+    )}`;
+
+  const ahora =
+    new Date().toISOString();
+
+  const payload = {
+    user_id:
+      userId,
+
+    folio:
+      nuevoFolio,
+
+    estado:
+      "DRAFT",
+
+    pantalla_actual:
+      pantalla || "simulacion",
+
+    actualizado_en:
+      ahora,
+
+    datos_borrador: {
+      datos,
+
+      consentimientos,
+
+      pasoMaximo,
+
+      ultimaPantallaPorPaso,
+    },
+  };
+
+  const {
+    data: creada,
+    error: crearError,
+  } = await supabase
+    .from("Aplicaciones")
+    .insert(payload)
+    .select(
+      `
+      id,
+      folio
+      `
+    )
+    .single();
+
+  /*
+    Si dos llamadas llegaron aquí
+    simultáneamente, el índice UNIQUE
+    permitirá solamente una.
+
+    La otra recibirá 23505.
+    Recuperamos silenciosamente
+    la que ganó.
+  */
+  if (
+    crearError?.code === "23505"
+  ) {
+    const {
+      data: ganadora,
+      error: recuperarError,
+    } = await supabase
+      .from("Aplicaciones")
+      .select(
+        `
+        id,
+        folio
+        `
+      )
+      .eq("user_id", userId)
+      .eq("estado", "DRAFT")
+      .limit(1)
+      .single();
+
+    if (recuperarError) {
+      throw recuperarError;
+    }
+
+    setSolicitudId(
+      ganadora.id
+    );
+
+    if (ganadora.folio) {
+      setFolio(
+        ganadora.folio
+      );
+    }
+
+    return ganadora.id;
+  }
+
+  if (crearError) {
+    throw crearError;
+  }
+
+  setSolicitudId(creada.id);
+
+  setFolio(
+    creada.folio ||
+      nuevoFolio
+  );
+
+  return creada.id;
+}
+
+async function guardarBorradorSupabase(
+  pantallaDestino = pantalla
+) {
+  if (!usuario?.id) {
+    return null;
+  }
+
+  try {
+    /*
+      obtenerOCrearDraft() es ahora el ÚNICO
+      encargado de buscar o crear el DRAFT.
+
+      Esta función solamente guarda cambios.
+    */
+    const id =
+      await obtenerOCrearDraft(
+        usuario.id
+      );
+
+    if (!id) {
+      throw new Error(
+        "No se pudo obtener la solicitud."
+      );
+    }
+
+    const datosSeguros = {
+      ...datos,
+      password: "",
+    };
+
+    const ahora =
+      new Date().toISOString();
+
+    const payload = {
+      tipo_persona:
+        datos.tipoPersona || null,
+
+      nombre:
+        obtenerNombreSolicitud() ||
+        null,
+
+      correo:
+        datos.correo ||
+        usuario.email ||
+        null,
+
+      celular:
+        datos.celular || null,
+
+      monto:
+        numeroONull(
+          datos.montoSolicitado
+        ),
+
+      plazo:
+        numeroONull(
+          datos.plazoSolicitado
+        ),
+
+      destino:
+        datos.destino || null,
+
+      ingreso:
+        datos.tipoPersona ===
+        "fisica"
+          ? numeroONull(
+              datos.ingreso
+            )
+          : numeroONull(
+              datos.ventasMensuales
+            ),
 
       /*
-        Toda fila de Aplicaciones necesita folio desde que nace como DRAFT.
-        Esto evita que el auto-guardado falle antes de enviar la solicitud.
+        Ya NO dejamos que el cliente
+        determine con/sin garantía.
+
+        Estos campos se definirán
+        posteriormente en análisis.
       */
-      const folioBorrador =
-        folio ||
-        `TRI-${Math.floor(100000 + Math.random() * 900000)}`;
+      tipo_credito:
+        null,
 
-      if (!folio) {
-        setFolio(folioBorrador);
-      }
+      es_pep:
+        datos.esPep === "si"
+          ? true
+          : datos.esPep === "no"
+          ? false
+          : null,
 
-      const payload = {
-        user_id: usuario.id,
+      tipo_pep:
+        datos.esPep === "no"
+          ? "NO_PEP"
+          : datos.tipoPep || null,
 
-        folio: folioBorrador,
+      detalle_pep:
+        datos.esPep === "si"
+          ? datos.detallePep || null
+          : null,
 
-        tipo_persona: datos.tipoPersona || null,
+      declaracion_pep_aceptada:
+        Boolean(
+          datos.declaracionPepAceptada
+        ),
 
-        nombre: nombreSolicitud || null,
+      declaracion_pep_fecha:
+        datos.declaracionPepFecha ||
+        null,
 
-        correo: datos.correo || usuario.email || null,
+      pantalla_actual:
+        pantallaDestino,
 
-        celular: datos.celular || null,
+      datos_borrador: {
+        datos:
+          datosSeguros,
 
-        monto: numeroONull(datos.montoSolicitado),
+        consentimientos,
 
-        plazo: numeroONull(datos.plazoSolicitado),
+        pasoMaximo,
 
-        destino: datos.destino || null,
+        ultimaPantallaPorPaso,
+      },
 
-        /*
-          AQUÍ ESTÁ UNA DE LAS CORRECCIONES IMPORTANTES:
-          jamás enviamos "" a una columna numeric.
-        */
-        ingreso:
-          datos.tipoPersona === "fisica"
-            ? numeroONull(datos.ingreso)
-            : numeroONull(datos.ventasMensuales),
+      actualizado_en:
+        ahora,
+    };
 
-        tipo_credito: datos.tipoCredito || null,
+    const {
+      error,
+    } = await supabase
+      .from("Aplicaciones")
+      .update(payload)
+      .eq("id", id)
+      .eq(
+        "user_id",
+        usuario.id
+      );
 
-        tipo_garantia: datos.tipoGarantia || null,
-
-        es_pep:
-          datos.esPep === "si"
-            ? true
-            : datos.esPep === "no"
-            ? false
-            : null,
-
-        tipo_pep:
-          datos.esPep === "no"
-            ? "NO_PEP"
-            : datos.tipoPep || null,
-
-        detalle_pep:
-          datos.esPep === "si"
-            ? datos.detallePep || null
-            : null,
-
-        declaracion_pep_aceptada: Boolean(datos.declaracionPepAceptada),
-        declaracion_pep_fecha: datos.declaracionPepFecha || null,
-
-        estado: "DRAFT",
-
-        pantalla_actual: pantalla,
-
-        datos_borrador: {
-          datos: datosSeguros,
-          consentimientos,
-          pasoMaximo,
-          ultimaPantallaPorPaso,
-        },
-
-        actualizado_en: new Date().toISOString(),
-      };
-
-      if (solicitudId) {
-        const { error } = await supabase
-          .from("Aplicaciones")
-          .update(payload)
-          .eq("id", solicitudId);
-
-        if (error) {
-          console.error("Error guardando borrador:", error);
-        }
-
-        return;
-      }
-
-      const {
-        data: existente,
-        error: errorBuscar,
-      } = await supabase
-        .from("Aplicaciones")
-        .select("id")
-        .eq("user_id", usuario.id)
-        .eq("estado", "DRAFT")
-        .order("actualizado_en", {
-          ascending: false,
-        })
-        .limit(1)
-        .maybeSingle();
-
-      if (errorBuscar) {
-        console.error(errorBuscar);
-      }
-
-      if (existente?.id) {
-        setSolicitudId(existente.id);
-
-        const { error } = await supabase
-          .from("Aplicaciones")
-          .update(payload)
-          .eq("id", existente.id);
-
-        if (error) {
-          console.error(error);
-        }
-
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("Aplicaciones")
-        .insert([payload])
-        .select("id")
-        .single();
-
-      if (error) {
-        console.error("Error creando borrador:", error);
-        return;
-      }
-
-      if (data?.id) {
-        setSolicitudId(data.id);
-      }
-    } catch (error) {
-      console.error(error);
+    if (error) {
+      throw error;
     }
+
+    return id;
+  } catch (error) {
+    console.error(
+      "Error guardando borrador:",
+      error
+    );
+
+    return null;
   }
+}
 
   async function cargarDocumentos(aplicacionId) {
     if (!aplicacionId) return;
@@ -1514,63 +1686,27 @@ async function prepararContratacion() {
     setMensajeError("");
   }
 
-  async function asegurarSolicitudId() {
-    if (solicitudId) return solicitudId;
+async function asegurarSolicitudId() {
+  const {
+    data: { session },
+    error,
+  } =
+    await supabase.auth.getSession();
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.user) {
-      throw new Error("Necesitas iniciar sesión para subir documentos.");
-    }
-
-    const { data: existente, error: errorBuscar } = await supabase
-      .from("Aplicaciones")
-      .select("id")
-      .eq("user_id", session.user.id)
-      .eq("estado", "DRAFT")
-      .order("actualizado_en", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (errorBuscar) throw errorBuscar;
-
-    if (existente?.id) {
-      setSolicitudId(existente.id);
-      return existente.id;
-    }
-
-    const { data: creada, error: errorCrear } = await supabase
-      .from("Aplicaciones")
-      .insert([
-        {
-          user_id: session.user.id,
-          correo: datos.correo || session.user.email || null,
-          celular: datos.celular || null,
-          tipo_persona: datos.tipoPersona || null,
-          nombre: obtenerNombreSolicitud() || null,
-          monto: numeroONull(datos.montoSolicitado),
-          plazo: numeroONull(datos.plazoSolicitado),
-          estado: "DRAFT",
-          pantalla_actual: pantalla,
-          datos_borrador: {
-            datos: { ...datos, password: "" },
-            consentimientos,
-            pasoMaximo,
-            ultimaPantallaPorPaso,
-          },
-          actualizado_en: new Date().toISOString(),
-        },
-      ])
-      .select("id")
-      .single();
-
-    if (errorCrear) throw errorCrear;
-
-    setSolicitudId(creada.id);
-    return creada.id;
+  if (error) {
+    throw error;
   }
+
+  if (!session?.user?.id) {
+    throw new Error(
+      "Debes iniciar sesión para continuar."
+    );
+  }
+
+  return await obtenerOCrearDraft(
+    session.user.id
+  );
+}
 
   async function seleccionarArchivo(campo, archivo) {
     if (!archivo) return;
@@ -2379,194 +2515,362 @@ ir("revision");
     ir("inicio");
   }
 
-  /* =========================================================
-     ENVIAR SOLICITUD
-  ========================================================= */
+/* =========================================================
+   ENVIAR SOLICITUD
+========================================================= */
 
-  async function guardarSolicitudSupabase() {
-    setMensajeError("");
-    setGuardando(true);
+async function guardarSolicitudSupabase() {
+  setMensajeError("");
+  setGuardando(true);
 
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+  try {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-      if (!session?.user) {
-        setGuardando(false);
+    if (sessionError) {
+      throw sessionError;
+    }
 
-        mostrarError(
-          "Necesitas iniciar sesión para enviar tu solicitud."
-        );
-
-        ir("loginCliente");
-        return;
-      }
-
-      if (
-        !esNumeroPositivo(datos.montoSolicitado) ||
-        !esNumeroPositivo(datos.plazoSolicitado)
-      ) {
-        setGuardando(false);
-
-        mostrarError(
-          "Monto y plazo deben contener valores válidos."
-        );
-        return;
-      }
-
-      const nuevoFolio =
-        folio ||
-        `TRI-${Math.floor(
-          100000 + Math.random() * 900000
-        )}`;
-
-      const datosSeguros = {
-        ...datos,
-        password: "",
-      };
-
-      /*
-        IMPORTANTE:
-        No usamos "" para ningún campo numérico.
-        Obligatorios -> número real.
-        Opcionales -> número o null.
-      */
-
-      const payloadFinal = {
-        user_id: session.user.id,
-
-        folio: nuevoFolio,
-
-        tipo_persona: datos.tipoPersona || null,
-
-        nombre: obtenerNombreSolicitud() || null,
-
-        correo: datos.correo || session.user.email || null,
-
-        celular: datos.celular || null,
-
-        monto: numeroObligatorio(datos.montoSolicitado),
-
-        plazo: numeroObligatorio(datos.plazoSolicitado),
-
-        destino: datos.destino || null,
-
-        ingreso:
-          datos.tipoPersona === "fisica"
-            ? numeroONull(datos.ingreso)
-            : numeroONull(datos.ventasMensuales),
-
-        tipo_credito: datos.tipoCredito || null,
-
-        tipo_garantia: datos.tipoGarantia || null,
-
-        es_pep:
-          datos.esPep === "si"
-            ? true
-            : datos.esPep === "no"
-            ? false
-            : null,
-
-        tipo_pep:
-          datos.esPep === "no"
-            ? "NO_PEP"
-            : datos.tipoPep || null,
-
-        detalle_pep:
-          datos.esPep === "si"
-            ? datos.detallePep || null
-            : null,
-
-        declaracion_pep_aceptada: Boolean(datos.declaracionPepAceptada),
-        declaracion_pep_fecha: datos.declaracionPepFecha || null,
-
-        estado: "SUBMITTED",
-
-        pantalla_actual: "enRevision",
-
-        datos_borrador: {
-          datos: datosSeguros,
-          consentimientos,
-
-          pasoMaximo: Math.max(pasoMaximo, 3),
-
-          ultimaPantallaPorPaso: {
-            ...ultimaPantallaPorPaso,
-            3: "enRevision",
-          },
-        },
-
-        actualizado_en: new Date().toISOString(),
-      };
-
-      if (solicitudId) {
-        const { error } = await supabase
-          .from("Aplicaciones")
-          .update(payloadFinal)
-          .eq("id", solicitudId);
-
-        if (error) {
-          console.error(error);
-
-          setGuardando(false);
-
-          mostrarError(
-            `No se pudo enviar la solicitud: ${error.message}`
-          );
-
-          return;
-        }
-      } else {
-        const { data, error } = await supabase
-          .from("Aplicaciones")
-          .insert([payloadFinal])
-          .select("id")
-          .single();
-
-        if (error) {
-          console.error(error);
-
-          setGuardando(false);
-
-          mostrarError(
-            `No se pudo enviar la solicitud: ${error.message}`
-          );
-
-          return;
-        }
-
-        if (data?.id) {
-          setSolicitudId(data.id);
-        }
-      }
-
-      setFolio(nuevoFolio);
-
-      setEstadoSolicitud("SUBMITTED");
-
-      setPasoMaximo((prev) => Math.max(prev, 4));
-
-      setUltimaPantallaPorPaso((prev) => ({
-        ...prev,
-        4: "enRevision",
-      }));
-
-      localStorage.removeItem("trisal_solicitud_borrador");
-
-      setGuardando(false);
-
-      ir("enRevision");
-    } catch (error) {
-      console.error(error);
-
+    if (!session?.user?.id) {
       setGuardando(false);
 
       mostrarError(
-        "Ocurrió un error al enviar la solicitud."
+        "Necesitas iniciar sesión para enviar tu solicitud."
+      );
+
+      ir("loginCliente");
+      return;
+    }
+
+    /* =====================================================
+       VALIDACIONES
+    ===================================================== */
+
+    if (
+      !esNumeroPositivo(
+        datos.montoSolicitado
+      ) ||
+      !esNumeroPositivo(
+        datos.plazoSolicitado
+      )
+    ) {
+      setGuardando(false);
+
+      mostrarError(
+        "Monto y plazo deben contener valores válidos."
+      );
+
+      return;
+    }
+
+    /*
+      IMPORTANTE:
+
+      Ya NO creamos una Aplicaciones aquí.
+
+      obtenerOCrearDraft() es el único lugar
+      autorizado para buscar/crear el DRAFT.
+    */
+
+    const aplicacionId =
+      await obtenerOCrearDraft(
+        session.user.id
+      );
+
+    if (!aplicacionId) {
+      throw new Error(
+        "No se pudo obtener la solicitud."
       );
     }
+
+    const datosSeguros = {
+      ...datos,
+      password: "",
+    };
+
+    const ahora =
+      new Date().toISOString();
+
+    /* =====================================================
+       CONVERTIR DRAFT → SUBMITTED
+    ===================================================== */
+
+    const payloadFinal = {
+      tipo_persona:
+        datos.tipoPersona || null,
+
+      nombre:
+        obtenerNombreSolicitud() ||
+        null,
+
+      correo:
+        datos.correo ||
+        session.user.email ||
+        null,
+
+      celular:
+        datos.celular || null,
+
+      monto:
+        numeroObligatorio(
+          datos.montoSolicitado
+        ),
+
+      plazo:
+        numeroObligatorio(
+          datos.plazoSolicitado
+        ),
+
+      destino:
+        datos.destino || null,
+
+      ingreso:
+        datos.tipoPersona ===
+        "fisica"
+          ? numeroONull(
+              datos.ingreso
+            )
+          : numeroONull(
+              datos.ventasMensuales
+            ),
+
+      /*
+        El cliente ya NO determina
+        si el crédito lleva garantía.
+
+        Esa decisión pertenece
+        al análisis crediticio.
+      */
+      tipo_credito:
+        null,
+
+      tipo_garantia:
+        null,
+
+      es_pep:
+        datos.esPep === "si"
+          ? true
+          : datos.esPep === "no"
+          ? false
+          : null,
+
+      tipo_pep:
+        datos.esPep === "no"
+          ? "NO_PEP"
+          : datos.tipoPep || null,
+
+      detalle_pep:
+        datos.esPep === "si"
+          ? datos.detallePep || null
+          : null,
+
+      declaracion_pep_aceptada:
+        Boolean(
+          datos.declaracionPepAceptada
+        ),
+
+      declaracion_pep_fecha:
+        datos.declaracionPepFecha ||
+        null,
+
+      estado:
+        "SUBMITTED",
+
+      pantalla_actual:
+        "enRevision",
+
+      datos_borrador: {
+        datos:
+          datosSeguros,
+
+        consentimientos,
+
+        pasoMaximo:
+          Math.max(
+            pasoMaximo,
+            3
+          ),
+
+        ultimaPantallaPorPaso: {
+          ...ultimaPantallaPorPaso,
+          3: "enRevision",
+        },
+      },
+
+      actualizado_en:
+        ahora,
+    };
+
+    /* =====================================================
+       ACTUALIZAR LA MISMA SOLICITUD
+    ===================================================== */
+
+    const {
+      data: solicitudEnviada,
+      error: updateError,
+    } = await supabase
+      .from("Aplicaciones")
+      .update(
+        payloadFinal
+      )
+      .eq(
+        "id",
+        aplicacionId
+      )
+      .eq(
+        "user_id",
+        session.user.id
+      )
+      /*
+        Esta protección evita que accidentalmente
+        volvamos a "enviar" una solicitud que ya
+        dejó de ser DRAFT.
+      */
+      .eq(
+        "estado",
+        "DRAFT"
+      )
+      .select(
+        `
+        id,
+        folio,
+        estado,
+        pantalla_actual,
+        actualizado_en
+        `
+      )
+      .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    /*
+      Si no actualizó ninguna fila,
+      la solicitud probablemente ya fue
+      enviada por otra ejecución/click.
+    */
+    if (!solicitudEnviada) {
+      const {
+        data: existente,
+        error: existenteError,
+      } = await supabase
+        .from("Aplicaciones")
+        .select(
+          `
+          id,
+          folio,
+          estado,
+          pantalla_actual
+          `
+        )
+        .eq(
+          "id",
+          aplicacionId
+        )
+        .eq(
+          "user_id",
+          session.user.id
+        )
+        .maybeSingle();
+
+      if (existenteError) {
+        throw existenteError;
+      }
+
+      if (
+        existente &&
+        existente.estado !== "DRAFT"
+      ) {
+        setSolicitudId(
+          existente.id
+        );
+
+        if (existente.folio) {
+          setFolio(
+            existente.folio
+          );
+        }
+
+        setEstadoSolicitud(
+          existente.estado
+        );
+
+        /*
+          Recuperamos desde BD para que
+          ella decida la pantalla correcta.
+        */
+        await recuperarSolicitud(
+          session.user.id
+        );
+
+        setGuardando(false);
+        return;
+      }
+
+      throw new Error(
+        "No pudimos confirmar el envío de la solicitud."
+      );
+    }
+
+    /* =====================================================
+       ACTUALIZAR REACT
+    ===================================================== */
+
+    setSolicitudId(
+      solicitudEnviada.id
+    );
+
+    if (
+      solicitudEnviada.folio
+    ) {
+      setFolio(
+        solicitudEnviada.folio
+      );
+    }
+
+    setEstadoSolicitud(
+      "SUBMITTED"
+    );
+
+    setPasoMaximo(
+      (prev) =>
+        Math.max(
+          prev,
+          3
+        )
+    );
+
+    setUltimaPantallaPorPaso(
+      (prev) => ({
+        ...prev,
+        3: "enRevision",
+      })
+    );
+
+    localStorage.removeItem(
+      "trisal_solicitud_borrador"
+    );
+
+    setGuardando(false);
+
+    ir("enRevision");
+  } catch (error) {
+    console.error(
+      "Error enviando solicitud:",
+      error
+    );
+
+    setGuardando(false);
+
+    mostrarError(
+      error?.message ||
+        "Ocurrió un error al enviar la solicitud."
+    );
   }
+}
 
   /* =========================================================
      OFERTA DEMO
