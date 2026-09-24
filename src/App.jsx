@@ -82,8 +82,13 @@ const PANTALLAS_PUBLICAS = [
 
 const ESTADOS_ENVIADOS = [
   "SUBMITTED",
+  "DOCUMENT_REVIEW",
+  "IN_ANALYSIS",
+  "INFORMATION_REQUESTED",
+  "CREDIT_COMMITTEE",
   "IN_REVIEW",
   "APPROVED",
+  "REJECTED",
   "CONTRACTING",
   "READY_TO_DISBURSE",
   "SIGNED",
@@ -1080,8 +1085,10 @@ async function guardarBorradorSupabase(
       };
     });
 
-    setArchivos(documentosRecuperados);
-  }
+   setArchivos(documentosRecuperados);
+
+return documentosRecuperados;
+}
 
   async function cargarDecisionCredito(aplicacionId) {
     if (!aplicacionId) return null;
@@ -1164,16 +1171,21 @@ async function guardarBorradorSupabase(
   `
 )
         .eq("user_id", userId)
-        .in("estado", [
-          "DRAFT",
-          "SUBMITTED",
-          "IN_REVIEW",
-          "APPROVED",
-          "CONTRACTING",
-          "READY_TO_DISBURSE",
-          "SIGNED",
-          "DISBURSED",
-        ])
+.in("estado", [
+  "DRAFT",
+  "SUBMITTED",
+  "DOCUMENT_REVIEW",
+  "IN_ANALYSIS",
+  "INFORMATION_REQUESTED",
+  "CREDIT_COMMITTEE",
+  "IN_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CONTRACTING",
+  "READY_TO_DISBURSE",
+  "SIGNED",
+  "DISBURSED",
+])
         .order("actualizado_en", {
           ascending: false,
         })
@@ -1211,7 +1223,16 @@ setGarantiaSolicitadaEn(
   data.garantia_solicitada_en || null
 );
 
-      await cargarDocumentos(data.id);
+      const documentosRecuperados =
+  await cargarDocumentos(data.id);
+
+const documentosRechazados =
+  Object.entries(documentosRecuperados || {})
+    .filter(
+      ([, documento]) =>
+        documento?.estado === "REJECTED"
+    )
+    .map(([tipo]) => tipo);
 
       if (data.folio) {
         setFolio(data.folio);
@@ -1272,9 +1293,50 @@ setGarantiaSolicitadaEn(
         return true;
       }
 
+      if (documentosRechazados.length > 0) {
+  const documentosFinancieros = [
+    "estadosCuenta",
+    "comprobanteIngresos",
+    "declaraciones",
+    "estadosFinancieros",
+  ];
+
+  const tieneRechazoIdentidad =
+    documentosRechazados.some(
+      (tipo) =>
+        !documentosFinancieros.includes(tipo)
+    );
+
+  const tieneRechazoFinanciero =
+    documentosRechazados.some(
+      (tipo) =>
+        documentosFinancieros.includes(tipo)
+    );
+
+  setPasoMaximo((prev) =>
+    Math.max(prev, 2)
+  );
+
+  if (tieneRechazoIdentidad) {
+    setPantalla("documentosIdentidad");
+    return true;
+  }
+
+  if (tieneRechazoFinanciero) {
+    setPantalla("documentosFinancieros");
+    return true;
+  }
+}
+
 if (
-  data.estado === "SUBMITTED" ||
-  data.estado === "IN_REVIEW"
+  [
+    "SUBMITTED",
+    "DOCUMENT_REVIEW",
+    "IN_ANALYSIS",
+    "INFORMATION_REQUESTED",
+    "CREDIT_COMMITTEE",
+    "IN_REVIEW",
+  ].includes(data.estado)
 ) {
   /*
     El analista todavía no ha solicitado garantía.
@@ -2033,23 +2095,93 @@ async function asegurarSolicitudId() {
         throw errorRegistro;
       }
 
-      setArchivos((prev) => ({
-        ...prev,
-        [campo]: {
-          id: registro.id,
-          name: registro.nombre_archivo,
-          storagePath: registro.storage_path,
-          estado: registro.estado,
-          observaciones: registro.observaciones || "",
-          version: registro.version,
-          subidoEn: registro.subido_en,
-          remoto: true,
-        },
-      }));
+setArchivos((prev) => ({
+  ...prev,
+  [campo]: {
+    id: registro.id,
+    name: registro.nombre_archivo,
+    storagePath: registro.storage_path,
+    estado: registro.estado,
+    observaciones:
+      registro.observaciones || "",
+    version: registro.version,
+    subidoEn: registro.subido_en,
+    remoto: true,
+  },
+}));
 
-      setMensajeInfo("Documento cargado y enviado a revisión.");
-    } catch (error) {
-      console.error("Error subiendo documento:", error);
+/*
+  Si el cliente acaba de sustituir un documento
+  rechazado, comprobamos si todavía queda algún
+  documento vigente REJECTED.
+
+  Sólo cuando ya no quede ninguno regresamos la
+  solicitud a IN_ANALYSIS.
+*/
+if (
+  documentoActualAnterior?.estado ===
+  "REJECTED"
+) {
+  const {
+    data: rechazadosRestantes,
+    error: errorRechazados,
+  } = await supabase
+    .from("DocumentosSolicitud")
+    .select("id")
+    .eq("aplicacion_id", aplicacionId)
+    .eq("es_actual", true)
+    .eq("estado", "REJECTED")
+    .limit(1);
+
+  if (errorRechazados) {
+    throw errorRechazados;
+  }
+
+  /*
+    Si éste era el último documento rechazado,
+    devolvemos el expediente a análisis.
+  */
+  if (
+    !rechazadosRestantes ||
+    rechazadosRestantes.length === 0
+  ) {
+    const ahora =
+      new Date().toISOString();
+
+    const {
+      error: errorSolicitud,
+    } = await supabase
+      .from("Aplicaciones")
+      .update({
+        estado: "IN_ANALYSIS",
+        pantalla_actual: "enRevision",
+        actualizado_en: ahora,
+      })
+      .eq("id", aplicacionId);
+
+    if (errorSolicitud) {
+      throw errorSolicitud;
+    }
+
+    setEstadoSolicitud(
+      "IN_ANALYSIS"
+    );
+
+    setMensajeInfo(
+      "Documento corregido y enviado nuevamente a revisión."
+    );
+
+    ir("enRevision", {
+      conservarMensajeInfo: true,
+    });
+
+    return;
+  }
+}
+
+setMensajeInfo(
+  "Documento cargado y enviado a revisión."
+);
 
       /*
         Si el archivo alcanzó a subirse a Storage pero falló el registro,
@@ -5370,11 +5502,48 @@ function Domicilio({
             onChange={(v) => actualizar("municipio", v)}
           />
 
-          <Campo
-            label="Estado *"
-            value={datos.estado}
-            onChange={(v) => actualizar("estado", v)}
-          />
+<Select
+  label="Estado *"
+  value={datos.estado}
+  onChange={(v) =>
+    actualizar("estado", v)
+  }
+  opciones={[
+    "",
+    "Aguascalientes",
+    "Baja California",
+    "Baja California Sur",
+    "Campeche",
+    "Chiapas",
+    "Chihuahua",
+    "Ciudad de México",
+    "Coahuila",
+    "Colima",
+    "Durango",
+    "Estado de México",
+    "Guanajuato",
+    "Guerrero",
+    "Hidalgo",
+    "Jalisco",
+    "Michoacán",
+    "Morelos",
+    "Nayarit",
+    "Nuevo León",
+    "Oaxaca",
+    "Puebla",
+    "Querétaro",
+    "Quintana Roo",
+    "San Luis Potosí",
+    "Sinaloa",
+    "Sonora",
+    "Tabasco",
+    "Tamaulipas",
+    "Tlaxcala",
+    "Veracruz",
+    "Yucatán",
+    "Zacatecas",
+  ]}
+/>
         </div>
 
         <NavButtons
@@ -5435,41 +5604,67 @@ function Ingresos({
               }
             />
 
-            <Campo
-              label="Antigüedad *"
-              value={datos.antiguedad}
-              onChange={(v) =>
-                actualizar("antiguedad", v)
-              }
-            />
+<Select
+  label="Antigüedad *"
+  value={datos.antiguedad}
+  onChange={(v) =>
+    actualizar("antiguedad", v)
+  }
+  opciones={[
+    "",
+    "Menos de 1 año",
+    "1 año",
+    "2 años",
+    "3 años",
+    "4 años",
+    "5 años o más",
+  ]}
+/>
 
-            <Campo
-              label="Ingreso mensual *"
-              type="number"
-              value={datos.ingreso}
-              onChange={(v) =>
-                actualizar("ingreso", v)
-              }
-            />
+<Campo
+  label="Ingreso mensual *"
+  value={formatearMontoInput(
+    datos.ingreso
+  )}
+  onChange={(v) =>
+    actualizar(
+      "ingreso",
+      limpiarMontoInput(v)
+    )
+  }
+/>
           </div>
         ) : (
           <div className="grid2">
-            <Campo
-              label="Ventas mensuales aproximadas *"
-              type="number"
-              value={datos.ventasMensuales}
-              onChange={(v) =>
-                actualizar("ventasMensuales", v)
-              }
-            />
+<Campo
+  label="Ventas mensuales aproximadas *"
+  value={formatearMontoInput(
+    datos.ventasMensuales
+  )}
+  onChange={(v) =>
+    actualizar(
+      "ventasMensuales",
+      limpiarMontoInput(v)
+    )
+  }
+/>
 
-            <Campo
-              label="Antigüedad de la empresa"
-              value={datos.antiguedad}
-              onChange={(v) =>
-                actualizar("antiguedad", v)
-              }
-            />
+<Select
+  label="Antigüedad de la empresa"
+  value={datos.antiguedad}
+  onChange={(v) =>
+    actualizar("antiguedad", v)
+  }
+  opciones={[
+    "",
+    "Menos de 1 año",
+    "1 año",
+    "2 años",
+    "3 años",
+    "4 años",
+    "5 años o más",
+  ]}
+/>
           </div>
         )}
 
@@ -5572,14 +5767,18 @@ function Solicitud({
 
       <div className="card">
         <div className="grid2">
-          <Campo
-            label="Monto solicitado *"
-            type="number"
-            value={datos.montoSolicitado}
-            onChange={(v) =>
-              actualizar("montoSolicitado", v)
-            }
-          />
+<Campo
+  label="Monto solicitado *"
+  value={formatearMontoInput(
+    datos.montoSolicitado
+  )}
+  onChange={(v) =>
+    actualizar(
+      "montoSolicitado",
+      limpiarMontoInput(v)
+    )
+  }
+/>
 
           <Select
             label="Plazo solicitado *"
@@ -5828,10 +6027,22 @@ function Revision({
   regresar,
   trackerProps,
 }) {
-  const nombre =
-    datos.tipoPersona === "moral"
-      ? datos.razonSocial
-      : `${datos.nombre} ${datos.apellidoPaterno}`.trim();
+const nombre =
+  datos.tipoPersona === "moral"
+    ? String(datos.razonSocial || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toUpperCase()
+    : [
+        datos.nombre,
+        datos.apellidoPaterno,
+        datos.apellidoMaterno,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toUpperCase();
 
   return (
     <Pagina
