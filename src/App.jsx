@@ -411,34 +411,47 @@ const producto = {
      NAVEGACIÓN
   ========================================================= */
 
-  function ir(nuevaPantalla, opciones = {}) {
-    const { noGuardarHistorial = false } = opciones;
+function ir(nuevaPantalla, opciones = {}) {
+  const {
+    noGuardarHistorial = false,
+    conservarMensajeInfo = false,
+  } = opciones;
 
-    setMensajeError("");
+  setMensajeError("");
 
-    setLegalAbierto(false);
-    setMenuMovil(false);
-
-    const pasoNuevo = PASO_POR_PANTALLA[nuevaPantalla];
-
-    if (pasoNuevo) {
-      setPasoMaximo((prev) => Math.max(prev, pasoNuevo));
-
-      if (!noGuardarHistorial) {
-        setUltimaPantallaPorPaso((prev) => ({
-          ...prev,
-          [pasoNuevo]: nuevaPantalla,
-        }));
-      }
-    }
-
-    setPantalla(nuevaPantalla);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+  if (!conservarMensajeInfo) {
+    setMensajeInfo("");
   }
+
+  setLegalAbierto(false);
+  setMenuMovil(false);
+
+  const pasoNuevo =
+    PASO_POR_PANTALLA[nuevaPantalla];
+
+  if (pasoNuevo) {
+    setPasoMaximo((prev) =>
+      Math.max(prev, pasoNuevo)
+    );
+
+    if (!noGuardarHistorial) {
+      setUltimaPantallaPorPaso(
+        (prev) => ({
+          ...prev,
+          [pasoNuevo]:
+            nuevaPantalla,
+        })
+      );
+    }
+  }
+
+  setPantalla(nuevaPantalla);
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}
 
   function navegarPorTracker(numeroPaso) {
     /*
@@ -2559,11 +2572,13 @@ if (data?.session) {
   return;
 }
 
-      setMensajeInfo(
-        "Te enviamos un correo para confirmar tu cuenta."
-      );
+setMensajeInfo(
+  "Te enviamos un correo para confirmar tu cuenta."
+);
 
-      ir("confirmarCorreo");
+ir("confirmarCorreo", {
+  conservarMensajeInfo: true,
+});
     } catch (error) {
       console.error(error);
       mostrarError("No pudimos crear la cuenta.");
