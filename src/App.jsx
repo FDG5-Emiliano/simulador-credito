@@ -4026,39 +4026,38 @@ function ComoFunciona({
   usuario,
   abrirMiSolicitud,
 }) {
-const PASOS = [
-  {
-    numero: 1,
-    nombre: "Simula",
-    pantallaBase: "simulacion",
-  },
-  {
-    numero: 2,
-    nombre: "Solicitud",
-    pantallaBase: "tipoPersona",
-  },
-  {
-    numero: 3,
-    nombre: "Revisión",
-    pantallaBase: "enRevision",
-  },
-  {
-    numero: 4,
-    nombre: "Garantía",
-    pantallaBase: "garantia",
-    condicional: "garantia",
-  },
-  {
-    numero: 5,
-    nombre: "Oferta",
-    pantallaBase: "oferta",
-  },
-  {
-    numero: 6,
-    nombre: "Firma",
-    pantallaBase: "cuentaBanco",
-  },
-];
+  const pasos = [
+    {
+      titulo: "Simula",
+      texto:
+        "Elige el monto y plazo que necesitas para iniciar tu solicitud.",
+    },
+    {
+      titulo: "Completa tu solicitud",
+      texto:
+        "Proporciona tus datos, autorizaciones y la documentación necesaria para integrar tu expediente.",
+    },
+    {
+      titulo: "Revisión",
+      texto:
+        "Analizamos tu solicitud y revisamos la información y documentos proporcionados.",
+    },
+    {
+      titulo: "Garantía",
+      texto:
+        "Si durante el análisis se requiere una garantía u obligado solidario, te indicaremos qué información necesitamos.",
+    },
+    {
+      titulo: "Oferta",
+      texto:
+        "Si tu solicitud es aprobada, podrás consultar las condiciones de la oferta de crédito.",
+    },
+    {
+      titulo: "Firma y dispersión",
+      texto:
+        "Revisa tus documentos contractuales, completa el proceso de firma y recibe los recursos en tu cuenta bancaria.",
+    },
+  ];
 
   return (
     <Pagina
@@ -4071,7 +4070,9 @@ const PASOS = [
             className="simpleFlowCard"
             key={paso.titulo}
           >
-            <div className="stepCircle">{index + 1}</div>
+            <div className="stepCircle">
+              {index + 1}
+            </div>
 
             <h3>{paso.titulo}</h3>
 
@@ -4081,21 +4082,21 @@ const PASOS = [
       </div>
 
       <div className="bottomAction">
-<button
-  className="primary"
-  onClick={() => {
-    if (usuario) {
-      abrirMiSolicitud();
-      return;
-    }
+        <button
+          className="primary"
+          onClick={() => {
+            if (usuario) {
+              abrirMiSolicitud();
+              return;
+            }
 
-    ir("registro");
-  }}
->
-  {usuario
-    ? "Continuar mi solicitud"
-    : "Comenzar solicitud"}
-</button>
+            ir("registro");
+          }}
+        >
+          {usuario
+            ? "Continuar mi solicitud"
+            : "Comenzar solicitud"}
+        </button>
       </div>
     </Pagina>
   );
