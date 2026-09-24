@@ -520,9 +520,35 @@ if (
     });
   }
 
-  function regresarA(pantallaAnterior) {
-    ir(pantallaAnterior);
+async function regresarA(pantallaAnterior) {
+  setMensajeError("");
+  setMensajeInfo("");
+
+  // Navegamos inmediatamente para que el usuario
+  // no tenga que esperar a Supabase.
+  ir(pantallaAnterior, {
+    noGuardarHistorial: true,
+  });
+
+  // Si existe una sesión y seguimos en DRAFT,
+  // dejamos persistida explícitamente la pantalla
+  // a la que regresó el usuario.
+  if (
+    usuario?.id &&
+    estadoSolicitud === "DRAFT"
+  ) {
+    try {
+      await guardarBorradorSupabase(
+        pantallaAnterior
+      );
+    } catch (error) {
+      console.error(
+        "Error guardando navegación hacia atrás:",
+        error
+      );
+    }
   }
+}
 
 function puedeAbrirPantallaProtegida(
   pantallaDestino
