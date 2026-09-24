@@ -2183,37 +2183,50 @@ setMensajeInfo(
   "Documento cargado y enviado a revisión."
 );
 
-      /*
-        Si el archivo alcanzó a subirse a Storage pero falló el registro,
-        intentamos limpiar únicamente la nueva versión fallida.
-      */
-      if (storagePathNuevo) {
-        try {
-          await supabase.storage
-            .from(DOCUMENTOS_BUCKET)
-            .remove([storagePathNuevo]);
-        } catch (cleanupError) {
-          console.error("No se pudo limpiar el archivo fallido:", cleanupError);
-        }
-      }
+} catch (error) {
+  console.error(
+    "Error subiendo documento:",
+    error
+  );
 
-      setArchivos((prev) => {
-        const copia = { ...prev };
-
-        if (documentoAnterior) {
-          copia[campo] = documentoAnterior;
-        } else {
-          delete copia[campo];
-        }
-
-        return copia;
-      });
-
-      mostrarError(
-        error?.message || "No se pudo subir el documento. Intenta nuevamente."
+  /*
+    Si el archivo alcanzó a subirse a Storage
+    pero falló el registro, intentamos limpiar
+    únicamente la nueva versión fallida.
+  */
+  if (storagePathNuevo) {
+    try {
+      await supabase.storage
+        .from(DOCUMENTOS_BUCKET)
+        .remove([storagePathNuevo]);
+    } catch (cleanupError) {
+      console.error(
+        "No se pudo limpiar el archivo fallido:",
+        cleanupError
       );
     }
   }
+
+  setArchivos((prev) => {
+    const copia = { ...prev };
+
+    if (documentoAnterior) {
+      copia[campo] =
+        documentoAnterior;
+    } else {
+      delete copia[campo];
+    }
+
+    return copia;
+  });
+
+  mostrarError(
+    error?.message ||
+      "No se pudo subir el documento. Intenta nuevamente."
+  );
+}
+}
+
 
   function mostrarError(texto) {
     setMensajeError(texto);
