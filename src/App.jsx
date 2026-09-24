@@ -450,6 +450,14 @@ if (
       return;
     }
 
+    if (
+  !puedeAbrirPantallaProtegida(
+    destino
+  )
+) {
+  return;
+}
+
     ir(destino, {
       noGuardarHistorial: true,
     });
@@ -458,6 +466,48 @@ if (
   function regresarA(pantallaAnterior) {
     ir(pantallaAnterior);
   }
+
+function puedeAbrirPantallaProtegida(
+  pantallaDestino
+) {
+  if (pantallaDestino === "oferta") {
+    return [
+      "APPROVED",
+      "CONTRACTING",
+      "READY_TO_DISBURSE",
+      "SIGNED",
+      "DISBURSED",
+    ].includes(estadoSolicitud);
+  }
+
+  if (pantallaDestino === "cuentaBanco") {
+    return [
+      "APPROVED",
+      "CONTRACTING",
+      "READY_TO_DISBURSE",
+      "SIGNED",
+      "DISBURSED",
+    ].includes(estadoSolicitud);
+  }
+
+  if (
+    [
+      "contratos",
+      "firma",
+      "tesoreriaCliente",
+      "creditoActivo",
+    ].includes(pantallaDestino)
+  ) {
+    return [
+      "CONTRACTING",
+      "READY_TO_DISBURSE",
+      "SIGNED",
+      "DISBURSED",
+    ].includes(estadoSolicitud);
+  }
+
+  return true;
+}
 
   /* =========================================================
      BORRADOR LOCAL
@@ -6456,35 +6506,104 @@ function Tracker({
   const pasoVisualActual =
     obtenerPasoVisual(pasoActual);
 
-  function bloqueado(paso) {
+function bloqueado(paso) {
+  /*
+    REGLA PRINCIPAL:
+    después de enviar la solicitud,
+    el estado del backend controla qué
+    etapas puede abrir el cliente.
+  */
+
+  if (
+    estadoSolicitud === "SUBMITTED" ||
+    estadoSolicitud === "IN_REVIEW"
+  ) {
     /*
-      La disponibilidad real sigue utilizando
-      pasoMaximo interno.
+      Mientras está en revisión:
+
+      - Simula / Solicitud quedan cerradas.
+      - Revisión es accesible.
+      - Garantía sólo se habilita si
+        Backoffice la solicitó.
+      - Oferta y Firma permanecen bloqueadas.
     */
 
+    if (paso.numeroReal === 3) {
+      return false;
+    }
+
     if (
-      paso.numeroReal > pasoMaximo
+      paso.numeroReal === 4 &&
+      requiereGarantia === true
     ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /*
+    APPROVED significa que Backoffice
+    ya autorizó llegar a Oferta.
+
+    Si hubo garantía, también permitimos
+    consultar esa etapa.
+  */
+  if (estadoSolicitud === "APPROVED") {
+    if (paso.numeroReal < 3) {
       return true;
     }
 
-    /*
-      Una solicitud enviada no debe permitir
-      regresar a las pantallas editables
-      de Simulación/Solicitud.
-    */
+    if (paso.numeroReal === 3) {
+      return false;
+    }
 
-    if (
-      ESTADOS_ENVIADOS.includes(
-        estadoSolicitud
-      ) &&
-      paso.numeroReal < 3
-    ) {
+    if (paso.numeroReal === 4) {
+      return requiereGarantia !== true;
+    }
+
+    if (paso.numeroReal === 5) {
+      return false;
+    }
+
+    /*
+      Firma todavía NO.
+      Primero el cliente debe aceptar
+      la oferta y entrar en contratación.
+    */
+    if (paso.numeroReal >= 6) {
+      return true;
+    }
+  }
+
+  /*
+    Una vez iniciada la contratación,
+    Oferta y Firma ya forman parte
+    del flujo permitido.
+  */
+  if (
+    estadoSolicitud === "CONTRACTING" ||
+    estadoSolicitud === "READY_TO_DISBURSE" ||
+    estadoSolicitud === "SIGNED" ||
+    estadoSolicitud === "DISBURSED"
+  ) {
+    if (paso.numeroReal < 3) {
       return true;
     }
 
     return false;
   }
+
+  /*
+    DRAFT:
+    usamos el avance normal del formulario.
+  */
+  if (paso.numeroReal > pasoMaximo) {
+    return true;
+  }
+
+  return false;
+}
 
   return (
     <>
