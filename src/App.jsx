@@ -786,23 +786,28 @@ async function obtenerOCrearDraft(userId) {
     No importa si es DRAFT,
     SUBMITTED o INFORMATION_REQUESTED.
   */
-  if (solicitudViva?.id) {
-    setSolicitudId(
-      solicitudViva.id
-    );
+if (solicitudViva?.id) {
+  setSolicitudId(
+    solicitudViva.id
+  );
 
-    if (solicitudViva.folio) {
-      setFolio(
-        solicitudViva.folio
-      );
-    }
+  setFolio(
+    solicitudViva.folio || ""
+  );
 
-    setEstadoSolicitud(
-      solicitudViva.estado
-    );
+  setEstadoSolicitud(
+    solicitudViva.estado
+  );
 
-    return solicitudViva.id;
-  }
+  /*
+    IMPORTANTE:
+    Si la solicitud ya fue enviada,
+    simplemente devolvemos su ID.
+
+    Nunca intentamos crear un DRAFT.
+  */
+  return solicitudViva.id;
+}
 
   /*
     4. Sólo llegamos aquí cuando realmente
@@ -858,80 +863,69 @@ async function obtenerOCrearDraft(userId) {
     Protección adicional ante dos llamadas
     simultáneas.
   */
-  if (
-    crearError?.code === "23505"
-  ) {
-    const {
-      data: existente,
-      error: recuperarError,
-    } = await supabase
-      .from("Aplicaciones")
-      .select(`
-        id,
-        folio,
-        estado,
-        pantalla_actual
-      `)
-      .eq("user_id", userId)
-      .in(
-        "estado",
-        ESTADOS_SOLICITUD_VIVA
-      )
-      .order("actualizado_en", {
-        ascending: false,
-      })
-      .limit(1)
-      .maybeSingle();
+if (
+  crearError?.code === "23505"
+) {
+  const {
+    data: existente,
+    error: recuperarError,
+  } = await supabase
+    .from("Aplicaciones")
+    .select(`
+      id,
+      folio,
+      estado,
+      pantalla_actual
+    `)
+    .eq("user_id", userId)
+    .in(
+      "estado",
+      ESTADOS_SOLICITUD_VIVA
+    )
+    .order("actualizado_en", {
+      ascending: false,
+    })
+    .limit(1)
+    .maybeSingle();
 
-    if (recuperarError) {
-      throw recuperarError;
-    }
-
-    if (!existente?.id) {
-      throw new Error(
-        "La solicitud fue creada, pero no pudimos recuperarla."
-      );
-    }
-
-    setSolicitudId(
-      existente.id
-    );
-
-    setFolio(
-      existente.folio || ""
-    );
-
-    setEstadoSolicitud(
-      existente.estado
-    );
-
-    return existente.id;
+  if (recuperarError) {
+    throw recuperarError;
   }
 
-  if (crearError) {
-    throw crearError;
-  }
-
-  if (!creada?.id) {
+  if (!existente?.id) {
     throw new Error(
-      "Supabase no devolvió la solicitud creada."
+      "Existe una solicitud activa, pero no pudimos recuperarla."
     );
   }
 
-  setSolicitudId(
-    creada.id
-  );
+  setSolicitudId(existente.id);
+  setFolio(existente.folio || "");
+  setEstadoSolicitud(existente.estado);
 
-  setFolio(
-    creada.folio || ""
-  );
-
-  setEstadoSolicitud(
-    creada.estado
-  );
-
-  return creada.id;
+  return existente.id;
 }
+
+/*
+  Si hubo otro error distinto a 23505,
+  sí lo lanzamos.
+*/
+if (crearError) {
+  throw crearError;
+}
+
+if (!creada?.id) {
+  throw new Error(
+    "La solicitud fue creada, pero no pudimos recuperarla."
+  );
+}
+
+setSolicitudId(creada.id);
+setFolio(creada.folio || "");
+setEstadoSolicitud(creada.estado);
+
+return creada.id;
+} // ← ESTE CIERRA obtenerOCrearDraft()
+
 
 async function guardarBorradorSupabase(
   pantallaDestino = pantalla
@@ -2172,42 +2166,52 @@ if (
     Si éste era el último documento rechazado,
     devolvemos el expediente a análisis.
   */
-  if (
-    !rechazadosRestantes ||
-    rechazadosRestantes.length === 0
-  ) {
-    const ahora =
-      new Date().toISOString();
+if (
+  !rechazadosRestantes ||
+  rechazadosRestantes.length === 0
+) {
+  const ahora =
+    new Date().toISOString();
 
-    const {
-      error: errorSolicitud,
-    } = await supabase
-      .from("Aplicaciones")
-      .update({
-        estado: "IN_ANALYSIS",
-        pantalla_actual: "enRevision",
-        actualizado_en: ahora,
-      })
-      .eq("id", aplicacionId);
+  const {
+    error: errorSolicitud,
+  } = await supabase
+    .from("Aplicaciones")
+    .update({
+      estado: "IN_ANALYSIS",
+      pantalla_actual: "enRevision",
+      actualizado_en: ahora,
+    })
+    .eq("id", aplicacionId);
 
-    if (errorSolicitud) {
-      throw errorSolicitud;
-    }
-
-    setEstadoSolicitud(
-      "IN_ANALYSIS"
-    );
-
-    setMensajeInfo(
-      "Documento corregido y enviado nuevamente a revisión."
-    );
-
-    ir("enRevision", {
-      conservarMensajeInfo: true,
-    });
-
-    return;
+  if (errorSolicitud) {
+    throw errorSolicitud;
   }
+
+  /*
+    Conservamos explícitamente la MISMA
+    solicitud que acabamos de actualizar.
+  */
+  setSolicitudId(aplicacionId);
+
+  setEstadoSolicitud(
+    "IN_ANALYSIS"
+  );
+
+  setPantalla(
+    "enRevision"
+  );
+
+  setPasoMaximo((prev) =>
+    Math.max(prev, 3)
+  );
+
+  setMensajeInfo(
+    "Documento corregido y enviado nuevamente a revisión."
+  );
+
+  return;
+}
 }
 
 setMensajeInfo(
