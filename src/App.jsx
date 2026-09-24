@@ -4056,10 +4056,7 @@ function DatosSolicitante({
   label="RFC *"
   value={datos.rfcEmpresa}
   onChange={(v) =>
-    actualizar(
-      "rfcEmpresa",
-      normalizarRFC(v).slice(0, 12)
-    )
+    actualizar("rfcEmpresa", v)
   }
 />
 
@@ -4193,10 +4190,7 @@ function DatosSolicitante({
   label="CURP *"
   value={datos.curp}
   onChange={(v) =>
-    actualizar(
-      "curp",
-      normalizarCURP(v).slice(0, 18)
-    )
+    actualizar("curp", v)
   }
 />
 
@@ -4204,10 +4198,7 @@ function DatosSolicitante({
   label="RFC *"
   value={datos.rfc}
   onChange={(v) =>
-    actualizar(
-      "rfc",
-      normalizarRFC(v).slice(0, 13)
-    )
+    actualizar("rfc", v)
   }
 />
 
