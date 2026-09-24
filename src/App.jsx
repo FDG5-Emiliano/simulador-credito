@@ -309,6 +309,32 @@ const producto = {
      HELPERS NUMÉRICOS
   ========================================================= */
 
+  function formatearMontoInput(valor) {
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ""
+  ) {
+    return "";
+  }
+
+  const limpio = String(valor)
+    .replace(/[^\d]/g, "");
+
+  if (!limpio) {
+    return "";
+  }
+
+  return Number(limpio).toLocaleString(
+    "en-US"
+  );
+}
+
+function limpiarMontoInput(valor) {
+  return String(valor || "")
+    .replace(/[^\d]/g, "");
+}
+
   function numeroONull(valor) {
     if (
       valor === "" ||
@@ -613,7 +639,7 @@ function puedeAbrirPantallaProtegida(
     estadoSolicitud,
   ]);
 
-  async function obtenerOCrearDraft(userId) {
+async function obtenerOCrearDraft(userId) {
   if (!userId) {
     throw new Error(
       "No hay un usuario autenticado."
@@ -621,32 +647,59 @@ function puedeAbrirPantallaProtegida(
   }
 
   /*
-    Si React ya conoce la solicitud,
-    reutilizamos ese ID.
+    1. Si React ya tiene una solicitud conocida,
+    verificamos que siga siendo el DRAFT de este usuario.
   */
   if (solicitudId) {
-    return solicitudId;
+    const {
+      data: solicitudActual,
+      error: solicitudActualError,
+    } = await supabase
+      .from("Aplicaciones")
+      .select(`
+        id,
+        folio,
+        estado
+      `)
+      .eq("id", solicitudId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (solicitudActualError) {
+      throw solicitudActualError;
+    }
+
+    if (
+      solicitudActual?.id &&
+      solicitudActual.estado === "DRAFT"
+    ) {
+      if (solicitudActual.folio) {
+        setFolio(
+          solicitudActual.folio
+        );
+      }
+
+      return solicitudActual.id;
+    }
   }
 
   /*
-    Primero buscamos el único DRAFT
-    permitido para este usuario.
+    2. Buscar el único DRAFT permitido
+    para este usuario.
   */
   const {
     data: draftExistente,
     error: buscarError,
   } = await supabase
     .from("Aplicaciones")
-    .select(
-      `
+    .select(`
       id,
       folio,
       estado,
       pantalla_actual,
       datos_borrador,
       actualizado_en
-      `
-    )
+    `)
     .eq("user_id", userId)
     .eq("estado", "DRAFT")
     .order("actualizado_en", {
@@ -659,6 +712,10 @@ function puedeAbrirPantallaProtegida(
     throw buscarError;
   }
 
+  /*
+    3. Si ya existe, reutilizarlo.
+    NO creamos otra solicitud.
+  */
   if (draftExistente?.id) {
     setSolicitudId(
       draftExistente.id
@@ -674,27 +731,30 @@ function puedeAbrirPantallaProtegida(
   }
 
   /*
-    No existe: intentamos crear uno.
+    4. No existe DRAFT.
+
+    Creamos la aplicación SIN enviar folio.
+
+    PostgreSQL ejecutará:
+      trg_generar_folio_aplicacion
+
+    y asignará:
+      TRI-000001
+      TRI-000002
+      TRI-000003
+      ...
   */
-
-  const nuevoFolio =
-    folio ||
-    `TRI-${String(
-      Math.floor(
-        100000 +
-          Math.random() * 900000
-      )
-    )}`;
-
   const ahora =
     new Date().toISOString();
+
+  const datosSeguros = {
+    ...datos,
+    password: "",
+  };
 
   const payload = {
     user_id:
       userId,
-
-    folio:
-      nuevoFolio,
 
     estado:
       "DRAFT",
@@ -702,11 +762,9 @@ function puedeAbrirPantallaProtegida(
     pantalla_actual:
       pantalla || "simulacion",
 
-    actualizado_en:
-      ahora,
-
     datos_borrador: {
-      datos,
+      datos:
+        datosSeguros,
 
       consentimientos,
 
@@ -714,6 +772,9 @@ function puedeAbrirPantallaProtegida(
 
       ultimaPantallaPorPaso,
     },
+
+    actualizado_en:
+      ahora,
   };
 
   const {
@@ -722,22 +783,23 @@ function puedeAbrirPantallaProtegida(
   } = await supabase
     .from("Aplicaciones")
     .insert(payload)
-    .select(
-      `
+    .select(`
       id,
-      folio
-      `
-    )
+      folio,
+      estado,
+      pantalla_actual
+    `)
     .single();
 
   /*
-    Si dos llamadas llegaron aquí
-    simultáneamente, el índice UNIQUE
-    permitirá solamente una.
+    5. Protección contra concurrencia.
 
-    La otra recibirá 23505.
-    Recuperamos silenciosamente
-    la que ganó.
+    Si dos llamadas intentan crear el DRAFT
+    simultáneamente, nuestro índice UNIQUE
+    deja ganar solamente a una.
+
+    La segunda recibe 23505 y recupera
+    el DRAFT que ya fue creado.
   */
   if (
     crearError?.code === "23505"
@@ -747,19 +809,25 @@ function puedeAbrirPantallaProtegida(
       error: recuperarError,
     } = await supabase
       .from("Aplicaciones")
-      .select(
-        `
+      .select(`
         id,
-        folio
-        `
-      )
+        folio,
+        estado,
+        pantalla_actual
+      `)
       .eq("user_id", userId)
       .eq("estado", "DRAFT")
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (recuperarError) {
       throw recuperarError;
+    }
+
+    if (!ganadora?.id) {
+      throw new Error(
+        "La solicitud fue creada, pero no pudimos recuperarla."
+      );
     }
 
     setSolicitudId(
@@ -779,12 +847,25 @@ function puedeAbrirPantallaProtegida(
     throw crearError;
   }
 
-  setSolicitudId(creada.id);
+  if (!creada?.id) {
+    throw new Error(
+      "Supabase no devolvió la solicitud creada."
+    );
+  }
 
-  setFolio(
-    creada.folio ||
-      nuevoFolio
+  /*
+    El folio que recibimos aquí ya fue
+    generado por PostgreSQL.
+  */
+  setSolicitudId(
+    creada.id
   );
+
+  if (creada.folio) {
+    setFolio(
+      creada.folio
+    );
+  }
 
   return creada.id;
 }
@@ -4139,14 +4220,18 @@ function Simulacion({
       <Tracker {...trackerProps} />
 
       <div className="card formCard">
-        <Campo
-          label="Monto solicitado *"
-          type="number"
-          value={datos.montoSolicitado}
-          onChange={(valor) =>
-            actualizar("montoSolicitado", valor)
-          }
-        />
+<Campo
+  label="Monto solicitado *"
+  value={formatearMontoInput(
+    datos.montoSolicitado
+  )}
+  onChange={(v) =>
+    actualizar(
+      "montoSolicitado",
+      limpiarMontoInput(v)
+    )
+  }
+/>
 
         <label className="label">
           Plazo solicitado *
