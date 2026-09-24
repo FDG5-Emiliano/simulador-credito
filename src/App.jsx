@@ -3204,6 +3204,7 @@ async function abrirDocumento(tipo) {
   ir={ir}
   usuario={usuario}
   abrirMiSolicitud={abrirMiSolicitud}
+  iniciarNuevaSolicitud={iniciarNuevaSolicitud}
   cerrarSesion={cerrarSesion}
   menuMovil={menuMovil}
   setMenuMovil={setMenuMovil}
