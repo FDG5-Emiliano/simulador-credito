@@ -3366,7 +3366,7 @@ async function abrirDocumento(tipo) {
             datos={datos}
             actualizar={actualizar}
             continuar={validarTipoPersona}
-            regresar={() => regresarA("simulacion")}
+regresar={() => regresarA("simulacion")}
             trackerProps={{
               pasoActual: 2,
               pasoMaximo,
