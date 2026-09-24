@@ -95,6 +95,20 @@ const ESTADOS_ENVIADOS = [
   "DISBURSED",
 ];
 
+const ESTADOS_SOLICITUD_VIVA = [
+  "DRAFT",
+  "SUBMITTED",
+  "DOCUMENT_REVIEW",
+  "IN_ANALYSIS",
+  "INFORMATION_REQUESTED",
+  "CREDIT_COMMITTEE",
+  "IN_REVIEW",
+  "APPROVED",
+  "CONTRACTING",
+  "READY_TO_DISBURSE",
+  "SIGNED",
+];
+
 const DOCUMENTOS_BUCKET = "documentos-solicitudes";
 
 /* =========================================================
@@ -679,8 +693,11 @@ async function obtenerOCrearDraft(userId) {
   }
 
   /*
-    1. Si React ya tiene una solicitud conocida,
-    verificamos que siga siendo el DRAFT de este usuario.
+    1. Si React ya conoce una solicitud,
+    comprobamos que siga perteneciendo
+    al usuario.
+
+    Ya NO exigimos que sea DRAFT.
   */
   if (solicitudId) {
     const {
@@ -691,7 +708,8 @@ async function obtenerOCrearDraft(userId) {
       .select(`
         id,
         folio,
-        estado
+        estado,
+        pantalla_actual
       `)
       .eq("id", solicitudId)
       .eq("user_id", userId)
@@ -703,24 +721,38 @@ async function obtenerOCrearDraft(userId) {
 
     if (
       solicitudActual?.id &&
-      solicitudActual.estado === "DRAFT"
+      ESTADOS_SOLICITUD_VIVA.includes(
+        solicitudActual.estado
+      )
     ) {
+      setSolicitudId(
+        solicitudActual.id
+      );
+
       if (solicitudActual.folio) {
         setFolio(
           solicitudActual.folio
         );
       }
 
+      setEstadoSolicitud(
+        solicitudActual.estado
+      );
+
       return solicitudActual.id;
     }
   }
 
   /*
-    2. Buscar el único DRAFT permitido
-    para este usuario.
+    2. Antes de crear absolutamente nada,
+    buscamos cualquier solicitud VIVA
+    del usuario.
+
+    Esto incluye SUBMITTED,
+    INFORMATION_REQUESTED, APPROVED, etc.
   */
   const {
-    data: draftExistente,
+    data: solicitudViva,
     error: buscarError,
   } = await supabase
     .from("Aplicaciones")
@@ -733,7 +765,10 @@ async function obtenerOCrearDraft(userId) {
       actualizado_en
     `)
     .eq("user_id", userId)
-    .eq("estado", "DRAFT")
+    .in(
+      "estado",
+      ESTADOS_SOLICITUD_VIVA
+    )
     .order("actualizado_en", {
       ascending: false,
     })
@@ -745,36 +780,35 @@ async function obtenerOCrearDraft(userId) {
   }
 
   /*
-    3. Si ya existe, reutilizarlo.
-    NO creamos otra solicitud.
+    3. Si existe una solicitud viva,
+    reutilizamos ESA.
+
+    No importa si es DRAFT,
+    SUBMITTED o INFORMATION_REQUESTED.
   */
-  if (draftExistente?.id) {
+  if (solicitudViva?.id) {
     setSolicitudId(
-      draftExistente.id
+      solicitudViva.id
     );
 
-    if (draftExistente.folio) {
+    if (solicitudViva.folio) {
       setFolio(
-        draftExistente.folio
+        solicitudViva.folio
       );
     }
 
-    return draftExistente.id;
+    setEstadoSolicitud(
+      solicitudViva.estado
+    );
+
+    return solicitudViva.id;
   }
 
   /*
-    4. No existe DRAFT.
+    4. Sólo llegamos aquí cuando realmente
+    NO existe ninguna solicitud viva.
 
-    Creamos la aplicación SIN enviar folio.
-
-    PostgreSQL ejecutará:
-      trg_generar_folio_aplicacion
-
-    y asignará:
-      TRI-000001
-      TRI-000002
-      TRI-000003
-      ...
+    Entonces sí podemos crear una nueva.
   */
   const ahora =
     new Date().toISOString();
@@ -785,11 +819,9 @@ async function obtenerOCrearDraft(userId) {
   };
 
   const payload = {
-    user_id:
-      userId,
+    user_id: userId,
 
-    estado:
-      "DRAFT",
+    estado: "DRAFT",
 
     pantalla_actual:
       pantalla || "simulacion",
@@ -805,8 +837,7 @@ async function obtenerOCrearDraft(userId) {
       ultimaPantallaPorPaso,
     },
 
-    actualizado_en:
-      ahora,
+    actualizado_en: ahora,
   };
 
   const {
@@ -824,20 +855,14 @@ async function obtenerOCrearDraft(userId) {
     .single();
 
   /*
-    5. Protección contra concurrencia.
-
-    Si dos llamadas intentan crear el DRAFT
-    simultáneamente, nuestro índice UNIQUE
-    deja ganar solamente a una.
-
-    La segunda recibe 23505 y recupera
-    el DRAFT que ya fue creado.
+    Protección adicional ante dos llamadas
+    simultáneas.
   */
   if (
     crearError?.code === "23505"
   ) {
     const {
-      data: ganadora,
+      data: existente,
       error: recuperarError,
     } = await supabase
       .from("Aplicaciones")
@@ -848,7 +873,13 @@ async function obtenerOCrearDraft(userId) {
         pantalla_actual
       `)
       .eq("user_id", userId)
-      .eq("estado", "DRAFT")
+      .in(
+        "estado",
+        ESTADOS_SOLICITUD_VIVA
+      )
+      .order("actualizado_en", {
+        ascending: false,
+      })
       .limit(1)
       .maybeSingle();
 
@@ -856,23 +887,25 @@ async function obtenerOCrearDraft(userId) {
       throw recuperarError;
     }
 
-    if (!ganadora?.id) {
+    if (!existente?.id) {
       throw new Error(
         "La solicitud fue creada, pero no pudimos recuperarla."
       );
     }
 
     setSolicitudId(
-      ganadora.id
+      existente.id
     );
 
-    if (ganadora.folio) {
-      setFolio(
-        ganadora.folio
-      );
-    }
+    setFolio(
+      existente.folio || ""
+    );
 
-    return ganadora.id;
+    setEstadoSolicitud(
+      existente.estado
+    );
+
+    return existente.id;
   }
 
   if (crearError) {
@@ -885,19 +918,17 @@ async function obtenerOCrearDraft(userId) {
     );
   }
 
-  /*
-    El folio que recibimos aquí ya fue
-    generado por PostgreSQL.
-  */
   setSolicitudId(
     creada.id
   );
 
-  if (creada.folio) {
-    setFolio(
-      creada.folio
-    );
-  }
+  setFolio(
+    creada.folio || ""
+  );
+
+  setEstadoSolicitud(
+    creada.estado
+  );
 
   return creada.id;
 }
