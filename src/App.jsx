@@ -2091,21 +2091,25 @@ function curpValida(valor) {
     ir("tipoPersona");
   }
 
-  function validarTipoPersona() {
-    if (!datos.tipoPersona) {
-      mostrarError(
-        "Selecciona si la solicitud corresponde a Persona Física o Persona Moral."
-      );
-      return;
-    }
-
-    if (usuario) {
-      ir("consentimientos");
-      return;
-    }
-
-    ir("registro");
+function validarTipoPersona() {
+  if (!datos.tipoPersona) {
+    mostrarError(
+      "Selecciona si la solicitud corresponde a Persona Física o Persona Moral."
+    );
+    return;
   }
+
+  if (!usuario?.id) {
+    mostrarError(
+      "Necesitas iniciar sesión para continuar."
+    );
+
+    ir("loginCliente");
+    return;
+  }
+
+  ir("consentimientos");
+}
 
   function validarConsentimientos() {
     const completos = Object.values(consentimientos).every(Boolean);
@@ -2586,12 +2590,22 @@ ir("revision");
         return;
       }
 
-      if (data?.session) {
-        setUsuario(data.session.user);
+if (data?.session) {
+  setUsuario(
+    data.session.user
+  );
 
-        ir("consentimientos");
-        return;
-      }
+  setDatos((prev) => ({
+    ...prev,
+    correo:
+      data.session.user.email ||
+      prev.correo,
+    password: "",
+  }));
+
+  ir("simulacion");
+  return;
+}
 
       setMensajeInfo(
         "Te enviamos un correo para confirmar tu cuenta."
@@ -3151,13 +3165,22 @@ async function abrirDocumento(tipo) {
   />
 )}
 
-        {pantalla === "producto" && (
-          <Producto producto={producto} ir={ir} />
-        )}
+{pantalla === "producto" && (
+  <Producto
+    producto={producto}
+    ir={ir}
+    usuario={usuario}
+    abrirMiSolicitud={abrirMiSolicitud}
+  />
+)}
 
-        {pantalla === "comoFunciona" && (
-          <ComoFunciona ir={ir} />
-        )}
+{pantalla === "comoFunciona" && (
+  <ComoFunciona
+    ir={ir}
+    usuario={usuario}
+    abrirMiSolicitud={abrirMiSolicitud}
+  />
+)}
 
         {pantalla === "simulacion" && (
           <Simulacion
@@ -3188,21 +3211,17 @@ async function abrirDocumento(tipo) {
           />
         )}
 
-        {pantalla === "registro" && (
-          <Registro
-            datos={datos}
-            actualizar={actualizar}
-            crearCuenta={crearCuenta}
-            ir={ir}
-            regresar={() => regresarA("tipoPersona")}
-            trackerProps={{
-              pasoActual: 2,
-              pasoMaximo,
-              navegarPorTracker,
-              estadoSolicitud,
-            }}
-          />
-        )}
+{pantalla === "registro" && (
+  <Registro
+    datos={datos}
+    actualizar={actualizar}
+    crearCuenta={crearCuenta}
+    ir={ir}
+    regresar={() =>
+      regresarA("inicio")
+    }
+  />
+)}
 
         {pantalla === "loginCliente" && (
           <LoginCliente
@@ -3224,11 +3243,9 @@ async function abrirDocumento(tipo) {
             consentimientos={consentimientos}
             actualizar={actualizarConsentimiento}
             continuar={validarConsentimientos}
-            regresar={() =>
-              usuario
-                ? regresarA("tipoPersona")
-                : regresarA("registro")
-            }
+regresar={() =>
+  regresarA("tipoPersona")
+}
             trackerProps={{
               pasoActual: 2,
               pasoMaximo,
@@ -3676,12 +3693,12 @@ function Header({
               Iniciar sesión
             </button>
 
-            <button
-              className="navCta"
-              onClick={() => ir("simulacion")}
-            >
-              Solicita tu crédito
-            </button>
+<button
+  className="navCta"
+  onClick={() => ir("registro")}
+>
+  Solicita tu crédito
+</button>
           </>
         )}
       </nav>
@@ -3724,7 +3741,7 @@ function Inicio({
       return;
     }
 
-    ir("simulacion");
+    ir("registro");
   }}
 >
   {usuario
@@ -3773,7 +3790,12 @@ function Inicio({
    PRODUCTO
 ========================================================= */
 
-function Producto({ producto, ir }) {
+function Producto({
+  producto,
+  ir,
+  usuario,
+  abrirMiSolicitud,
+}) {
   const tasaMaxima =
     producto.tasaMaxima === null
       ? "Pendiente de configurar"
@@ -3801,12 +3823,21 @@ function Producto({ producto, ir }) {
         </div>
 
         <div className="productHeroAction">
-          <button
-            className="goldButton"
-            onClick={() => ir("simulacion")}
-          >
-            Iniciar solicitud
-          </button>
+<button
+  className="goldButton"
+  onClick={() => {
+    if (usuario) {
+      abrirMiSolicitud();
+      return;
+    }
+
+    ir("registro");
+  }}
+>
+  {usuario
+    ? "Continuar mi solicitud"
+    : "Iniciar solicitud"}
+</button>
         </div>
       </section>
 
@@ -3919,7 +3950,11 @@ function Producto({ producto, ir }) {
    CÓMO FUNCIONA
 ========================================================= */
 
-function ComoFunciona({ ir }) {
+function ComoFunciona({
+  ir,
+  usuario,
+  abrirMiSolicitud,
+}) {
 const PASOS = [
   {
     numero: 1,
@@ -3975,12 +4010,21 @@ const PASOS = [
       </div>
 
       <div className="bottomAction">
-        <button
-          className="primary"
-          onClick={() => ir("simulacion")}
-        >
-          Comenzar solicitud
-        </button>
+<button
+  className="primary"
+  onClick={() => {
+    if (usuario) {
+      abrirMiSolicitud();
+      return;
+    }
+
+    ir("registro");
+  }}
+>
+  {usuario
+    ? "Continuar mi solicitud"
+    : "Comenzar solicitud"}
+</button>
       </div>
     </Pagina>
   );
@@ -4130,34 +4174,37 @@ function Registro({
   crearCuenta,
   ir,
   regresar,
-  trackerProps,
 }) {
   return (
     <Pagina
       titulo="Crea tu cuenta"
-      subtitulo="Tu cuenta nos permitirá guardar el avance de tu solicitud."
+      subtitulo="Primero crea tu cuenta para guardar de forma segura el avance de tu solicitud."
     >
-      <Tracker {...trackerProps} />
-
       <div className="card formCard">
         <Campo
           label="Celular *"
           value={datos.celular}
-          onChange={(v) => actualizar("celular", v)}
+          onChange={(v) =>
+            actualizar("celular", v)
+          }
         />
 
         <Campo
           label="Correo electrónico *"
           type="email"
           value={datos.correo}
-          onChange={(v) => actualizar("correo", v)}
+          onChange={(v) =>
+            actualizar("correo", v)
+          }
         />
 
         <Campo
           label="Contraseña *"
           type="password"
           value={datos.password}
-          onChange={(v) => actualizar("password", v)}
+          onChange={(v) =>
+            actualizar("password", v)
+          }
         />
 
         <NavButtons
@@ -4167,11 +4214,15 @@ function Registro({
         />
 
         <div className="loginPrompt">
-          <span>¿Ya tienes cuenta?</span>
+          <span>
+            ¿Ya tienes cuenta?
+          </span>
 
           <button
             className="linkButton"
-            onClick={() => ir("loginCliente")}
+            onClick={() =>
+              ir("loginCliente")
+            }
           >
             Iniciar sesión
           </button>
@@ -4255,16 +4306,18 @@ function LoginCliente({
           {cargando ? "Ingresando..." : "Iniciar sesión"}
         </button>
 
-        <div className="loginPrompt">
-          <span>¿No tienes cuenta?</span>
+<div className="loginPrompt">
+  <span>¿No tienes cuenta?</span>
 
-          <button
-            className="linkButton"
-            onClick={() => ir("simulacion")}
-          >
-            Iniciar solicitud
-          </button>
-        </div>
+  <button
+    className="linkButton"
+    onClick={() =>
+      ir("registro")
+    }
+  >
+    Crear cuenta
+  </button>
+</div>
       </div>
     </Pagina>
   );
@@ -4322,9 +4375,9 @@ if (data?.user) {
       data.user.id
     );
 
-  if (!recuperada) {
-    ir("consentimientos");
-  }
+if (!recuperada) {
+  ir("simulacion");
+}
 }
     } catch (error) {
       console.error(error);
