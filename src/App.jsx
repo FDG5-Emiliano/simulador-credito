@@ -344,18 +344,21 @@ const producto = {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const user = session?.user || null;
+    } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        const user = session?.user || null;
 
-      setUsuario(user);
+        setUsuario(user);
 
-      if (user) {
-        setDatos((prev) => ({
-          ...prev,
-          correo: prev.correo || user.email || "",
-        }));
+        if (user) {
+          setDatos((prev) => ({
+            ...prev,
+            correo: user.email || prev.correo || "",
+            password: "",
+          }));
+        }
       }
-    });
+    );
 
     return () => {
       subscription.unsubscribe();
@@ -366,28 +369,43 @@ const producto = {
     try {
       const {
         data: { session },
+        error,
       } = await supabase.auth.getSession();
+
+      if (error) {
+        throw error;
+      }
 
       if (session?.user) {
         setUsuario(session.user);
 
         setDatos((prev) => ({
           ...prev,
-          correo: prev.correo || session.user.email || "",
+          correo: session.user.email || "",
+          password: "",
         }));
 
-        await recuperarSolicitud(session.user.id);
+        await recuperarSolicitud(
+          session.user.id
+        );
       } else {
-        recuperarLocal();
+        setUsuario(null);
+
+        localStorage.removeItem(
+          "trisal_solicitud_borrador"
+        );
       }
     } catch (error) {
-      console.error(error);
-      recuperarLocal();
+      console.error(
+        "Error recuperando sesión:",
+        error
+      );
     } finally {
       yaRecuperoRef.current = true;
       setCargandoSesion(false);
     }
   }
+
 
   /* =========================================================
      NAVEGACIÓN
@@ -508,92 +526,6 @@ function puedeAbrirPantallaProtegida(
 
   return true;
 }
-
-  /* =========================================================
-     BORRADOR LOCAL
-  ========================================================= */
-
-  useEffect(() => {
-    if (cargandoSesion || !yaRecuperoRef.current) {
-      return;
-    }
-
-    if (PANTALLAS_PUBLICAS.includes(pantalla)) {
-      return;
-    }
-
-    const datosSeguros = {
-      ...datos,
-      password: "",
-    };
-
-    const borrador = {
-      datos: datosSeguros,
-      pantalla,
-      consentimientos,
-      pasoMaximo,
-      ultimaPantallaPorPaso,
-      guardadoEn: new Date().toISOString(),
-    };
-
-    localStorage.setItem(
-      "trisal_solicitud_borrador",
-      JSON.stringify(borrador)
-    );
-  }, [
-    datos,
-    pantalla,
-    consentimientos,
-    pasoMaximo,
-    ultimaPantallaPorPaso,
-    cargandoSesion,
-  ]);
-
-  function recuperarLocal() {
-    try {
-      const guardado = localStorage.getItem(
-        "trisal_solicitud_borrador"
-      );
-
-      if (!guardado) {
-        return;
-      }
-
-      const borrador = JSON.parse(guardado);
-
-      if (borrador.datos) {
-        setDatos((prev) => ({
-          ...prev,
-          ...borrador.datos,
-          password: "",
-        }));
-      }
-
-      if (borrador.consentimientos) {
-        setConsentimientos(borrador.consentimientos);
-      }
-
-      if (borrador.pasoMaximo) {
-        setPasoMaximo(borrador.pasoMaximo);
-      }
-
-      if (borrador.ultimaPantallaPorPaso) {
-        setUltimaPantallaPorPaso((prev) => ({
-          ...prev,
-          ...borrador.ultimaPantallaPorPaso,
-        }));
-      }
-
-      if (
-        borrador.pantalla &&
-        !PANTALLAS_PUBLICAS.includes(borrador.pantalla)
-      ) {
-        setPantalla(borrador.pantalla);
-      }
-    } catch (error) {
-      console.error("Error recuperando borrador local:", error);
-    }
-  }
 
     /* =========================================================
      para consultar cada 1o seg si se aprobo o no
@@ -1127,16 +1059,17 @@ async function guardarBorradorSupabase(
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        console.error(error);
-        recuperarLocal();
-        return false;
-      }
+if (error) {
+  console.error(
+    "Error recuperando solicitud:",
+    error
+  );
+  return false;
+}
 
-      if (!data) {
-        recuperarLocal();
-        return false;
-      }
+if (!data) {
+  return false;
+}
 
       setSolicitudId(data.id);
       setEstadoSolicitud(data.estado || "DRAFT");
@@ -1376,12 +1309,31 @@ if (data.estado === "DISBURSED") {
   return true;
 }
       return true;
-    } catch (error) {
-      console.error(error);
-      recuperarLocal();
-      return false;
-    }
+} catch (error) {
+  console.error(
+    "Error recuperando solicitud:",
+    error
+  );
+
+  return false;
+}
   }
+
+  function iniciarNuevaSolicitud() {
+  /*
+    Si existe usuario autenticado,
+    primero comprobamos si tiene una
+    solicitud vigente.
+  */
+  if (usuario?.id) {
+    abrirMiSolicitud();
+    return;
+  }
+
+  limpiarSolicitudEnMemoria();
+
+  ir("registro");
+}
 
   async function abrirMiSolicitud() {
   setMensajeError("");
@@ -2618,24 +2570,139 @@ if (data?.session) {
     }
   }
 
+  function limpiarSolicitudEnMemoria() {
+  setSolicitudId(null);
+  setFolio("");
+  setEstadoSolicitud("DRAFT");
+
+  setRequiereGarantia(null);
+  setTipoGarantiaSolicitada("");
+  setGarantiaSolicitadaEn(null);
+
+  setPasoMaximo(1);
+
+  setUltimaPantallaPorPaso({
+    1: "simulacion",
+    2: "tipoPersona",
+    3: "enRevision",
+    4: "garantia",
+    5: "oferta",
+    6: "cuentaBanco",
+  });
+
+  setConsentimientos({
+    privacidad: false,
+    buro: false,
+    tratamiento: false,
+    identidad: false,
+  });
+
+  setArchivos({});
+  setDocumentosContractuales({});
+
+  setDatos({
+    montoSolicitado: "",
+    plazoSolicitado: "",
+    destino: "",
+
+    tipoPersona: "",
+
+    celular: "",
+    correo: "",
+    password: "",
+
+    nombre: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    curp: "",
+    rfc: "",
+    nacimiento: "",
+    estadoCivil: "",
+    regimenMatrimonial: "",
+    dependientes: "",
+
+    conyugeNombre: "",
+    conyugeCurp: "",
+    conyugeRfc: "",
+
+    razonSocial: "",
+    rfcEmpresa: "",
+    fechaConstitucion: "",
+    actividadEconomica: "",
+    giroMercantil: "",
+    nacionalidadEmpresa: "Mexicana",
+
+    representanteLegal: "",
+    rfcRepresentante: "",
+    curpRepresentante: "",
+
+    propietarioReal: "",
+    rfcPropietarioReal: "",
+
+    esPep: "",
+    tipoPep: "",
+    detallePep: "",
+    declaracionPepAceptada: false,
+    declaracionPepFecha: "",
+
+    calle: "",
+    numeroExterior: "",
+    colonia: "",
+    cp: "",
+    municipio: "",
+    estado: "",
+
+    ocupacion: "",
+    empresaActividad: "",
+    antiguedad: "",
+    ingreso: "",
+    ventasMensuales: "",
+    frecuenciaPago: "",
+
+    tipoCredito: "",
+    tipoGarantia: "",
+    descripcionGarantia: "",
+    valorGarantia: "",
+
+    garanteNombre: "",
+    garanteTelefono: "",
+    garanteCorreo: "",
+    garanteRfc: "",
+
+    banco: "",
+    clabe: "",
+    fechaPrimerPago: "",
+
+    montoAprobado: "10000",
+    plazoAprobado: "6",
+    tasaAprobada: "55",
+    tasaMoratoriaAprobada: "73.5",
+    comisionAprobada: "3",
+    catAprobado: "",
+  });
+
+  localStorage.removeItem(
+    "trisal_solicitud_borrador"
+  );
+}
+
   async function cerrarSesion() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error(
+        "Error cerrando sesión:",
+        error
+      );
+    }
 
     setUsuario(null);
-    setSolicitudId(null);
-    setFolio("");
-    setEstadoSolicitud("DRAFT");
 
-    setDatos((prev) => ({
-      ...prev,
-      correo: "",
-      password: "",
-    }));
-
-    localStorage.removeItem("trisal_solicitud_borrador");
+    limpiarSolicitudEnMemoria();
 
     ir("inicio");
   }
+
 
 /* =========================================================
    ENVIAR SOLICITUD
@@ -3157,12 +3224,13 @@ async function abrirDocumento(tipo) {
         )}
 
 {pantalla === "inicio" && (
-  <Inicio
-    ir={ir}
-    producto={producto}
-    usuario={usuario}
-    abrirMiSolicitud={abrirMiSolicitud}
-  />
+<Inicio
+  ir={ir}
+  producto={producto}
+  usuario={usuario}
+  abrirMiSolicitud={abrirMiSolicitud}
+  iniciarNuevaSolicitud={iniciarNuevaSolicitud}
+/>
 )}
 
 {pantalla === "producto" && (
@@ -3585,6 +3653,7 @@ function Header({
   ir,
   usuario,
   abrirMiSolicitud,
+  iniciarNuevaSolicitud,
   cerrarSesion,
   menuMovil,
   setMenuMovil,
@@ -3695,7 +3764,7 @@ function Header({
 
 <button
   className="navCta"
-  onClick={() => ir("registro")}
+  onClick={iniciarNuevaSolicitud}
 >
   Solicita tu crédito
 </button>
@@ -3715,6 +3784,7 @@ function Inicio({
   producto,
   usuario,
   abrirMiSolicitud,
+  iniciarNuevaSolicitud,
 }) {
   return (
     <section className="hero fadeUp">
@@ -3741,7 +3811,7 @@ function Inicio({
       return;
     }
 
-    ir("registro");
+    iniciarNuevaSolicitud();
   }}
 >
   {usuario
@@ -4346,10 +4416,9 @@ if (session?.user) {
       session.user.id
     );
 
-  if (!recuperada) {
-    ir("consentimientos");
-  }
-
+if (!recuperada) {
+  ir("simulacion");
+}
   setCargando(false);
   return;
 }
