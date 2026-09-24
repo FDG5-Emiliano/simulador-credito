@@ -1333,6 +1333,64 @@ if (data.estado === "DISBURSED") {
     }
   }
 
+  async function abrirMiSolicitud() {
+  setMensajeError("");
+  setMensajeInfo("");
+
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!session?.user?.id) {
+      ir("loginCliente");
+      return;
+    }
+
+    const recuperada =
+      await recuperarSolicitud(
+        session.user.id
+      );
+
+    /*
+      recuperarSolicitud() ya decide
+      la pantalla correcta según el estado:
+
+      DRAFT        -> pantalla guardada
+      SUBMITTED    -> enRevision
+      IN_REVIEW    -> enRevision / garantía
+      APPROVED     -> oferta
+      CONTRACTING  -> contratación
+      etc.
+    */
+
+    if (recuperada) {
+      return;
+    }
+
+    /*
+      Solamente si realmente NO existe
+      una solicitud vigente iniciamos
+      una nueva.
+    */
+    ir("simulacion");
+  } catch (error) {
+    console.error(
+      "Error abriendo Mi solicitud:",
+      error
+    );
+
+    mostrarError(
+      "No pudimos recuperar tu solicitud."
+    );
+  }
+}
+
   /* =========================================================
      FORM HELPERS
   ========================================================= */
@@ -3011,15 +3069,16 @@ async function abrirDocumento(tipo) {
     <div className="app">
       <style>{css}</style>
 
-      <Header
-        ir={ir}
-        usuario={usuario}
-        cerrarSesion={cerrarSesion}
-        menuMovil={menuMovil}
-        setMenuMovil={setMenuMovil}
-        legalAbierto={legalAbierto}
-        setLegalAbierto={setLegalAbierto}
-      />
+<Header
+  ir={ir}
+  usuario={usuario}
+  abrirMiSolicitud={abrirMiSolicitud}
+  cerrarSesion={cerrarSesion}
+  menuMovil={menuMovil}
+  setMenuMovil={setMenuMovil}
+  legalAbierto={legalAbierto}
+  setLegalAbierto={setLegalAbierto}
+/>
 
       <main className="container">
         {mensajeError && (
@@ -3033,13 +3092,14 @@ async function abrirDocumento(tipo) {
           <div className="globalInfo">{mensajeInfo}</div>
         )}
 
-        {pantalla === "inicio" && (
-          <Inicio
-            ir={ir}
-            producto={producto}
-            usuario={usuario}
-          />
-        )}
+{pantalla === "inicio" && (
+  <Inicio
+    ir={ir}
+    producto={producto}
+    usuario={usuario}
+    abrirMiSolicitud={abrirMiSolicitud}
+  />
+)}
 
         {pantalla === "producto" && (
           <Producto producto={producto} ir={ir} />
@@ -3457,6 +3517,7 @@ trackerProps={{
 function Header({
   ir,
   usuario,
+  abrirMiSolicitud,
   cerrarSesion,
   menuMovil,
   setMenuMovil,
@@ -3542,12 +3603,12 @@ function Header({
 
         {usuario ? (
           <>
-            <button
-              className="navButton"
-              onClick={() => ir("simulacion")}
-            >
-              Mi solicitud
-            </button>
+<button
+  className="navButton"
+  onClick={abrirMiSolicitud}
+>
+  Mi solicitud
+</button>
 
             <button
               className="logoutButton"
@@ -3582,7 +3643,12 @@ function Header({
    INICIO
 ========================================================= */
 
-function Inicio({ ir, producto, usuario }) {
+function Inicio({
+  ir,
+  producto,
+  usuario,
+  abrirMiSolicitud,
+}) {
   return (
     <section className="hero fadeUp">
       <div className="heroContent">
@@ -3600,14 +3666,21 @@ function Inicio({ ir, producto, usuario }) {
         </p>
 
         <div className="buttonRow">
-          <button
-            className="primary"
-            onClick={() => ir("simulacion")}
-          >
-            {usuario
-              ? "Continuar mi solicitud"
-              : "Solicita tu crédito"}
-          </button>
+<button
+  className="primary"
+  onClick={() => {
+    if (usuario) {
+      abrirMiSolicitud();
+      return;
+    }
+
+    ir("simulacion");
+  }}
+>
+  {usuario
+    ? "Continuar mi solicitud"
+    : "Solicita tu crédito"}
+</button>
 
           <button
             className="secondary"
@@ -3917,12 +3990,6 @@ function Simulacion({
           ))}
         </div>
 
-        <div className="notice">
-          La tasa, CAT, comisión y pago definitivo no se
-          muestran en esta etapa. Las condiciones dependerán
-          del análisis de crédito.
-        </div>
-
         <div className="formAction">
           <button
             className="primary"
@@ -4170,14 +4237,19 @@ function ConfirmarCorreo({
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session?.user) {
-        await recuperarSolicitud(session.user.id);
+if (session?.user) {
+  const recuperada =
+    await recuperarSolicitud(
+      session.user.id
+    );
 
-        ir("consentimientos");
+  if (!recuperada) {
+    ir("consentimientos");
+  }
 
-        setCargando(false);
-        return;
-      }
+  setCargando(false);
+  return;
+}
 
       const { data, error } =
         await supabase.auth.signInWithPassword({
@@ -4194,11 +4266,16 @@ function ConfirmarCorreo({
         return;
       }
 
-      if (data?.user) {
-        await recuperarSolicitud(data.user.id);
+if (data?.user) {
+  const recuperada =
+    await recuperarSolicitud(
+      data.user.id
+    );
 
-        ir("consentimientos");
-      }
+  if (!recuperada) {
+    ir("consentimientos");
+  }
+}
     } catch (error) {
       console.error(error);
 
@@ -5230,11 +5307,6 @@ function Solicitud({
           />
         </div>
 
-        <div className="notice">
-          La tasa, CAT, comisión y pago serán determinados
-          después del análisis de la solicitud.
-        </div>
-
         <NavButtons
           atras={regresar}
           continuar={continuar}
@@ -5500,12 +5572,6 @@ function Revision({
 
         </div>
 
-        <div className="importantNotice">
-          En esta etapa todavía no existe tasa, CAT, comisión
-          ni pago definitivo. Las condiciones serán determinadas
-          durante el análisis de crédito.
-        </div>
-
         <NavButtons
           atras={regresar}
           continuar={guardar}
@@ -5534,7 +5600,7 @@ function EnRevision({
       <Tracker {...trackerProps} />
 
       <div className="statusCard">
-        <div className="statusIcon">04</div>
+        <div className="statusIcon">03</div>
 
         <div>
           <p className="cardEyebrow">
