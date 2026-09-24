@@ -96,6 +96,33 @@ const DOCUMENTOS_BUCKET = "documentos-solicitudes";
    APP
 ========================================================= */
 
+function formatearMontoInput(valor) {
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ""
+  ) {
+    return "";
+  }
+
+  const limpio = String(valor)
+    .replace(/[^\d]/g, "");
+
+  if (!limpio) {
+    return "";
+  }
+
+  return Number(limpio).toLocaleString(
+    "en-US"
+  );
+}
+
+function limpiarMontoInput(valor) {
+  return String(valor || "")
+    .replace(/[^\d]/g, "");
+}
+
+
 export default function App() {
   const [pantalla, setPantalla] = useState("inicio");
 
@@ -308,32 +335,6 @@ const producto = {
   /* =========================================================
      HELPERS NUMÉRICOS
   ========================================================= */
-
-  function formatearMontoInput(valor) {
-  if (
-    valor === null ||
-    valor === undefined ||
-    valor === ""
-  ) {
-    return "";
-  }
-
-  const limpio = String(valor)
-    .replace(/[^\d]/g, "");
-
-  if (!limpio) {
-    return "";
-  }
-
-  return Number(limpio).toLocaleString(
-    "en-US"
-  );
-}
-
-function limpiarMontoInput(valor) {
-  return String(valor || "")
-    .replace(/[^\d]/g, "");
-}
 
   function numeroONull(valor) {
     if (
