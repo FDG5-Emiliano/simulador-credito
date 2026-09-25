@@ -1613,8 +1613,15 @@ if (data.estado === "SIGNED") {
 
 
 if (data.estado === "DISBURSED") {
+  await cargarDocumentosContractuales(
+    data.id
+  );
+
   setPasoMaximo(6);
-  setPantalla("creditoActivo");
+  setPantalla(
+    "creditoActivo"
+  );
+
   return true;
 }
       return true;
@@ -4021,10 +4028,16 @@ trackerProps={{
         )}
 
         {pantalla === "creditoActivo" && (
-          <CreditoActivo
-            datos={datos}
-            pagoOferta={pagoOferta}
-          />
+         <CreditoActivo
+  datos={datos}
+  pagoOferta={pagoOferta}
+  documentosContractuales={
+    documentosContractuales
+  }
+  abrirDocumento={
+    abrirDocumento
+  }
+/>
         )}
 
         {pantalla === "une" && (
@@ -6676,7 +6689,33 @@ function Dispersado({ ir }) {
 function CreditoActivo({
   datos,
   pagoOferta,
+  documentosContractuales,
+  abrirDocumento,
 }) {
+  const contratoTipo =
+    datos.tipoPersona === "moral"
+      ? "CONTRATO_PM"
+      : "CONTRATO_PF";
+
+  const contratoDisponible =
+    Boolean(
+      documentosContractuales?.[
+        contratoTipo
+      ]
+    );
+
+  const tablaDisponible =
+    Boolean(
+      documentosContractuales
+        ?.TABLA_AMORTIZACION
+    );
+
+  const pagareDisponible =
+    Boolean(
+      documentosContractuales
+        ?.PAGARE
+    );
+
   return (
     <Pagina
       titulo="Mi crédito"
@@ -6685,22 +6724,85 @@ function CreditoActivo({
       <div className="summaryGrid">
         <SummaryCard
           titulo="Monto original"
-          valor={moneda(datos.montoAprobado)}
+          valor={moneda(
+            datos.montoAprobado
+          )}
         />
 
         <SummaryCard
           titulo="Próximo pago"
-          valor={moneda(pagoOferta)}
+          valor={moneda(
+            pagoOferta
+          )}
         />
       </div>
 
       <div className="portalOptions">
-        <button>Tabla de amortización</button>
-        <button>Pagos realizados</button>
-        <button>Estado de cuenta</button>
-        <button>Contrato</button>
-        <button>Pagaré</button>
-        <button>Método de pago</button>
+        <button
+          type="button"
+          disabled={
+            !tablaDisponible
+          }
+          onClick={() => {
+            if (
+              tablaDisponible
+            ) {
+              abrirDocumento(
+                "TABLA_AMORTIZACION"
+              );
+            }
+          }}
+        >
+          Tabla de amortización
+        </button>
+
+        <button type="button">
+          Pagos realizados
+        </button>
+
+        <button type="button">
+          Estado de cuenta
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            !contratoDisponible
+          }
+          onClick={() => {
+            if (
+              contratoDisponible
+            ) {
+              abrirDocumento(
+                contratoTipo
+              );
+            }
+          }}
+        >
+          Contrato
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            !pagareDisponible
+          }
+          onClick={() => {
+            if (
+              pagareDisponible
+            ) {
+              abrirDocumento(
+                "PAGARE"
+              );
+            }
+          }}
+        >
+          Pagaré
+        </button>
+
+        <button type="button">
+          Método de pago
+        </button>
       </div>
     </Pagina>
   );
