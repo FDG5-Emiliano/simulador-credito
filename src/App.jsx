@@ -3954,9 +3954,6 @@ trackerProps={{
       {pantalla === "contratos" && (
   <Contratos
     ir={ir}
-    regresar={() =>
-      regresarA("cuentaBanco")
-    }
     documentosContractuales={
       documentosContractuales
     }
@@ -6430,7 +6427,6 @@ function CuentaBanco({
 
 function Contratos({
   ir,
-  regresar,
   trackerProps,
   documentosContractuales,
   abrirDocumento,
@@ -6523,12 +6519,19 @@ function Contratos({
           }}
         />
 
-        <NavButtons
-          atras={regresar}
-          continuar={() => ir("firma")}
-          textoContinuar="Continuar"
-          disabled={!documentosListos}
-        />
+<div
+  className="navigation"
+  style={{ justifyContent: "flex-end" }}
+>
+  <button
+    type="button"
+    className="primary"
+    onClick={() => ir("firma")}
+    disabled={!documentosListos}
+  >
+    Continuar
+  </button>
+</div>
       </div>
     </Pagina>
   );
@@ -6572,7 +6575,13 @@ function Firma({
       </div>
 
       <div className="buttonRow">
-
+        <button
+          type="button"
+          className="secondary"
+          onClick={regresar}
+        >
+          ← Regresar a documentos
+        </button>
       </div>
     </Pagina>
   );
