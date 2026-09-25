@@ -1168,7 +1168,7 @@ return documentosRecuperados;
     return data;
   }
 
-  async function cargarDocumentosContractuales(
+async function cargarDocumentosContractuales(
   aplicacionId
 ) {
   if (!aplicacionId) {
@@ -1177,82 +1177,46 @@ return documentosRecuperados;
   }
 
   try {
-    /*
-      Primero obtenemos el contrato correspondiente
-      a esta aplicación.
-    */
     const {
-      data: contrato,
-      error: errorContrato,
-    } = await supabase
-      .schema("contracts")
-      .from("contracts")
-      .select("id")
-      .eq("application_id", aplicacionId)
-      .maybeSingle();
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (errorContrato) {
-      throw errorContrato;
-    }
-
-    if (!contrato?.id) {
-      console.warn(
-        "No existe contrato para la aplicación:",
-        aplicacionId
-      );
-
+    if (!session?.access_token) {
       setDocumentosContractuales({});
       return {};
     }
 
-    /*
-      Recuperamos únicamente la versión vigente
-      de cada documento contractual.
-    */
-    const {
-      data: documentos,
-      error: errorDocumentos,
-    } = await supabase
-      .schema("contracts")
-      .from("contract_documents")
-      .select(`
-        id,
-        document_type,
-        document_version,
-        snapshot_id,
-        storage_path,
-        created_at
-      `)
-      .eq("contract_id", contrato.id)
-      .order("document_version", {
-        ascending: false,
-      });
+    const response =
+      await fetch(
+        `/api/generar-documentos-contractuales?aplicacion_id=${encodeURIComponent(
+          aplicacionId
+        )}`,
+        {
+          method: "GET",
 
-    if (errorDocumentos) {
-      throw errorDocumentos;
+          headers: {
+            Authorization:
+              `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+    const resultado =
+      await response.json();
+
+    if (
+      !response.ok ||
+      !resultado?.ok
+    ) {
+      throw new Error(
+        resultado?.error ||
+        "No pudimos recuperar los documentos contractuales."
+      );
     }
 
-    /*
-      Como vienen ordenados de mayor a menor,
-      conservamos solamente la versión más reciente
-      de cada tipo.
-    */
-    const recuperados = {};
-
-    (documentos || []).forEach(
-      (documento) => {
-        if (
-          documento?.document_type &&
-          !recuperados[
-            documento.document_type
-          ]
-        ) {
-          recuperados[
-            documento.document_type
-          ] = documento;
-        }
-      }
-    );
+    const recuperados =
+      resultado.documents_by_type ||
+      {};
 
     console.log(
       "DOCUMENTOS CONTRACTUALES RECUPERADOS:",

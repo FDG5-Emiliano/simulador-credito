@@ -28,12 +28,15 @@ const cloudConvert = new CloudConvert(
 ========================================================= */
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      ok: false,
-      error: "Método no permitido.",
-    });
-  }
+if (
+  req.method !== "POST" &&
+  req.method !== "GET"
+) {
+  return res.status(405).json({
+    ok: false,
+    error: "Método no permitido.",
+  });
+}
 
   try {
     /* =====================================================
@@ -76,11 +79,16 @@ export default async function handler(req, res) {
        2. INPUT
     ===================================================== */
 
-    const {
-      aplicacion_id,
-      application_id,
-      contract_id,
-    } = req.body || {};
+const input =
+  req.method === "GET"
+    ? req.query || {}
+    : req.body || {};
+
+const {
+  aplicacion_id,
+  application_id,
+  contract_id,
+} = input;
 
     if (
       !aplicacion_id &&
@@ -387,6 +395,140 @@ export default async function handler(req, res) {
           "La tabla de amortización contractual está vacía.",
       });
     }
+
+
+    /* =====================================================
+   7.5 CONSULTAR DOCUMENTOS EXISTENTES
+===================================================== */
+
+if (req.method === "GET") {
+  const {
+    data: documentos,
+    error: documentosError,
+  } = await supabaseAdmin
+    .schema("contracts")
+    .from("contract_documents")
+    .select(`
+      id,
+      contract_id,
+      snapshot_id,
+      document_type,
+      document_version,
+      template_version,
+      storage_path,
+      status,
+      requires_signature,
+      generated_at,
+      created_at
+    `)
+    .eq(
+      "contract_id",
+      contract.id
+    )
+    .eq(
+      "snapshot_id",
+      snapshot.id
+    )
+    .eq(
+      "status",
+      "GENERATED"
+    )
+    .order(
+      "document_version",
+      {
+        ascending: false,
+      }
+    );
+
+  if (documentosError) {
+    throw documentosError;
+  }
+
+  /*
+    Conservamos solamente la versión más reciente
+    de cada tipo para el snapshot vigente.
+  */
+
+  const documentosPorTipo = {};
+
+  for (
+    const documento of
+    documentos || []
+  ) {
+    if (
+      !documentosPorTipo[
+        documento.document_type
+      ]
+    ) {
+      documentosPorTipo[
+        documento.document_type
+      ] = {
+        id:
+          documento.id,
+
+        type:
+          documento.document_type,
+
+        tipo:
+          documento.document_type,
+
+        document_type:
+          documento.document_type,
+
+        version:
+          documento.document_version,
+
+        template_version:
+          documento.template_version,
+
+        snapshot_id:
+          documento.snapshot_id,
+
+        storage_path:
+          documento.storage_path,
+
+        status:
+          documento.status,
+
+        requires_signature:
+          Boolean(
+            documento.requires_signature
+          ),
+
+        generated_at:
+          documento.generated_at,
+      };
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+
+    contract_id:
+      contract.id,
+
+    contract_number:
+      contract.contract_number,
+
+    snapshot_id:
+      snapshot.id,
+
+    snapshot_version:
+      snapshot.snapshot_version,
+
+    snapshot_sha256:
+      snapshot.sha256,
+
+    documents:
+      Object.values(
+        documentosPorTipo
+      ),
+
+    documents_by_type:
+      documentosPorTipo,
+  });
+}
+
 
     /* =====================================================
        8. MODELO SEMÁNTICO
