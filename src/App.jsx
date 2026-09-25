@@ -186,6 +186,14 @@ const [ultimaPantallaPorPaso, setUltimaPantallaPorPaso] = useState({
   const [documentosContractuales, setDocumentosContractuales] =
   useState({});
 
+const [creditoActivoInfo, setCreditoActivoInfo] =
+  useState({
+    credito: null,
+    calendario: [],
+    pagos: [],
+    proximoPago: null,
+  });
+
   const yaRecuperoRef = useRef(false);
 
   const [consentimientos, setConsentimientos] = useState({
@@ -1258,6 +1266,207 @@ async function cargarDocumentosContractuales(
   }
 }
 
+async function cargarCreditoActivo(
+  aplicacionId
+) {
+  if (!aplicacionId) {
+    setCreditoActivoInfo({
+      credito: null,
+      calendario: [],
+      pagos: [],
+      proximoPago: null,
+    });
+
+    return null;
+  }
+
+  try {
+    /* =========================================
+       1. OBTENER CRÉDITO
+    ========================================= */
+
+    const {
+      data: credito,
+      error: errorCredito,
+    } = await supabase
+      .from("Creditos")
+      .select(`
+        id,
+        aplicacion_id,
+        folio_credito,
+        monto_original,
+        saldo_capital,
+        plazo_meses,
+        tasa_anual,
+        cat,
+        comision_apertura,
+        fecha_contrato,
+        fecha_dispersion,
+        fecha_vencimiento,
+        estado
+      `)
+      .eq(
+        "aplicacion_id",
+        aplicacionId
+      )
+      .maybeSingle();
+
+    if (errorCredito) {
+      throw errorCredito;
+    }
+
+    if (!credito?.id) {
+      console.warn(
+        "No encontramos crédito para la aplicación:",
+        aplicacionId
+      );
+
+      setCreditoActivoInfo({
+        credito: null,
+        calendario: [],
+        pagos: [],
+        proximoPago: null,
+      });
+
+      return null;
+    }
+
+    /* =========================================
+       2. CARGAR CALENDARIO
+    ========================================= */
+
+    const {
+      data: calendario,
+      error: errorCalendario,
+    } = await supabase
+      .from("CalendarioPagos")
+      .select(`
+        id,
+        credito_id,
+        numero_pago,
+        fecha_vencimiento,
+        saldo_inicial,
+        capital,
+        interes,
+        iva_interes,
+        comisiones,
+        iva_comision,
+        pago_total,
+        monto_pagado,
+        fecha_ultimo_pago,
+        estado,
+        interes_moratorio,
+        capital_vencido,
+        saldo_exigible,
+        dias_mora
+      `)
+      .eq(
+        "credito_id",
+        credito.id
+      )
+      .order(
+        "numero_pago",
+        {
+          ascending: true,
+        }
+      );
+
+    if (errorCalendario) {
+      throw errorCalendario;
+    }
+
+    /* =========================================
+       3. CARGAR PAGOS REALIZADOS
+    ========================================= */
+
+    const {
+      data: pagos,
+      error: errorPagos,
+    } = await supabase
+      .from("Pagos")
+      .select(`
+        id,
+        credito_id,
+        calendario_pago_id,
+        monto,
+        fecha_pago,
+        referencia,
+        metodo,
+        origen,
+        conciliado
+      `)
+      .eq(
+        "credito_id",
+        credito.id
+      )
+      .order(
+        "fecha_pago",
+        {
+          ascending: false,
+        }
+      );
+
+    if (errorPagos) {
+      throw errorPagos;
+    }
+
+    /* =========================================
+       4. DETERMINAR PRÓXIMO PAGO
+    ========================================= */
+
+    const proximoPago =
+      (calendario || []).find(
+        (cuota) => {
+          const total =
+            Number(
+              cuota.pago_total || 0
+            );
+
+          const pagado =
+            Number(
+              cuota.monto_pagado || 0
+            );
+
+          return pagado < total;
+        }
+      ) || null;
+
+    const informacion = {
+      credito,
+      calendario:
+        calendario || [],
+      pagos:
+        pagos || [],
+      proximoPago,
+    };
+
+    console.log(
+      "CRÉDITO ACTIVO RECUPERADO:",
+      informacion
+    );
+
+    setCreditoActivoInfo(
+      informacion
+    );
+
+    return informacion;
+  } catch (error) {
+    console.error(
+      "Error recuperando crédito activo:",
+      error
+    );
+
+    setCreditoActivoInfo({
+      credito: null,
+      calendario: [],
+      pagos: [],
+      proximoPago: null,
+    });
+
+    return null;
+  }
+}
+
   /* =========================================================
      RECUPERAR SOLICITUD
   ========================================================= */
@@ -1613,11 +1822,18 @@ if (data.estado === "SIGNED") {
 
 
 if (data.estado === "DISBURSED") {
-  await cargarDocumentosContractuales(
-    data.id
-  );
+  await Promise.all([
+    cargarDocumentosContractuales(
+      data.id
+    ),
+
+    cargarCreditoActivo(
+      data.id
+    ),
+  ]);
 
   setPasoMaximo(6);
+
   setPantalla(
     "creditoActivo"
   );
@@ -3008,10 +3224,17 @@ ir("confirmarCorreo", {
     identidad: false,
   });
 
-  setArchivos({});
-  setDocumentosContractuales({});
+setArchivos({});
+setDocumentosContractuales({});
 
-  setDatos({
+setCreditoActivoInfo({
+  credito: null,
+  calendario: [],
+  pagos: [],
+  proximoPago: null,
+});
+
+setDatos({
     montoSolicitado: "",
     plazoSolicitado: "",
     destino: "",
@@ -4028,9 +4251,9 @@ trackerProps={{
         )}
 
         {pantalla === "creditoActivo" && (
-         <CreditoActivo
+       <CreditoActivo
   datos={datos}
-  pagoOferta={pagoOferta}
+  creditoActivoInfo={creditoActivoInfo}
   documentosContractuales={
     documentosContractuales
   }
@@ -6688,21 +6911,32 @@ function Dispersado({ ir }) {
 
 function CreditoActivo({
   datos,
-  pagoOferta,
+  creditoActivoInfo,
   documentosContractuales,
   abrirDocumento,
 }) {
+  const [seccion, setSeccion] =
+    useState("resumen");
+
+    const credito =
+  creditoActivoInfo?.credito ||
+  null;
+
+const calendario =
+  creditoActivoInfo?.calendario ||
+  [];
+
   const contratoTipo =
-    datos.tipoPersona === "moral"
+    documentosContractuales?.CONTRATO_PF
+      ? "CONTRATO_PF"
+      : documentosContractuales?.CONTRATO_PM
       ? "CONTRATO_PM"
-      : "CONTRATO_PF";
+      : documentosContractuales?.CONTRATO
+      ? "CONTRATO"
+      : null;
 
   const contratoDisponible =
-    Boolean(
-      documentosContractuales?.[
-        contratoTipo
-      ]
-    );
+    Boolean(contratoTipo);
 
   const tablaDisponible =
     Boolean(
@@ -6716,37 +6950,103 @@ function CreditoActivo({
         ?.PAGARE
     );
 
+  const domiciliacionDisponible =
+    Boolean(
+      documentosContractuales
+        ?.DOMICILIACION
+    );
+
+  const proximoPago =
+    creditoActivoInfo?.proximoPago ||
+    null;
+
+    const montoProximoPago =
+  proximoPago
+    ? Math.max(
+        0,
+        Number(
+          proximoPago.pago_total ||
+            0
+        ) -
+          Number(
+            proximoPago.monto_pagado ||
+              0
+          )
+      )
+    : 0;
+
+  const pagos =
+    creditoActivoInfo?.pagos ||
+    [];
+
+  function fechaMX(fecha) {
+    if (!fecha) {
+      return "-";
+    }
+
+    return new Date(
+      `${String(fecha).slice(0, 10)}T12:00:00`
+    ).toLocaleDateString(
+      "es-MX",
+      {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }
+    );
+  }
+
   return (
     <Pagina
       titulo="Mi crédito"
-      subtitulo="Consulta información y documentos de tu operación."
+      subtitulo="Consulta el estado, próximos pagos, historial y documentos de tu crédito."
     >
       <div className="summaryGrid">
-        <SummaryCard
-          titulo="Monto original"
-          valor={moneda(
-            datos.montoAprobado
-          )}
-        />
+<SummaryCard
+  titulo="Saldo actual"
+  valor={moneda(
+    credito?.saldo_capital
+  )}
+/>
 
         <SummaryCard
           titulo="Próximo pago"
-          valor={moneda(
-            pagoOferta
-          )}
+valor={
+  proximoPago
+    ? moneda(
+        montoProximoPago
+      )
+    : "Sin pago pendiente"
+}
+        />
+
+        <SummaryCard
+          titulo="Fecha del próximo pago"
+          valor={
+            proximoPago
+              ? fechaMX(
+                  proximoPago.fecha_vencimiento
+                )
+              : "-"
+          }
         />
       </div>
 
       <div className="portalOptions">
         <button
           type="button"
-          disabled={
-            !tablaDisponible
+          onClick={() =>
+            setSeccion("pagos")
           }
+        >
+          Pagos realizados
+        </button>
+
+        <button
+          type="button"
+          disabled={!tablaDisponible}
           onClick={() => {
-            if (
-              tablaDisponible
-            ) {
+            if (tablaDisponible) {
               abrirDocumento(
                 "TABLA_AMORTIZACION"
               );
@@ -6756,23 +7056,11 @@ function CreditoActivo({
           Tabla de amortización
         </button>
 
-        <button type="button">
-          Pagos realizados
-        </button>
-
-        <button type="button">
-          Estado de cuenta
-        </button>
-
         <button
           type="button"
-          disabled={
-            !contratoDisponible
-          }
+          disabled={!contratoDisponible}
           onClick={() => {
-            if (
-              contratoDisponible
-            ) {
+            if (contratoTipo) {
               abrirDocumento(
                 contratoTipo
               );
@@ -6784,13 +7072,9 @@ function CreditoActivo({
 
         <button
           type="button"
-          disabled={
-            !pagareDisponible
-          }
+          disabled={!pagareDisponible}
           onClick={() => {
-            if (
-              pagareDisponible
-            ) {
+            if (pagareDisponible) {
               abrirDocumento(
                 "PAGARE"
               );
@@ -6800,10 +7084,196 @@ function CreditoActivo({
           Pagaré
         </button>
 
-        <button type="button">
-          Método de pago
+        <button
+          type="button"
+          disabled={
+            !domiciliacionDisponible
+          }
+          onClick={() => {
+            if (
+              domiciliacionDisponible
+            ) {
+              abrirDocumento(
+                "DOMICILIACION"
+              );
+            }
+          }}
+        >
+          Autorización de domiciliación
         </button>
+
+<button
+  type="button"
+  onClick={() =>
+    setSeccion("calendario")
+  }
+>
+  Próximos pagos
+</button>
       </div>
+
+      {seccion === "pagos" && (
+        <div
+          className="card"
+          style={{
+            marginTop: "24px",
+          }}
+        >
+          <SectionDivider
+            titulo="Historial de pagos"
+          />
+
+          {proximoPago && (
+            <div
+              className="importantNotice"
+            >
+              <strong>
+                Próximo pago:{" "}
+                {fechaMX(
+                  proximoPago.fecha_vencimiento
+                )}
+              </strong>
+
+<div>
+  {moneda(
+    montoProximoPago
+  )}
+</div>
+            </div>
+          )}
+
+          {pagos.length === 0 ? (
+            <div className="notice">
+              Todavía no hay pagos
+              registrados para este
+              crédito.
+            </div>
+          ) : (
+            pagos.map((pago) => (
+              <div
+                className="summaryRow"
+                key={pago.id}
+              >
+                <div>
+                  <strong>
+                    {fechaMX(
+                      pago.fecha_pago
+                    )}
+                  </strong>
+
+                  <div
+                    style={{
+                      color:
+                        "var(--muted)",
+                      marginTop: "4px",
+                    }}
+                  >
+                    {pago.metodo ||
+                      "Pago registrado"}
+                  </div>
+                </div>
+
+                <strong>
+                  {moneda(
+                    pago.monto
+                  )}
+                </strong>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {seccion === "calendario" && (
+  <div
+    className="card"
+    style={{
+      marginTop: "24px",
+    }}
+  >
+    <SectionDivider
+      titulo="Calendario de pagos"
+    />
+
+    {calendario.length === 0 ? (
+      <div className="notice">
+        No encontramos el calendario
+        de pagos de este crédito.
+      </div>
+    ) : (
+      calendario.map(
+        (cuota) => {
+          const total =
+            Number(
+              cuota.pago_total || 0
+            );
+
+          const pagado =
+            Number(
+              cuota.monto_pagado || 0
+            );
+
+          const pendiente =
+            Math.max(
+              0,
+              total - pagado
+            );
+
+          return (
+            <div
+              className="summaryRow"
+              key={cuota.id}
+            >
+              <div>
+                <strong>
+                  Pago #{cuota.numero_pago}
+                </strong>
+
+                <div
+                  style={{
+                    marginTop: "5px",
+                    color:
+                      "var(--muted)",
+                  }}
+                >
+                  {fechaMX(
+                    cuota.fecha_vencimiento
+                  )}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  textAlign: "right",
+                }}
+              >
+                <strong>
+                  {moneda(
+                    pendiente
+                  )}
+                </strong>
+
+                <div
+                  style={{
+                    marginTop: "5px",
+                    color:
+                      "var(--muted)",
+                  }}
+                >
+                  {pendiente <= 0
+                    ? "Pagado"
+                    : cuota.estado ||
+                      "Pendiente"}
+                </div>
+              </div>
+            </div>
+          );
+        }
+      )
+    )}
+  </div>
+)}
+
     </Pagina>
   );
 }
