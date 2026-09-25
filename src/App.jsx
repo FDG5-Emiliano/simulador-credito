@@ -6572,13 +6572,7 @@ function Firma({
       </div>
 
       <div className="buttonRow">
-        <button
-          type="button"
-          className="secondary"
-          onClick={regresar}
-        >
-          ← Regresar a documentos
-        </button>
+
       </div>
     </Pagina>
   );
