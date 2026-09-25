@@ -616,37 +616,55 @@ function puedeAbrirPantallaProtegida(
      para consultar cada 1o seg si se aprobo o no
   ========================================================= */
 
-  useEffect(() => {
+useEffect(() => {
+  /*
+    Actualización automática de pantallas
+    cuyo estado depende de acciones realizadas
+    desde Backoffice.
+
+    - enRevision:
+        espera decisión del analista.
+
+    - firma:
+        espera confirmación de firma.
+
+    - tesoreriaCliente:
+        espera confirmación de dispersión.
+  */
+
+  const pantallasConActualizacionAutomatica = [
+    "enRevision",
+    "firma",
+    "tesoreriaCliente",
+  ];
+
   if (
-    pantalla !== "enRevision" ||
-    !usuario?.id
+    !usuario ||
+    !pantallasConActualizacionAutomatica.includes(
+      pantalla
+    )
   ) {
     return;
   }
 
-  const revisarEstado = async () => {
-    try {
-      await recuperarSolicitud(usuario.id);
-    } catch (error) {
-      console.error(
-        "Error actualizando estado de solicitud:",
-        error
-      );
-    }
-  };
-
-  revisarEstado();
-
   const intervalo = setInterval(
-    revisarEstado,
+    async () => {
+      try {
+        await recuperarSolicitud();
+      } catch (error) {
+        console.error(
+          "Error actualizando estado de la solicitud:",
+          error
+        );
+      }
+    },
     10000
   );
 
   return () => {
     clearInterval(intervalo);
   };
-}, [pantalla, usuario?.id]);
-
+}, [usuario, pantalla]);
 
   /* =========================================================
      AUTO-GUARDADO SUPABASE
