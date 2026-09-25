@@ -1168,6 +1168,114 @@ return documentosRecuperados;
     return data;
   }
 
+  async function cargarDocumentosContractuales(
+  aplicacionId
+) {
+  if (!aplicacionId) {
+    setDocumentosContractuales({});
+    return {};
+  }
+
+  try {
+    /*
+      Primero obtenemos el contrato correspondiente
+      a esta aplicación.
+    */
+    const {
+      data: contrato,
+      error: errorContrato,
+    } = await supabase
+      .schema("contracts")
+      .from("contracts")
+      .select("id")
+      .eq("application_id", aplicacionId)
+      .maybeSingle();
+
+    if (errorContrato) {
+      throw errorContrato;
+    }
+
+    if (!contrato?.id) {
+      console.warn(
+        "No existe contrato para la aplicación:",
+        aplicacionId
+      );
+
+      setDocumentosContractuales({});
+      return {};
+    }
+
+    /*
+      Recuperamos únicamente la versión vigente
+      de cada documento contractual.
+    */
+    const {
+      data: documentos,
+      error: errorDocumentos,
+    } = await supabase
+      .schema("contracts")
+      .from("contract_documents")
+      .select(`
+        id,
+        document_type,
+        document_version,
+        snapshot_id,
+        storage_path,
+        created_at
+      `)
+      .eq("contract_id", contrato.id)
+      .order("document_version", {
+        ascending: false,
+      });
+
+    if (errorDocumentos) {
+      throw errorDocumentos;
+    }
+
+    /*
+      Como vienen ordenados de mayor a menor,
+      conservamos solamente la versión más reciente
+      de cada tipo.
+    */
+    const recuperados = {};
+
+    (documentos || []).forEach(
+      (documento) => {
+        if (
+          documento?.document_type &&
+          !recuperados[
+            documento.document_type
+          ]
+        ) {
+          recuperados[
+            documento.document_type
+          ] = documento;
+        }
+      }
+    );
+
+    console.log(
+      "DOCUMENTOS CONTRACTUALES RECUPERADOS:",
+      recuperados
+    );
+
+    setDocumentosContractuales(
+      recuperados
+    );
+
+    return recuperados;
+  } catch (error) {
+    console.error(
+      "Error recuperando documentos contractuales:",
+      error
+    );
+
+    setDocumentosContractuales({});
+
+    return {};
+  }
+}
+
   /* =========================================================
      RECUPERAR SOLICITUD
   ========================================================= */
@@ -1486,6 +1594,17 @@ if (data.estado === "APPROVED") {
 ========================================= */
 
 if (data.estado === "CONTRACTING") {
+  /*
+    Recuperamos los documentos ya existentes.
+
+    IMPORTANTE:
+    aquí NO generamos documentos nuevos.
+    Sólo recuperamos los que ya existen en BD.
+  */
+  await cargarDocumentosContractuales(
+    data.id
+  );
+
   setPasoMaximo(6);
 
   setPantalla(
