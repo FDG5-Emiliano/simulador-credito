@@ -7047,6 +7047,87 @@ const calendario =
       titulo="Mi crédito"
       subtitulo="Consulta el estado, próximos pagos, historial y documentos de tu crédito."
     >
+
+      <div className="creditIdentityCard">
+  <div className="creditIdentityTop">
+    <div>
+      <span className="creditIdentityEyebrow">
+        TRISAL · CRÉDITO SIMPLE
+      </span>
+
+      <h2>
+        {credito?.folio_credito ||
+          "Crédito activo"}
+      </h2>
+
+      <p>
+        {datos.tipoPersona === "moral"
+          ? datos.razonSocial
+          : [
+              datos.nombre,
+              datos.apellidoPaterno,
+              datos.apellidoMaterno,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toUpperCase()}
+      </p>
+    </div>
+
+    <span className="creditStatusBadge">
+      Crédito activo
+    </span>
+  </div>
+
+  <div className="creditIdentityData">
+    <div>
+      <span>Monto original</span>
+      <strong>
+        {moneda(
+          credito?.monto_original
+        )}
+      </strong>
+    </div>
+
+    <div>
+      <span>Plazo</span>
+      <strong>
+        {credito?.plazo_meses || "-"} meses
+      </strong>
+    </div>
+
+    <div>
+      <span>Tasa anual</span>
+      <strong>
+        {credito?.tasa_anual != null
+          ? `${Number(
+              credito.tasa_anual
+            ).toFixed(2)}%`
+          : "-"}
+      </strong>
+    </div>
+
+    <div>
+      <span>CAT</span>
+      <strong>
+        {credito?.cat != null
+          ? `${Number(
+              credito.cat
+            ).toFixed(2)}%`
+          : "-"}
+      </strong>
+    </div>
+  </div>
+
+  <div className="creditInstitution">
+    Crédito otorgado por{" "}
+    <strong>
+      FDG5 SERVICIOS, S.A. DE C.V.,
+      SOFOM, E.N.R.
+    </strong>
+  </div>
+</div>
+
       <div className="summaryGrid">
 <SummaryCard
   titulo="Saldo actual"
@@ -7195,37 +7276,51 @@ valor={
               crédito.
             </div>
           ) : (
-            pagos.map((pago) => (
-              <div
-                className="summaryRow"
-                key={pago.id}
-              >
-                <div>
-                  <strong>
-                    {fechaMX(
-                      pago.fecha_pago
-                    )}
-                  </strong>
+pagos.map((pago) => (
+  <div
+    className="summaryRow"
+    key={pago.id}
+  >
+    <div>
+      <strong>
+        {fechaMX(
+          pago.fecha_pago
+        )}
+      </strong>
 
-                  <div
-                    style={{
-                      color:
-                        "var(--muted)",
-                      marginTop: "4px",
-                    }}
-                  >
-                    {pago.metodo ||
-                      "Pago registrado"}
-                  </div>
-                </div>
+      <div
+        style={{
+          color: "var(--green)",
+          marginTop: "4px",
+          fontWeight: 750,
+        }}
+      >
+        Pago recibido
+      </div>
+    </div>
 
-                <strong>
-                  {moneda(
-                    pago.monto
-                  )}
-                </strong>
-              </div>
-            ))
+    <div
+      style={{
+        textAlign: "right",
+      }}
+    >
+      <strong>
+        {moneda(
+          pago.monto
+        )}
+      </strong>
+
+      <div
+        style={{
+          color: "var(--muted)",
+          marginTop: "4px",
+        }}
+      >
+        Pagado
+      </div>
+    </div>
+  </div>
+))
           )}
         </div>
       )}
@@ -10823,11 +10918,161 @@ button:disabled {
   min-width: 210px;
 }
 
+.creditIdentityCard {
+  margin-bottom: 22px;
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--navy),
+      var(--navy2)
+    );
+
+  color: white;
+
+  border-radius: 18px;
+
+  box-shadow:
+    0 12px 32px rgba(17,26,42,.12);
+}
+
+.creditIdentityTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 30px;
+
+  padding: 28px 30px 24px;
+}
+
+.creditIdentityEyebrow {
+  display: block;
+
+  margin-bottom: 8px;
+
+  color: #d5b66d;
+
+  font-size: 11px;
+  font-weight: 900;
+
+  letter-spacing: .14em;
+}
+
+.creditIdentityTop h2 {
+  margin: 0 0 6px;
+
+  color: white;
+
+  font-size: 28px;
+}
+
+.creditIdentityTop p {
+  margin: 0;
+
+  color: #cbd3df;
+
+  font-size: 14px;
+}
+
+.creditStatusBadge {
+  display: inline-flex;
+
+  padding: 8px 12px;
+
+  background:
+    rgba(255,255,255,.1);
+
+  border:
+    1px solid rgba(255,255,255,.15);
+
+  border-radius: 20px;
+
+  color: white;
+
+  font-size: 12px;
+  font-weight: 850;
+
+  white-space: nowrap;
+}
+
+.creditIdentityData {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0,1fr));
+
+  border-top:
+    1px solid rgba(255,255,255,.1);
+}
+
+.creditIdentityData > div {
+  display: flex;
+  flex-direction: column;
+
+  gap: 5px;
+
+  padding: 20px 30px;
+
+  border-right:
+    1px solid rgba(255,255,255,.1);
+}
+
+.creditIdentityData > div:last-child {
+  border-right: 0;
+}
+
+.creditIdentityData span {
+  color: #aeb8c8;
+
+  font-size: 12px;
+}
+
+.creditIdentityData strong {
+  color: white;
+
+  font-size: 17px;
+}
+
+.creditInstitution {
+  padding: 13px 30px;
+
+  background:
+    rgba(255,255,255,.045);
+
+  color: #aeb8c8;
+
+  font-size: 11px;
+}
+
+.creditInstitution strong {
+  color: #d8dee8;
+}
+
 /* =========================================================
    MOBILE
 ========================================================= */
 
 @media (max-width: 820px) {
+
+.creditIdentityTop {
+  flex-direction: column;
+  gap: 15px;
+  padding: 22px;
+}
+
+.creditIdentityData {
+  grid-template-columns: 1fr 1fr;
+}
+
+.creditIdentityData > div {
+  padding: 17px 22px;
+}
+
+.creditInstitution {
+  padding: 13px 22px;
+}
 
   .header {
     min-height: 66px;
