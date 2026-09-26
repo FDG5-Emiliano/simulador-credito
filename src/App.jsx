@@ -7005,7 +7005,7 @@ const calendario =
   }
 
   if (pagado > 0) {
-    return "Pago parcial";
+    return "Pendiente de pagar";
   }
 
   if (
