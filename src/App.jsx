@@ -194,6 +194,9 @@ const [creditoActivoInfo, setCreditoActivoInfo] =
     proximoPago: null,
   });
 
+  const [creditosContratados, setCreditosContratados] =
+  useState([]);
+
   const yaRecuperoRef = useRef(false);
 
   const [consentimientos, setConsentimientos] = useState({
@@ -694,6 +697,15 @@ useEffect(() => {
     if (ESTADOS_ENVIADOS.includes(estadoSolicitud)) {
       return;
     }
+
+    useEffect(() => {
+  if (!usuario?.id) {
+    setCreditosContratados([]);
+    return;
+  }
+
+  cargarCreditosContratados();
+}, [usuario?.id, estadoSolicitud]);
 
     const timer = setTimeout(() => {
       guardarBorradorSupabase();
@@ -1263,6 +1275,94 @@ async function cargarDocumentosContractuales(
     setDocumentosContractuales({});
 
     return {};
+  }
+}
+
+async function cargarCreditosContratados() {
+  if (!usuario?.id) {
+    setCreditosContratados([]);
+    return [];
+  }
+
+  try {
+    /*
+      Primero obtenemos las aplicaciones
+      que pertenecen al usuario autenticado.
+    */
+    const {
+      data: aplicaciones,
+      error: errorAplicaciones,
+    } = await supabase
+      .from("Aplicaciones")
+      .select("id")
+      .eq("user_id", usuario.id);
+
+    if (errorAplicaciones) {
+      throw errorAplicaciones;
+    }
+
+    const idsAplicaciones =
+      (aplicaciones || [])
+        .map((item) => item.id)
+        .filter(Boolean);
+
+    if (idsAplicaciones.length === 0) {
+      setCreditosContratados([]);
+      return [];
+    }
+
+    /*
+      Recuperamos todos los créditos asociados
+      a las aplicaciones de este cliente.
+    */
+    const {
+      data: creditos,
+      error: errorCreditos,
+    } = await supabase
+      .from("Creditos")
+      .select(`
+        id,
+        aplicacion_id,
+        folio_credito,
+        monto_original,
+        saldo_capital,
+        estado,
+        fecha_dispersion,
+        fecha_vencimiento
+      `)
+      .in(
+        "aplicacion_id",
+        idsAplicaciones
+      )
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (errorCreditos) {
+      throw errorCreditos;
+    }
+
+    const contratados =
+      (creditos || []).filter(
+        (credito) =>
+          credito.estado !==
+          "PENDING_CONTRACT"
+      );
+
+    setCreditosContratados(
+      contratados
+    );
+
+    return contratados;
+  } catch (error) {
+    console.error(
+      "Error cargando créditos contratados:",
+      error
+    );
+
+    setCreditosContratados([]);
+
+    return [];
   }
 }
 
@@ -3837,6 +3937,9 @@ async function abrirDocumento(tipo) {
 <Header
   ir={ir}
   usuario={usuario}
+  datos={datos}
+  estadoSolicitud={estadoSolicitud}
+  creditosContratados={creditosContratados}
   abrirMiSolicitud={abrirMiSolicitud}
   iniciarNuevaSolicitud={iniciarNuevaSolicitud}
   cerrarSesion={cerrarSesion}
@@ -4290,6 +4393,9 @@ trackerProps={{
 function Header({
   ir,
   usuario,
+  datos,
+  estadoSolicitud,
+  creditosContratados,
   abrirMiSolicitud,
   iniciarNuevaSolicitud,
   cerrarSesion,
@@ -4298,6 +4404,32 @@ function Header({
   legalAbierto,
   setLegalAbierto,
 }) {
+    const cantidadCreditos =
+    creditosContratados?.length || 0;
+
+  const tieneCreditoActivo =
+    cantidadCreditos > 0 ||
+    estadoSolicitud === "DISBURSED";
+
+  const textoMenuCliente =
+    cantidadCreditos > 1
+      ? "Mis créditos"
+      : tieneCreditoActivo
+        ? "Mi crédito"
+        : "Mi solicitud";
+
+  const nombreSesion =
+    datos?.tipoPersona === "moral"
+      ? datos?.razonSocial
+      : datos?.nombre;
+
+  const nombreMostrar =
+    String(nombreSesion || "")
+      .trim()
+      .split(/\s+/)[0] ||
+    usuario?.email?.split("@")[0] ||
+    "";
+
   return (
     <header className="header">
       <button
@@ -4377,11 +4509,19 @@ function Header({
 
         {usuario ? (
           <>
+          <div className="sessionUser">
+  <span>Hola,</span>
+
+  <strong>
+    {nombreMostrar}
+  </strong>
+</div>
+
 <button
   className="navButton"
   onClick={abrirMiSolicitud}
 >
-  Mi solicitud
+  {textoMenuCliente}
 </button>
 
             <button
@@ -8850,6 +8990,35 @@ button:disabled {
   background: var(--goldHover);
 }
 
+.sessionUser {
+  display: flex;
+  flex-direction: column;
+
+  justify-content: center;
+
+  margin: 0 6px 0 10px;
+
+  line-height: 1.15;
+
+  white-space: nowrap;
+}
+
+.sessionUser span {
+  color: var(--muted);
+
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.sessionUser strong {
+  margin-top: 2px;
+
+  color: var(--navy);
+
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .logoutButton {
   border: 1px solid #d7dde5;
 
@@ -11244,6 +11413,26 @@ button:disabled {
 
 @media (max-width: 820px) {
 
+.sessionUser {
+  width: 100%;
+
+  margin: 4px 0 8px;
+
+  padding: 10px 12px;
+
+  background: #f5f6f8;
+
+  border-radius: 8px;
+}
+
+.sessionUser span {
+  font-size: 10px;
+}
+
+.sessionUser strong {
+  font-size: 14px;
+}
+  
 .creditIdentityTop {
   flex-direction: column;
   gap: 15px;
@@ -11277,7 +11466,7 @@ button:disabled {
 .creditIdentityAction {
   min-height: 76px;
 }
-  
+
   .header {
     min-height: 66px;
 
