@@ -7096,27 +7096,31 @@ const calendario =
       </strong>
     </div>
 
-    <div>
-      <span>Tasa anual</span>
-      <strong>
-        {credito?.tasa_anual != null
-          ? `${Number(
-              credito.tasa_anual
-            ).toFixed(2)}%`
-          : "-"}
-      </strong>
-    </div>
+<div
+  className="creditIdentityAction"
+  onClick={() =>
+    setSeccion("pagos")
+  }
+>
+  <span>Pagos realizados</span>
 
-    <div>
-      <span>CAT</span>
-      <strong>
-        {credito?.cat != null
-          ? `${Number(
-              credito.cat
-            ).toFixed(2)}%`
-          : "-"}
-      </strong>
-    </div>
+  <strong>
+    Ver historial →
+  </strong>
+</div>
+
+<div
+  className="creditIdentityAction"
+  onClick={() =>
+    setSeccion("calendario")
+  }
+>
+  <span>Próximos pagos</span>
+
+  <strong>
+    Ver calendario →
+  </strong>
+</div>
   </div>
 
   <div className="creditInstitution">
@@ -7159,85 +7163,131 @@ valor={
         />
       </div>
 
-      <div className="portalOptions">
-        <button
-          type="button"
-          onClick={() =>
-            setSeccion("pagos")
-          }
-        >
-          Pagos realizados
-        </button>
+<div className="creditDocumentsBar">
+  <button
+    type="button"
+    className="creditDocumentsButton"
+    onClick={() =>
+      setSeccion((actual) =>
+        actual === "documentos"
+          ? null
+          : "documentos"
+      )
+    }
+  >
+    <span>
+      Documentos del crédito
+    </span>
 
-        <button
-          type="button"
-          disabled={!tablaDisponible}
-          onClick={() => {
-            if (tablaDisponible) {
-              abrirDocumento(
-                "TABLA_AMORTIZACION"
-              );
-            }
-          }}
-        >
-          Tabla de amortización
-        </button>
+    <span>
+      {seccion === "documentos"
+        ? "Ocultar ↑"
+        : "Consultar ↓"}
+    </span>
+  </button>
+</div>
 
-        <button
-          type="button"
-          disabled={!contratoDisponible}
-          onClick={() => {
-            if (contratoTipo) {
-              abrirDocumento(
-                contratoTipo
-              );
-            }
-          }}
-        >
-          Contrato
-        </button>
+{seccion === "documentos" && (
+  <div className="portalDetail">
+    <div className="sectionTitle">
+      Documentos de tu crédito
+    </div>
 
-        <button
-          type="button"
-          disabled={!pagareDisponible}
-          onClick={() => {
-            if (pagareDisponible) {
-              abrirDocumento(
-                "PAGARE"
-              );
-            }
-          }}
-        >
-          Pagaré
-        </button>
+    <div className="creditDocumentList">
+      <button
+        type="button"
+        onClick={() =>
+          abrirDocumento(
+            "CONTRATO_PF"
+          )
+        }
+      >
+        <div>
+          <strong>
+            Contrato de crédito
+          </strong>
 
-        <button
-          type="button"
-          disabled={
-            !domiciliacionDisponible
-          }
-          onClick={() => {
-            if (
-              domiciliacionDisponible
-            ) {
-              abrirDocumento(
-                "DOMICILIACION"
-              );
-            }
-          }}
-        >
-          Autorización de domiciliación
-        </button>
+          <span>
+            Documento contractual
+          </span>
+        </div>
 
-<button
-  type="button"
-  onClick={() =>
-    setSeccion("calendario")
-  }
->
-  Próximos pagos
-</button>
-      </div>
+        <strong>
+          Ver documento →
+        </strong>
+      </button>
+
+      <button
+        type="button"
+        onClick={() =>
+          abrirDocumento(
+            "TABLA_AMORTIZACION"
+          )
+        }
+      >
+        <div>
+          <strong>
+            Tabla de amortización
+          </strong>
+
+          <span>
+            Calendario contractual
+          </span>
+        </div>
+
+        <strong>
+          Ver documento →
+        </strong>
+      </button>
+
+      <button
+        type="button"
+        onClick={() =>
+          abrirDocumento(
+            "PAGARE"
+          )
+        }
+      >
+        <div>
+          <strong>
+            Pagaré
+          </strong>
+
+          <span>
+            Documento contractual
+          </span>
+        </div>
+
+        <strong>
+          Ver documento →
+        </strong>
+      </button>
+
+      <button
+        type="button"
+        onClick={() =>
+          abrirDocumento(
+            "DOMICILIACION"
+          )
+        }
+      >
+        <div>
+          <strong>
+            Autorización de domiciliación
+          </strong>
+
+          <span>
+            Documento contractual
+          </span>
+        </div>
+
+        <strong>
+          Ver documento →
+        </strong>
+      </button>
+    </div>
+  </div>
+)}
 
       {seccion === "pagos" && (
         <div
@@ -11051,8 +11101,146 @@ button:disabled {
 }
 
 /* =========================================================
+   ACCIONES DEL CRÉDITO
+========================================================= */
+
+.creditIdentityAction {
+  cursor: pointer;
+
+  transition:
+    background .18s ease,
+    transform .18s ease;
+}
+
+.creditIdentityAction:hover {
+  background: rgba(255,255,255,.07);
+}
+
+.creditIdentityAction strong {
+  color: #d5b66d;
+}
+
+.creditIdentityAction:hover strong {
+  color: #ead18f;
+}
+
+/* =========================================================
+   DOCUMENTOS DEL CRÉDITO
+========================================================= */
+
+.creditDocumentsBar {
+  margin-top: 18px;
+  margin-bottom: 22px;
+}
+
+.creditDocumentsButton {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 17px 20px;
+
+  background: white;
+
+  border: 1px solid var(--border);
+  border-radius: 13px;
+
+  color: var(--navy);
+
+  font-size: 14px;
+  font-weight: 800;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 5px 18px rgba(15,23,42,.025);
+}
+
+.creditDocumentsButton:hover {
+  background: #fafbfc;
+  border-color: #cbd3dd;
+}
+
+.creditDocumentsButton span:last-child {
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.creditDocumentList {
+  display: flex;
+  flex-direction: column;
+
+  margin-top: 4px;
+}
+
+.creditDocumentList button {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 25px;
+
+  padding: 18px 4px;
+
+  background: transparent;
+
+  border: 0;
+  border-bottom: 1px solid var(--border);
+
+  color: var(--text);
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.creditDocumentList button:last-child {
+  border-bottom: 0;
+}
+
+.creditDocumentList button:hover {
+  background: #fafbfc;
+}
+
+.creditDocumentList button > div {
+  display: flex;
+  flex-direction: column;
+
+  gap: 5px;
+}
+
+.creditDocumentList button > div > strong {
+  color: var(--text);
+
+  font-size: 14px;
+}
+
+.creditDocumentList button span {
+  color: var(--muted);
+
+  font-size: 12px;
+}
+
+.creditDocumentList button > strong {
+  color: var(--gold);
+
+  font-size: 12px;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
    MOBILE
 ========================================================= */
+
 
 @media (max-width: 820px) {
 
@@ -11074,6 +11262,22 @@ button:disabled {
   padding: 13px 22px;
 }
 
+.creditDocumentsButton {
+  padding: 16px;
+}
+
+.creditDocumentList button {
+  align-items: flex-start;
+}
+
+.creditDocumentList button > strong {
+  text-align: right;
+}
+
+.creditIdentityAction {
+  min-height: 76px;
+}
+  
   .header {
     min-height: 66px;
 
