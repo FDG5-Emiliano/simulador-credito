@@ -6979,6 +6979,52 @@ const calendario =
     creditoActivoInfo?.pagos ||
     [];
 
+    function estadoPagoCliente(estado, cuota) {
+  const valor = String(
+    estado || ""
+  ).toUpperCase();
+
+  const total =
+    Number(cuota?.pago_total || 0);
+
+  const pagado =
+    Number(cuota?.monto_pagado || 0);
+
+  const vencimiento =
+    cuota?.fecha_vencimiento
+      ? new Date(
+          `${cuota.fecha_vencimiento}T23:59:59`
+        )
+      : null;
+
+  if (
+    total > 0 &&
+    pagado >= total
+  ) {
+    return "Pagado";
+  }
+
+  if (pagado > 0) {
+    return "Pago parcial";
+  }
+
+  if (
+    vencimiento &&
+    vencimiento < new Date()
+  ) {
+    return "Vencido";
+  }
+
+  if (
+    valor === "PAID" ||
+    valor === "PAGADO"
+  ) {
+    return "Pagado";
+  }
+
+  return "Pendiente";
+}
+
   function fechaMX(fecha) {
     if (!fecha) {
       return "-";
@@ -7260,10 +7306,10 @@ valor={
                       "var(--muted)",
                   }}
                 >
-                  {pendiente <= 0
-                    ? "Pagado"
-                    : cuota.estado ||
-                      "Pendiente"}
+{estadoPagoCliente(
+  cuota.estado,
+  cuota
+)}
                 </div>
               </div>
             </div>
