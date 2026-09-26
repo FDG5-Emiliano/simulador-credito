@@ -7274,7 +7274,7 @@ const calendario =
 
       <div className="summaryGrid">
 <SummaryCard
-  titulo="Saldo actual"
+  titulo="Monto solicitado"
   valor={moneda(
     credito?.saldo_capital
   )}
@@ -11432,7 +11432,7 @@ button:disabled {
 .sessionUser strong {
   font-size: 14px;
 }
-  
+
 .creditIdentityTop {
   flex-direction: column;
   gap: 15px;
