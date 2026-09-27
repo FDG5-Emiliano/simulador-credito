@@ -199,6 +199,11 @@ const [
   setCreditosContratados,
 ] = useState([]);
 
+const [
+  solicitudViva,
+  setSolicitudViva,
+] = useState(null);
+
 const yaRecuperoRef = useRef(false);
 
   const [consentimientos, setConsentimientos] = useState({
@@ -727,13 +732,18 @@ const timer = setTimeout(() => {
     estadoSolicitud,
   ]);
 
-  useEffect(() => {
+useEffect(() => {
   if (!usuario?.id) {
     setCreditosContratados([]);
+    setSolicitudViva(null);
     return;
   }
 
   cargarCreditosContratados(
+    usuario.id
+  );
+
+  cargarSolicitudViva(
     usuario.id
   );
 }, [
@@ -1293,6 +1303,65 @@ async function cargarDocumentosContractuales(
     setDocumentosContractuales({});
 
     return {};
+  }
+}
+
+async function cargarSolicitudViva(
+  userId = usuario?.id
+) {
+  if (!userId) {
+    setSolicitudViva(null);
+    return null;
+  }
+
+  try {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("Aplicaciones")
+      .select(`
+        id,
+        folio,
+        estado,
+        pantalla_actual,
+        actualizado_en
+      `)
+      .eq(
+        "user_id",
+        userId
+      )
+      .in(
+        "estado",
+        ESTADOS_SOLICITUD_VIVA
+      )
+      .order(
+        "actualizado_en",
+        {
+          ascending: false,
+        }
+      )
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    setSolicitudViva(
+      data || null
+    );
+
+    return data || null;
+  } catch (error) {
+    console.error(
+      "Error cargando solicitud viva:",
+      error
+    );
+
+    setSolicitudViva(null);
+
+    return null;
   }
 }
 
@@ -2198,7 +2267,7 @@ async function iniciarNuevaSolicitud() {
   }
 }
 
-async function abrirMiSolicitud() {
+async function abrirAreaCreditos() {
   setMensajeError("");
   setMensajeInfo("");
 
@@ -2235,15 +2304,90 @@ async function abrirMiSolicitud() {
       return;
     }
 
-    const recuperada =
-      await recuperarSolicitud(
-        session.user.id
-      );
+    await abrirMiSolicitud();
+  } catch (error) {
+    console.error(
+      "Error abriendo créditos:",
+      error
+    );
 
-    if (recuperada) {
+    mostrarError(
+      "No pudimos recuperar tus créditos."
+    );
+  }
+}
+
+async function abrirMiSolicitud() {
+  setMensajeError("");
+  setMensajeInfo("");
+
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!session?.user?.id) {
+      ir("loginCliente");
       return;
     }
 
+    /*
+      1. PRIMERO buscamos una solicitud viva.
+
+      Si existe TRI-000002 DRAFT,
+      queremos continuar TRI-000002.
+
+      No queremos abrir TRI-C-000001.
+    */
+    const viva =
+      await cargarSolicitudViva(
+        session.user.id
+      );
+
+    if (viva?.id) {
+      const recuperada =
+        await recuperarSolicitud(
+          session.user.id
+        );
+
+      if (recuperada) {
+        return;
+      }
+    }
+
+    /*
+      2. Si NO existe solicitud viva,
+      entonces revisamos créditos.
+    */
+    const creditos =
+      await cargarCreditosContratados(
+        session.user.id
+      );
+
+    if (creditos.length > 1) {
+      ir("misCreditos");
+      return;
+    }
+
+    if (creditos.length === 1) {
+      await abrirCredito(
+        creditos[0]
+      );
+
+      return;
+    }
+
+    /*
+      3. No tiene solicitud viva
+      ni crédito.
+
+      Inicia su primera solicitud.
+    */
     limpiarSolicitudEnMemoria();
 
     ir("simulacion");
@@ -4174,7 +4318,7 @@ async function abrirDocumento(tipo) {
   datos={datos}
   estadoSolicitud={estadoSolicitud}
   creditosContratados={creditosContratados}
-  abrirMiSolicitud={abrirMiSolicitud}
+  abrirMiSolicitud={abrirAreaCreditos}
   iniciarNuevaSolicitud={iniciarNuevaSolicitud}
   cerrarSesion={cerrarSesion}
   menuMovil={menuMovil}
@@ -4196,20 +4340,23 @@ async function abrirDocumento(tipo) {
         )}
 
 {pantalla === "inicio" && (
-  <Inicio
-    ir={ir}
-    producto={producto}
-    usuario={usuario}
-    creditosContratados={
-      creditosContratados
-    }
-    abrirMiSolicitud={
-      abrirMiSolicitud
-    }
-    iniciarNuevaSolicitud={
-      iniciarNuevaSolicitud
-    }
-  />
+<Inicio
+  ir={ir}
+  producto={producto}
+  usuario={usuario}
+  creditosContratados={
+    creditosContratados
+  }
+  solicitudViva={
+    solicitudViva
+  }
+  abrirMiSolicitud={
+    abrirMiSolicitud
+  }
+  iniciarNuevaSolicitud={
+    iniciarNuevaSolicitud
+  }
+/>
 )}
 
 {pantalla === "producto" && (
@@ -4810,6 +4957,7 @@ function Inicio({
   producto,
   usuario,
   creditosContratados,
+  solicitudViva,
   abrirMiSolicitud,
   iniciarNuevaSolicitud,
 }) {
@@ -4835,6 +4983,22 @@ function Inicio({
 <button
   className="primary"
   onClick={() => {
+    /*
+      Ya existe una solicitud viva.
+      Recuperamos esa solicitud.
+    */
+    if (
+      usuario &&
+      solicitudViva
+    ) {
+      abrirMiSolicitud();
+      return;
+    }
+
+    /*
+      Tiene crédito pero NO tiene
+      una solicitud nueva en proceso.
+    */
     if (
       usuario &&
       tieneCreditoActivo
@@ -4843,19 +5007,28 @@ function Inicio({
       return;
     }
 
+    /*
+      Tiene cuenta, pero todavía está
+      en su primera solicitud.
+    */
     if (usuario) {
       abrirMiSolicitud();
       return;
     }
 
+    /*
+      Usuario completamente nuevo.
+    */
     iniciarNuevaSolicitud();
   }}
 >
   {!usuario
     ? "Solicita tu crédito"
-    : tieneCreditoActivo
-      ? "Realizar nueva solicitud"
-      : "Continuar mi solicitud"}
+    : solicitudViva
+      ? "Continuar mi solicitud"
+      : tieneCreditoActivo
+        ? "Realizar nueva solicitud"
+        : "Continuar mi solicitud"}
 </button>
 
           <button
