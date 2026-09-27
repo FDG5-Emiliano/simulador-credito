@@ -532,18 +532,6 @@ if (
   return;
 }
 
-/*
-  Nunca autoguardamos una solicitud
-  mientras el usuario está consultando
-  un crédito ya contratado.
-*/
-if (
-  pantalla === "creditoActivo" ||
-  pantalla === "misCreditos"
-) {
-  return;
-}
-
     const destino =
       ultimaPantallaPorPaso[numeroPaso] ||
       PASOS.find((p) => p.numero === numeroPaso)?.pantallaBase;
@@ -708,13 +696,24 @@ useEffect(() => {
       return;
     }
 
-    if (ESTADOS_ENVIADOS.includes(estadoSolicitud)) {
-      return;
-    }
+if (ESTADOS_ENVIADOS.includes(estadoSolicitud)) {
+  return;
+}
 
-    const timer = setTimeout(() => {
-      guardarBorradorSupabase();
-    }, 1400);
+/*
+  Consultar un crédito contratado nunca
+  debe modificar una solicitud DRAFT.
+*/
+if (
+  pantalla === "creditoActivo" ||
+  pantalla === "misCreditos"
+) {
+  return;
+}
+
+const timer = setTimeout(() => {
+  guardarBorradorSupabase();
+}, 1400);
 
     return () => clearTimeout(timer);
   }, [
@@ -2098,24 +2097,74 @@ async function iniciarNuevaSolicitud() {
     }
 
     /*
-      Limpiamos completamente el contexto
-      de la operación anterior.
+      PRIMERO buscamos si ya existe un DRAFT.
+
+      Si existe, NO lo reiniciamos.
+      Recuperamos exactamente donde se quedó.
+    */
+    const {
+      data: draftExistente,
+      error: errorDraft,
+    } = await supabase
+      .from("Aplicaciones")
+      .select(`
+        id,
+        folio,
+        estado,
+        pantalla_actual
+      `)
+      .eq(
+        "user_id",
+        session.user.id
+      )
+      .eq(
+        "estado",
+        "DRAFT"
+      )
+      .order(
+        "actualizado_en",
+        {
+          ascending: false,
+        }
+      )
+      .limit(1)
+      .maybeSingle();
+
+    if (errorDraft) {
+      throw errorDraft;
+    }
+
+    /*
+      YA EXISTE UNA SOLICITUD NUEVA EN PROCESO.
+
+      Ejemplo: TRI-000002.
+
+      La recuperamos en lugar de crear otra
+      o mandarla otra vez a simulación.
+    */
+    if (draftExistente?.id) {
+      await recuperarSolicitud(
+        session.user.id
+      );
+
+      return;
+    }
+
+    /*
+      Sólo llegamos aquí cuando NO existe
+      ningún DRAFT.
+
+      Ahora sí limpiamos el crédito/solicitud
+      anterior de la memoria de React.
     */
     limpiarSolicitudEnMemoria();
 
-    /*
-      IMPORTANTE:
-      cambiamos primero la pantalla de React.
-
-      Así el autoguardado ya no puede volver
-      a guardar "creditoActivo" en la nueva
-      solicitud.
-    */
     setPantalla("simulacion");
 
     /*
-      Recupera TRI-000002 si ya existe DRAFT.
-      Si no existe, crea una nueva solicitud.
+      obtenerOCrearDraft creará la nueva
+      solicitud porque ya comprobamos
+      que no existe ningún DRAFT.
     */
     const nuevaSolicitudId =
       await obtenerOCrearDraft(
@@ -2128,34 +2177,6 @@ async function iniciarNuevaSolicitud() {
       );
     }
 
-    /*
-      Dejamos explícitamente la nueva
-      solicitud en simulación.
-    */
-    const {
-      error: errorPantalla,
-    } = await supabase
-      .from("Aplicaciones")
-      .update({
-        pantalla_actual:
-          "simulacion",
-
-        actualizado_en:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        nuevaSolicitudId
-      );
-
-    if (errorPantalla) {
-      throw errorPantalla;
-    }
-
-    /*
-      Actualizamos el estado local con
-      la nueva solicitud.
-    */
     setSolicitudId(
       nuevaSolicitudId
     );
@@ -2172,7 +2193,7 @@ async function iniciarNuevaSolicitud() {
     );
 
     mostrarError(
-      "No pudimos iniciar tu nueva solicitud."
+      "No pudimos iniciar o recuperar tu nueva solicitud."
     );
   }
 }
