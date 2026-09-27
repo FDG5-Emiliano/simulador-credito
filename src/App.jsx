@@ -1574,7 +1574,7 @@ async function cargarCreditosContratados(
     }
 
     /* =========================================
-       3. DETERMINAR CUÁLES YA SON CRÉDITOS
+       3. IDENTIFICAR CRÉDITOS CONTRATADOS
     ========================================= */
 
     const contratados =
@@ -1619,11 +1619,118 @@ async function cargarCreditosContratados(
         }
       );
 
+    if (
+      contratados.length === 0
+    ) {
+      setCreditosContratados([]);
+      return [];
+    }
+
+    /* =========================================
+       4. CALENDARIO DE TODOS LOS CRÉDITOS
+    ========================================= */
+
+    const idsCreditos =
+      contratados.map(
+        (credito) => credito.id
+      );
+
+    const {
+      data: calendario,
+      error: errorCalendario,
+    } = await supabase
+      .from("CalendarioPagos")
+      .select(`
+        id,
+        credito_id,
+        numero_pago,
+        fecha_vencimiento,
+        pago_total,
+        monto_pagado,
+        estado
+      `)
+      .in(
+        "credito_id",
+        idsCreditos
+      )
+      .order(
+        "numero_pago",
+        {
+          ascending: true,
+        }
+      );
+
+    if (errorCalendario) {
+      throw errorCalendario;
+    }
+
+    /* =========================================
+       5. PRÓXIMO PAGO DE CADA CRÉDITO
+    ========================================= */
+
+    const creditosConPago =
+      contratados.map(
+        (credito) => {
+          const cuotasCredito =
+            (calendario || [])
+              .filter(
+                (cuota) =>
+                  cuota.credito_id ===
+                  credito.id
+              );
+
+          /*
+            Primer pago que todavía tenga
+            dinero pendiente.
+          */
+          const proximoPago =
+            cuotasCredito.find(
+              (cuota) => {
+                const total =
+                  Number(
+                    cuota.pago_total || 0
+                  );
+
+                const pagado =
+                  Number(
+                    cuota.monto_pagado || 0
+                  );
+
+                return pagado < total;
+              }
+            ) || null;
+
+          const montoProximoPago =
+            proximoPago
+              ? Math.max(
+                  Number(
+                    proximoPago
+                      .pago_total || 0
+                  ) -
+                    Number(
+                      proximoPago
+                        .monto_pagado || 0
+                    ),
+                  0
+                )
+              : 0;
+
+          return {
+            ...credito,
+
+            proximoPago,
+
+            montoProximoPago,
+          };
+        }
+      );
+
     setCreditosContratados(
-      contratados
+      creditosConPago
     );
 
-    return contratados;
+    return creditosConPago;
+
   } catch (error) {
     console.error(
       "Error cargando créditos contratados:",
@@ -7738,24 +7845,26 @@ function MisCreditos({
               <div>
                 <span>Próximo pago</span>
 
-                <strong>
-                  {credito.proximoPago
-                    ? moneda(
-                        credito.montoProximoPago
-                      )
-                    : "Sin pago pendiente"}
-                </strong>
+              <strong>
+  {credito.proximoPago
+    ? moneda(
+        credito.montoProximoPago
+      )
+    : "Sin pago pendiente"}
+</strong>
               </div>
 
               <div>
                 <span>Fecha</span>
 
-                <strong>
-                  {fechaCredito(
-                    credito.proximoPago
-                      ?.fecha_vencimiento
-                  )}
-                </strong>
+            <strong>
+  {credito.proximoPago
+    ? fechaCredito(
+        credito.proximoPago
+          .fecha_vencimiento
+      )
+    : "Sin pago pendiente"}
+</strong>
               </div>
             </div>
 
