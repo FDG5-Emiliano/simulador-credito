@@ -2065,16 +2065,92 @@ if (data.estado === "DISBURSED") {
 }
   }
 
-function iniciarNuevaSolicitud() {
+async function iniciarNuevaSolicitud() {
   setMensajeError("");
   setMensajeInfo("");
 
-  if (usuario?.id) {
-    abrirMiSolicitud();
-    return;
-  }
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
 
-  ir("registro");
+    if (error) {
+      throw error;
+    }
+
+    /*
+      Sin sesión:
+      comportamiento normal para usuario nuevo.
+    */
+    if (!session?.user?.id) {
+      limpiarSolicitudEnMemoria();
+      ir("registro");
+      return;
+    }
+
+    /*
+      IMPORTANTE:
+      primero limpiamos el crédito/solicitud
+      que React tenía actualmente en memoria.
+    */
+    limpiarSolicitudEnMemoria();
+
+    /*
+      Buscamos o creamos la NUEVA solicitud viva.
+
+      Como TRI-000001 está DISBURSED,
+      obtenerOCrearDraft() NO debe reutilizarla.
+
+      Como ya existe TRI-000002 DRAFT,
+      recuperará TRI-000002.
+    */
+    const nuevaSolicitudId =
+      await obtenerOCrearDraft(
+        session.user.id
+      );
+
+    if (!nuevaSolicitudId) {
+      throw new Error(
+        "No pudimos preparar la nueva solicitud."
+      );
+    }
+
+    /*
+      Forzamos que la nueva solicitud comience
+      desde la simulación.
+    */
+    const {
+      error: errorPantalla,
+    } = await supabase
+      .from("Aplicaciones")
+      .update({
+        pantalla_actual:
+          "simulacion",
+
+        actualizado_en:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        nuevaSolicitudId
+      );
+
+    if (errorPantalla) {
+      throw errorPantalla;
+    }
+
+    ir("simulacion");
+  } catch (error) {
+    console.error(
+      "Error iniciando nueva solicitud:",
+      error
+    );
+
+    mostrarError(
+      "No pudimos iniciar tu nueva solicitud."
+    );
+  }
 }
 
 async function abrirMiSolicitud() {
