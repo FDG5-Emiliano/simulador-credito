@@ -4818,12 +4818,15 @@ function Header({
       ? datos?.razonSocial
       : datos?.nombre;
 
-  const nombreMostrar =
-    String(nombreSesion || "")
-      .trim()
-      .split(/\s+/)[0] ||
-    usuario?.email?.split("@")[0] ||
-    "";
+const nombreMostrar =
+  String(
+    datos?.nombre ||
+    usuario?.user_metadata?.nombre ||
+    ""
+  )
+    .trim()
+    .split(/\s+/)[0] ||
+  "Cliente";
 
   return (
     <header className="header">
