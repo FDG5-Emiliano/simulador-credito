@@ -194,10 +194,12 @@ const [creditoActivoInfo, setCreditoActivoInfo] =
     proximoPago: null,
   });
 
-  const [creditosContratados, setCreditosContratados] =
-  useState([]);
+const [
+  creditosContratados,
+  setCreditosContratados,
+] = useState([]);
 
-  const yaRecuperoRef = useRef(false);
+const yaRecuperoRef = useRef(false);
 
   const [consentimientos, setConsentimientos] = useState({
     privacidad: false,
@@ -698,15 +700,6 @@ useEffect(() => {
       return;
     }
 
-    useEffect(() => {
-  if (!usuario?.id) {
-    setCreditosContratados([]);
-    return;
-  }
-
-  cargarCreditosContratados();
-}, [usuario?.id, estadoSolicitud]);
-
     const timer = setTimeout(() => {
       guardarBorradorSupabase();
     }, 1400);
@@ -722,6 +715,15 @@ useEffect(() => {
     ultimaPantallaPorPaso,
     estadoSolicitud,
   ]);
+
+  useEffect(() => {
+  if (!usuario?.id) {
+    setCreditosContratados([]);
+    return;
+  }
+
+  cargarCreditosContratados();
+}, [usuario?.id, estadoSolicitud]);
 
 async function obtenerOCrearDraft(userId) {
   if (!userId) {
@@ -1278,43 +1280,36 @@ async function cargarDocumentosContractuales(
   }
 }
 
-async function cargarCreditosContratados() {
-  if (!usuario?.id) {
+async function cargarCreditosContratados(
+  userId = usuario?.id
+) {
+  if (!userId) {
     setCreditosContratados([]);
     return [];
   }
 
   try {
-    /*
-      Primero obtenemos las aplicaciones
-      que pertenecen al usuario autenticado.
-    */
     const {
       data: aplicaciones,
       error: errorAplicaciones,
     } = await supabase
       .from("Aplicaciones")
       .select("id")
-      .eq("user_id", usuario.id);
+      .eq("user_id", userId);
 
     if (errorAplicaciones) {
       throw errorAplicaciones;
     }
 
-    const idsAplicaciones =
-      (aplicaciones || [])
-        .map((item) => item.id)
-        .filter(Boolean);
+    const idsAplicaciones = (aplicaciones || [])
+      .map((item) => item.id)
+      .filter(Boolean);
 
     if (idsAplicaciones.length === 0) {
       setCreditosContratados([]);
       return [];
     }
 
-    /*
-      Recuperamos todos los créditos asociados
-      a las aplicaciones de este cliente.
-    */
     const {
       data: creditos,
       error: errorCreditos,
@@ -1326,9 +1321,11 @@ async function cargarCreditosContratados() {
         folio_credito,
         monto_original,
         saldo_capital,
+        plazo_meses,
         estado,
         fecha_dispersion,
-        fecha_vencimiento
+        fecha_vencimiento,
+        created_at
       `)
       .in(
         "aplicacion_id",
@@ -1342,18 +1339,101 @@ async function cargarCreditosContratados() {
       throw errorCreditos;
     }
 
-    const contratados =
-      (creditos || []).filter(
-        (credito) =>
-          credito.estado !==
-          "PENDING_CONTRACT"
-      );
-
-    setCreditosContratados(
-      contratados
+    const contratados = (creditos || []).filter(
+      (credito) =>
+        Boolean(credito.fecha_dispersion) ||
+        [
+          "ACTIVE",
+          "DISBURSED",
+          "PAST_DUE",
+          "PAID",
+          "CLOSED",
+        ].includes(
+          String(
+            credito.estado || ""
+          ).toUpperCase()
+        )
     );
 
-    return contratados;
+    if (contratados.length === 0) {
+      setCreditosContratados([]);
+      return [];
+    }
+
+    const idsCreditos = contratados.map(
+      (credito) => credito.id
+    );
+
+    const {
+      data: calendario,
+      error: errorCalendario,
+    } = await supabase
+      .from("CalendarioPagos")
+      .select(`
+        id,
+        credito_id,
+        numero_pago,
+        fecha_vencimiento,
+        pago_total,
+        monto_pagado,
+        estado
+      `)
+      .in(
+        "credito_id",
+        idsCreditos
+      )
+      .order("numero_pago", {
+        ascending: true,
+      });
+
+    if (errorCalendario) {
+      throw errorCalendario;
+    }
+
+    const resumen = contratados.map(
+      (credito) => {
+        const cuotas = (calendario || []).filter(
+          (cuota) =>
+            cuota.credito_id === credito.id
+        );
+
+        const proximoPago =
+          cuotas.find((cuota) => {
+            const total = Number(
+              cuota.pago_total || 0
+            );
+
+            const pagado = Number(
+              cuota.monto_pagado || 0
+            );
+
+            return pagado < total;
+          }) || null;
+
+        const montoProximoPago =
+          proximoPago
+            ? Math.max(
+                Number(
+                  proximoPago.pago_total || 0
+                ) -
+                  Number(
+                    proximoPago.monto_pagado || 0
+                  ),
+                0
+              )
+            : 0;
+
+        return {
+          ...credito,
+          proximoPago,
+          montoProximoPago,
+        };
+      }
+    );
+
+    setCreditosContratados(resumen);
+
+    return resumen;
   } catch (error) {
     console.error(
       "Error cargando créditos contratados:",
@@ -1567,6 +1647,59 @@ async function cargarCreditoActivo(
   }
 }
 
+async function abrirCredito(credito) {
+  if (!credito?.aplicacion_id) {
+    mostrarError(
+      "No encontramos la solicitud asociada al crédito."
+    );
+    return;
+  }
+
+  try {
+    setMensajeError("");
+    setMensajeInfo("");
+
+    setSolicitudId(
+      credito.aplicacion_id
+    );
+
+    const [
+      informacionCredito,
+      documentos,
+    ] = await Promise.all([
+      cargarCreditoActivo(
+        credito.aplicacion_id
+      ),
+
+      cargarDocumentosContractuales(
+        credito.aplicacion_id
+      ),
+    ]);
+
+    if (!informacionCredito?.credito) {
+      mostrarError(
+        "No pudimos recuperar la información del crédito."
+      );
+      return;
+    }
+
+    setDocumentosContractuales(
+      documentos || {}
+    );
+
+    ir("creditoActivo");
+  } catch (error) {
+    console.error(
+      "Error abriendo crédito:",
+      error
+    );
+
+    mostrarError(
+      "No pudimos abrir el crédito."
+    );
+  }
+}
+
   /* =========================================================
      RECUPERAR SOLICITUD
   ========================================================= */
@@ -1608,7 +1741,6 @@ async function cargarCreditoActivo(
   "CONTRACTING",
   "READY_TO_DISBURSE",
   "SIGNED",
-  "DISBURSED",
 ])
         .order("actualizado_en", {
           ascending: false,
@@ -1951,23 +2083,26 @@ if (data.estado === "DISBURSED") {
 }
   }
 
-  function iniciarNuevaSolicitud() {
-  /*
-    Si existe usuario autenticado,
-    primero comprobamos si tiene una
-    solicitud vigente.
-  */
-  if (usuario?.id) {
-    abrirMiSolicitud();
-    return;
+function iniciarNuevaSolicitud() {
+  limpiarSolicitudEnMemoria();
+
+  if (usuario?.email) {
+    setDatos((prev) => ({
+      ...prev,
+      correo: usuario.email,
+      password: "",
+    }));
   }
 
-  limpiarSolicitudEnMemoria();
+  if (usuario?.id) {
+    ir("simulacion");
+    return;
+  }
 
   ir("registro");
 }
 
-  async function abrirMiSolicitud() {
+async function abrirMiSolicitud() {
   setMensajeError("");
   setMensajeInfo("");
 
@@ -1986,41 +2121,44 @@ if (data.estado === "DISBURSED") {
       return;
     }
 
+    const creditos =
+      await cargarCreditosContratados(
+        session.user.id
+      );
+
+    if (creditos.length > 1) {
+      ir("misCreditos");
+      return;
+    }
+
+    if (creditos.length === 1) {
+      await abrirCredito(
+        creditos[0]
+      );
+
+      return;
+    }
+
     const recuperada =
       await recuperarSolicitud(
         session.user.id
       );
 
-    /*
-      recuperarSolicitud() ya decide
-      la pantalla correcta según el estado:
-
-      DRAFT        -> pantalla guardada
-      SUBMITTED    -> enRevision
-      IN_REVIEW    -> enRevision / garantía
-      APPROVED     -> oferta
-      CONTRACTING  -> contratación
-      etc.
-    */
-
     if (recuperada) {
       return;
     }
 
-    /*
-      Solamente si realmente NO existe
-      una solicitud vigente iniciamos
-      una nueva.
-    */
+    limpiarSolicitudEnMemoria();
+
     ir("simulacion");
   } catch (error) {
     console.error(
-      "Error abriendo Mi solicitud:",
+      "Error abriendo información del cliente:",
       error
     );
 
     mostrarError(
-      "No pudimos recuperar tu solicitud."
+      "No pudimos recuperar tu información."
     );
   }
 }
@@ -3962,13 +4100,20 @@ async function abrirDocumento(tipo) {
         )}
 
 {pantalla === "inicio" && (
-<Inicio
-  ir={ir}
-  producto={producto}
-  usuario={usuario}
-  abrirMiSolicitud={abrirMiSolicitud}
-  iniciarNuevaSolicitud={iniciarNuevaSolicitud}
-/>
+  <Inicio
+    ir={ir}
+    producto={producto}
+    usuario={usuario}
+    creditosContratados={
+      creditosContratados
+    }
+    abrirMiSolicitud={
+      abrirMiSolicitud
+    }
+    iniciarNuevaSolicitud={
+      iniciarNuevaSolicitud
+    }
+  />
 )}
 
 {pantalla === "producto" && (
@@ -4353,6 +4498,13 @@ trackerProps={{
           <Dispersado ir={ir} />
         )}
 
+{pantalla === "misCreditos" && (
+  <MisCreditos
+    creditos={creditosContratados}
+    abrirCredito={abrirCredito}
+  />
+)}
+
         {pantalla === "creditoActivo" && (
        <CreditoActivo
   datos={datos}
@@ -4561,9 +4713,12 @@ function Inicio({
   ir,
   producto,
   usuario,
+  creditosContratados,
   abrirMiSolicitud,
   iniciarNuevaSolicitud,
 }) {
+  const tieneCreditoActivo =
+    (creditosContratados?.length || 0) > 0;
   return (
     <section className="hero fadeUp">
       <div className="heroContent">
@@ -4584,6 +4739,14 @@ function Inicio({
 <button
   className="primary"
   onClick={() => {
+    if (
+      usuario &&
+      tieneCreditoActivo
+    ) {
+      iniciarNuevaSolicitud();
+      return;
+    }
+
     if (usuario) {
       abrirMiSolicitud();
       return;
@@ -4592,9 +4755,11 @@ function Inicio({
     iniciarNuevaSolicitud();
   }}
 >
-  {usuario
-    ? "Continuar mi solicitud"
-    : "Solicita tu crédito"}
+  {!usuario
+    ? "Solicita tu crédito"
+    : tieneCreditoActivo
+      ? "Realizar nueva solicitud"
+      : "Continuar mi solicitud"}
 </button>
 
           <button
@@ -7044,6 +7209,115 @@ function Dispersado({ ir }) {
             Ver mi crédito
           </button>
         </div>
+      </div>
+    </Pagina>
+  );
+}
+
+function MisCreditos({
+  creditos,
+  abrirCredito,
+}) {
+  function fechaCredito(fecha) {
+    if (!fecha) {
+      return "Sin pago pendiente";
+    }
+
+    return new Date(
+      `${String(fecha).slice(0, 10)}T12:00:00`
+    ).toLocaleDateString(
+      "es-MX",
+      {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }
+    );
+  }
+
+  return (
+    <Pagina
+      titulo="Mis créditos"
+      subtitulo="Consulta tus créditos contratados, saldos y próximos pagos."
+    >
+      <div className="myCreditsGrid">
+        {creditos.map((credito) => (
+          <button
+            type="button"
+            className="myCreditCard"
+            key={credito.id}
+            onClick={() =>
+              abrirCredito(credito)
+            }
+          >
+            <div className="myCreditCardHeader">
+              <div>
+                <span className="myCreditEyebrow">
+                  TRISAL · CRÉDITO SIMPLE
+                </span>
+
+                <h2>
+                  {credito.folio_credito ||
+                    "Crédito"}
+                </h2>
+              </div>
+
+              <span className="myCreditBadge">
+                Crédito activo
+              </span>
+            </div>
+
+            <div className="myCreditCardData">
+              <div>
+                <span>Saldo actual</span>
+
+                <strong>
+                  {moneda(
+                    credito.saldo_capital
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>Próximo pago</span>
+
+                <strong>
+                  {credito.proximoPago
+                    ? moneda(
+                        credito.montoProximoPago
+                      )
+                    : "Sin pago pendiente"}
+                </strong>
+              </div>
+
+              <div>
+                <span>Fecha</span>
+
+                <strong>
+                  {fechaCredito(
+                    credito.proximoPago
+                      ?.fecha_vencimiento
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            <div className="myCreditCardFooter">
+              <span>
+                Monto original{" "}
+                <strong>
+                  {moneda(
+                    credito.monto_original
+                  )}
+                </strong>
+              </span>
+
+              <strong>
+                Ver crédito →
+              </strong>
+            </div>
+          </button>
+        ))}
       </div>
     </Pagina>
   );
@@ -11407,12 +11681,178 @@ button:disabled {
 }
 
 /* =========================================================
+   MIS CRÉDITOS
+========================================================= */
+
+.myCreditsGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.myCreditCard {
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+
+  color: var(--text);
+  text-align: left;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 8px 26px rgba(15,23,42,.05);
+}
+
+.myCreditCard:hover {
+  border-color: #cbd3dd;
+
+  box-shadow:
+    0 14px 34px rgba(15,23,42,.08);
+}
+
+.myCreditCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+  padding: 24px;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--navy),
+      var(--navy2)
+    );
+
+  color: white;
+}
+
+.myCreditCardHeader h2 {
+  margin: 7px 0 0;
+  color: white;
+  font-size: 23px;
+}
+
+.myCreditEyebrow {
+  color: #d5b66d;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .13em;
+}
+
+.myCreditBadge {
+  padding: 7px 11px;
+
+  background:
+    rgba(255,255,255,.1);
+
+  border:
+    1px solid rgba(255,255,255,.15);
+
+  border-radius: 999px;
+
+  color: white;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.myCreditCardData {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0,1fr));
+}
+
+.myCreditCardData > div {
+  display: flex;
+  flex-direction: column;
+
+  gap: 7px;
+  padding: 22px;
+
+  border-right:
+    1px solid var(--border);
+}
+
+.myCreditCardData > div:last-child {
+  border-right: 0;
+}
+
+.myCreditCardData span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.myCreditCardData strong {
+  color: var(--navy);
+  font-size: 16px;
+}
+
+.myCreditCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+  padding: 16px 22px;
+
+  background: #fafbfc;
+
+  border-top:
+    1px solid var(--border);
+
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.myCreditCardFooter > strong {
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* =========================================================
    MOBILE
 ========================================================= */
 
 
 @media (max-width: 820px) {
 
+.myCreditsGrid {
+  grid-template-columns: 1fr;
+}
+
+.myCreditCardData {
+  grid-template-columns: 1fr;
+}
+
+.myCreditCardData > div {
+  border-right: 0;
+
+  border-bottom:
+    1px solid var(--border);
+}
+
+.myCreditCardData > div:last-child {
+  border-bottom: 0;
+}
+
+.myCreditCardHeader {
+  padding: 20px;
+}
+
+.myCreditCardFooter {
+  padding: 15px 20px;
+}
+  
 .sessionUser {
   width: 100%;
 
