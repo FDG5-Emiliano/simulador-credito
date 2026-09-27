@@ -149,6 +149,12 @@ export default function App() {
   const [legalAbierto, setLegalAbierto] = useState(false);
 
   const [usuario, setUsuario] = useState(null);
+
+  const [
+  perfilUsuario,
+  setPerfilUsuario,
+] = useState(null);
+
   const [cargandoSesion, setCargandoSesion] = useState(true);
 
   const [solicitudId, setSolicitudId] = useState(null);
@@ -736,6 +742,7 @@ useEffect(() => {
   if (!usuario?.id) {
     setCreditosContratados([]);
     setSolicitudViva(null);
+    setPerfilUsuario(null);
     return;
   }
 
@@ -744,6 +751,10 @@ useEffect(() => {
   );
 
   cargarSolicitudViva(
+    usuario.id
+  );
+
+  cargarPerfilUsuario(
     usuario.id
   );
 }, [
@@ -1303,6 +1314,53 @@ async function cargarDocumentosContractuales(
     setDocumentosContractuales({});
 
     return {};
+  }
+}
+
+async function cargarPerfilUsuario(
+  userId = usuario?.id
+) {
+  if (!userId) {
+    setPerfilUsuario(null);
+    return null;
+  }
+
+  try {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("PerfilesUsuarios")
+      .select(`
+        user_id,
+        nombre,
+        apellido_paterno,
+        apellido_materno
+      `)
+      .eq(
+        "user_id",
+        userId
+      )
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    setPerfilUsuario(
+      data || null
+    );
+
+    return data || null;
+  } catch (error) {
+    console.error(
+      "Error cargando perfil:",
+      error
+    );
+
+    setPerfilUsuario(null);
+
+    return null;
   }
 }
 
@@ -4315,6 +4373,7 @@ async function abrirDocumento(tipo) {
 <Header
   ir={ir}
   usuario={usuario}
+  perfilUsuario={perfilUsuario}
   datos={datos}
   estadoSolicitud={estadoSolicitud}
   creditosContratados={creditosContratados}
@@ -4788,6 +4847,7 @@ trackerProps={{
 function Header({
   ir,
   usuario,
+  perfilUsuario,
   datos,
   estadoSolicitud,
   creditosContratados,
@@ -4820,9 +4880,7 @@ function Header({
 
 const nombreMostrar =
   String(
-    datos?.nombre ||
-    usuario?.user_metadata?.nombre ||
-    ""
+    perfilUsuario?.nombre || ""
   )
     .trim()
     .split(/\s+/)[0] ||
