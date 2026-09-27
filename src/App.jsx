@@ -532,6 +532,18 @@ if (
   return;
 }
 
+/*
+  Nunca autoguardamos una solicitud
+  mientras el usuario está consultando
+  un crédito ya contratado.
+*/
+if (
+  pantalla === "creditoActivo" ||
+  pantalla === "misCreditos"
+) {
+  return;
+}
+
     const destino =
       ultimaPantallaPorPaso[numeroPaso] ||
       PASOS.find((p) => p.numero === numeroPaso)?.pantallaBase;
@@ -2079,10 +2091,6 @@ async function iniciarNuevaSolicitud() {
       throw error;
     }
 
-    /*
-      Sin sesión:
-      comportamiento normal para usuario nuevo.
-    */
     if (!session?.user?.id) {
       limpiarSolicitudEnMemoria();
       ir("registro");
@@ -2090,20 +2098,24 @@ async function iniciarNuevaSolicitud() {
     }
 
     /*
-      IMPORTANTE:
-      primero limpiamos el crédito/solicitud
-      que React tenía actualmente en memoria.
+      Limpiamos completamente el contexto
+      de la operación anterior.
     */
     limpiarSolicitudEnMemoria();
 
     /*
-      Buscamos o creamos la NUEVA solicitud viva.
+      IMPORTANTE:
+      cambiamos primero la pantalla de React.
 
-      Como TRI-000001 está DISBURSED,
-      obtenerOCrearDraft() NO debe reutilizarla.
+      Así el autoguardado ya no puede volver
+      a guardar "creditoActivo" en la nueva
+      solicitud.
+    */
+    setPantalla("simulacion");
 
-      Como ya existe TRI-000002 DRAFT,
-      recuperará TRI-000002.
+    /*
+      Recupera TRI-000002 si ya existe DRAFT.
+      Si no existe, crea una nueva solicitud.
     */
     const nuevaSolicitudId =
       await obtenerOCrearDraft(
@@ -2117,8 +2129,8 @@ async function iniciarNuevaSolicitud() {
     }
 
     /*
-      Forzamos que la nueva solicitud comience
-      desde la simulación.
+      Dejamos explícitamente la nueva
+      solicitud en simulación.
     */
     const {
       error: errorPantalla,
@@ -2139,6 +2151,18 @@ async function iniciarNuevaSolicitud() {
     if (errorPantalla) {
       throw errorPantalla;
     }
+
+    /*
+      Actualizamos el estado local con
+      la nueva solicitud.
+    */
+    setSolicitudId(
+      nuevaSolicitudId
+    );
+
+    setEstadoSolicitud(
+      "DRAFT"
+    );
 
     ir("simulacion");
   } catch (error) {
