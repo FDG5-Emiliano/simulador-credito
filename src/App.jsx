@@ -455,9 +455,9 @@ const producto = {
           password: "",
         }));
 
-        await recuperarSolicitud(
-          session.user.id
-        );
+await entrarPortalCliente(
+  session.user.id
+);
       } else {
         setUsuario(null);
 
@@ -2392,6 +2392,57 @@ async function iniciarNuevaSolicitud() {
 
     mostrarError(
       "No pudimos iniciar o recuperar tu nueva solicitud."
+    );
+  }
+}
+
+async function entrarPortalCliente(userId) {
+  if (!userId) {
+    ir("loginCliente");
+    return;
+  }
+
+  try {
+    setMensajeError("");
+    setMensajeInfo("");
+
+    // 1. La prioridad después del login son los créditos contratados.
+    const creditos =
+      await cargarCreditosContratados(userId);
+
+    // Tiene 2 o más créditos → Mis créditos
+    if (creditos.length >= 2) {
+      ir("misCreditos");
+      return;
+    }
+
+    // Tiene exactamente 1 → abrir directamente Mi crédito
+    if (creditos.length === 1) {
+      await abrirCredito(creditos[0]);
+      return;
+    }
+
+    // 2. Si no tiene créditos, buscamos una solicitud en proceso.
+    const viva =
+      await cargarSolicitudViva(userId);
+
+    if (viva?.id) {
+      await recuperarSolicitud(userId);
+      return;
+    }
+
+    // 3. No tiene crédito ni solicitud.
+    limpiarSolicitudEnMemoria();
+    ir("simulacion");
+
+  } catch (error) {
+    console.error(
+      "Error entrando al portal del cliente:",
+      error
+    );
+
+    mostrarError(
+      "No pudimos recuperar tu información."
     );
   }
 }
@@ -4555,12 +4606,12 @@ regresar={() => regresarA("simulacion")}
   />
 )}
 
-        {pantalla === "loginCliente" && (
-          <LoginCliente
-            ir={ir}
-            recuperarSolicitud={recuperarSolicitud}
-          />
-        )}
+{pantalla === "loginCliente" && (
+  <LoginCliente
+    ir={ir}
+    entrarPortalCliente={entrarPortalCliente}
+  />
+)}
 
         {pantalla === "confirmarCorreo" && (
           <ConfirmarCorreo
@@ -5661,7 +5712,7 @@ function Registro({
 
 function LoginCliente({
   ir,
-  recuperarSolicitud,
+  entrarPortalCliente,
 }) {
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
@@ -5687,14 +5738,11 @@ function LoginCliente({
       return;
     }
 
-    if (data?.user) {
-      const recuperada =
-        await recuperarSolicitud(data.user.id);
-
-      if (!recuperada) {
-        ir("simulacion");
-      }
-    }
+if (data?.user) {
+  await entrarPortalCliente(
+    data.user.id
+  );
+}
 
     setCargando(false);
   }
