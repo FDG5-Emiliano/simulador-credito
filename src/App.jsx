@@ -1317,6 +1317,77 @@ async function cargarDocumentosContractuales(
   }
 }
 
+async function guardarPerfilUsuario({
+  nombre,
+  apellidoPaterno,
+  apellidoMaterno,
+}) {
+  if (!usuario?.id) {
+    return null;
+  }
+
+  const nombreLimpio =
+    String(nombre || "").trim();
+
+  if (!nombreLimpio) {
+    return null;
+  }
+
+  try {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("PerfilesUsuarios")
+      .upsert(
+        {
+          user_id: usuario.id,
+
+          nombre:
+            nombreLimpio,
+
+          apellido_paterno:
+            String(
+              apellidoPaterno || ""
+            ).trim() || null,
+
+          apellido_materno:
+            String(
+              apellidoMaterno || ""
+            ).trim() || null,
+
+          updated_at:
+            new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id",
+        }
+      )
+      .select(`
+        user_id,
+        nombre,
+        apellido_paterno,
+        apellido_materno
+      `)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    setPerfilUsuario(data);
+
+    return data;
+  } catch (error) {
+    console.error(
+      "Error guardando perfil del usuario:",
+      error
+    );
+
+    return null;
+  }
+}
+
 async function cargarPerfilUsuario(
   userId = usuario?.id
 ) {
@@ -3237,7 +3308,7 @@ function validarTipoPersona() {
     ir("datosSolicitante");
   }
 
-function validarDatosSolicitante() {
+async function validarDatosSolicitante() {
   if (datos.tipoPersona === "fisica") {
     if (
       !datos.nombre.trim() ||
@@ -3366,6 +3437,14 @@ function validarDatosSolicitante() {
       rfcEmpresa:
         rfcNormalizado,
     }));
+  }
+
+  if (datos.tipoPersona === "fisica") {
+    await guardarPerfilUsuario({
+      nombre: datos.nombre,
+      apellidoPaterno: datos.apellidoPaterno,
+      apellidoMaterno: datos.apellidoMaterno,
+    });
   }
 
   ir("pep");
