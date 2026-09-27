@@ -722,8 +722,13 @@ useEffect(() => {
     return;
   }
 
-  cargarCreditosContratados();
-}, [usuario?.id, estadoSolicitud]);
+  cargarCreditosContratados(
+    usuario.id
+  );
+}, [
+  usuario?.id,
+  estadoSolicitud,
+]);
 
 async function obtenerOCrearDraft(userId) {
   if (!userId) {
@@ -1289,26 +1294,43 @@ async function cargarCreditosContratados(
   }
 
   try {
+    /* =========================================
+       1. APLICACIONES DEL USUARIO
+    ========================================= */
+
     const {
       data: aplicaciones,
       error: errorAplicaciones,
     } = await supabase
       .from("Aplicaciones")
-      .select("id")
-      .eq("user_id", userId);
+      .select(`
+        id,
+        estado
+      `)
+      .eq(
+        "user_id",
+        userId
+      );
 
     if (errorAplicaciones) {
       throw errorAplicaciones;
     }
 
-    const idsAplicaciones = (aplicaciones || [])
-      .map((item) => item.id)
-      .filter(Boolean);
+    const idsAplicaciones =
+      (aplicaciones || [])
+        .map((item) => item.id)
+        .filter(Boolean);
 
-    if (idsAplicaciones.length === 0) {
+    if (
+      idsAplicaciones.length === 0
+    ) {
       setCreditosContratados([]);
       return [];
     }
+
+    /* =========================================
+       2. CRÉDITOS DEL USUARIO
+    ========================================= */
 
     const {
       data: creditos,
@@ -1331,109 +1353,68 @@ async function cargarCreditosContratados(
         "aplicacion_id",
         idsAplicaciones
       )
-      .order("created_at", {
-        ascending: false,
-      });
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      );
 
     if (errorCreditos) {
       throw errorCreditos;
     }
 
-    const contratados = (creditos || []).filter(
-      (credito) =>
-        Boolean(credito.fecha_dispersion) ||
-        [
-          "ACTIVE",
-          "DISBURSED",
-          "PAST_DUE",
-          "PAID",
-          "CLOSED",
-        ].includes(
-          String(
-            credito.estado || ""
-          ).toUpperCase()
-        )
+    /* =========================================
+       3. DETERMINAR CUÁLES YA SON CRÉDITOS
+    ========================================= */
+
+    const contratados =
+      (creditos || []).filter(
+        (credito) => {
+          const aplicacion =
+            (aplicaciones || [])
+              .find(
+                (item) =>
+                  item.id ===
+                  credito.aplicacion_id
+              );
+
+          const estadoAplicacion =
+            String(
+              aplicacion?.estado || ""
+            ).toUpperCase();
+
+          const estadoCredito =
+            String(
+              credito.estado || ""
+            ).toUpperCase();
+
+          return (
+            estadoAplicacion ===
+              "DISBURSED" ||
+
+            Boolean(
+              credito.fecha_dispersion
+            ) ||
+
+            [
+              "ACTIVE",
+              "DISBURSED",
+              "PAST_DUE",
+              "PAID",
+              "CLOSED",
+            ].includes(
+              estadoCredito
+            )
+          );
+        }
+      );
+
+    setCreditosContratados(
+      contratados
     );
 
-    if (contratados.length === 0) {
-      setCreditosContratados([]);
-      return [];
-    }
-
-    const idsCreditos = contratados.map(
-      (credito) => credito.id
-    );
-
-    const {
-      data: calendario,
-      error: errorCalendario,
-    } = await supabase
-      .from("CalendarioPagos")
-      .select(`
-        id,
-        credito_id,
-        numero_pago,
-        fecha_vencimiento,
-        pago_total,
-        monto_pagado,
-        estado
-      `)
-      .in(
-        "credito_id",
-        idsCreditos
-      )
-      .order("numero_pago", {
-        ascending: true,
-      });
-
-    if (errorCalendario) {
-      throw errorCalendario;
-    }
-
-    const resumen = contratados.map(
-      (credito) => {
-        const cuotas = (calendario || []).filter(
-          (cuota) =>
-            cuota.credito_id === credito.id
-        );
-
-        const proximoPago =
-          cuotas.find((cuota) => {
-            const total = Number(
-              cuota.pago_total || 0
-            );
-
-            const pagado = Number(
-              cuota.monto_pagado || 0
-            );
-
-            return pagado < total;
-          }) || null;
-
-        const montoProximoPago =
-          proximoPago
-            ? Math.max(
-                Number(
-                  proximoPago.pago_total || 0
-                ) -
-                  Number(
-                    proximoPago.monto_pagado || 0
-                  ),
-                0
-              )
-            : 0;
-
-        return {
-          ...credito,
-          proximoPago,
-          montoProximoPago,
-        };
-      }
-    );
-
-    setCreditosContratados(resumen);
-
-    return resumen;
+    return contratados;
   } catch (error) {
     console.error(
       "Error cargando créditos contratados:",
@@ -1740,6 +1721,7 @@ async function abrirCredito(credito) {
   "REJECTED",
   "CONTRACTING",
   "READY_TO_DISBURSE",
+  "DISBURSED",
   "SIGNED",
 ])
         .order("actualizado_en", {
@@ -2084,18 +2066,11 @@ if (data.estado === "DISBURSED") {
   }
 
 function iniciarNuevaSolicitud() {
-  limpiarSolicitudEnMemoria();
-
-  if (usuario?.email) {
-    setDatos((prev) => ({
-      ...prev,
-      correo: usuario.email,
-      password: "",
-    }));
-  }
+  setMensajeError("");
+  setMensajeInfo("");
 
   if (usuario?.id) {
-    ir("simulacion");
+    abrirMiSolicitud();
     return;
   }
 
@@ -11852,7 +11827,7 @@ button:disabled {
 .myCreditCardFooter {
   padding: 15px 20px;
 }
-  
+
 .sessionUser {
   width: 100%;
 
