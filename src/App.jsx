@@ -9118,6 +9118,7 @@ function bloqueado(paso) {
   );
 }
 
+
 function Campo({
   label,
   value = "",
@@ -9125,18 +9126,97 @@ function Campo({
   type = "text",
   placeholder = "",
 }) {
+  const [mostrarPassword, setMostrarPassword] =
+    useState(false);
+
+  const esPassword = type === "password";
+
   return (
     <label className="field">
       <span>{label}</span>
 
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) =>
-          onChange?.(e.target.value)
+      <div
+        className={
+          esPassword
+            ? "passwordFieldWrapper"
+            : undefined
         }
-      />
+      >
+        <input
+          type={
+            esPassword
+              ? mostrarPassword
+                ? "text"
+                : "password"
+              : type
+          }
+          value={value}
+          placeholder={placeholder}
+          autoComplete={
+            esPassword
+              ? "current-password"
+              : undefined
+          }
+          onChange={(e) =>
+            onChange?.(e.target.value)
+          }
+        />
+
+        {esPassword && (
+          <button
+            type="button"
+            className="passwordToggle"
+            onClick={() =>
+              setMostrarPassword((prev) => !prev)
+            }
+            aria-label={
+              mostrarPassword
+                ? "Ocultar contraseña"
+                : "Mostrar contraseña"
+            }
+            aria-pressed={mostrarPassword}
+            title={
+              mostrarPassword
+                ? "Ocultar contraseña"
+                : "Mostrar contraseña"
+            }
+          >
+            {mostrarPassword ? (
+              <svg
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 3l18 18" />
+                <path d="M10.6 5.2A10.8 10.8 0 0 1 12 5c5.5 0 9.5 7 9.5 7a15 15 0 0 1-3.2 4.1" />
+                <path d="M6.1 6.1C3.8 7.6 2.5 12 2.5 12S6.5 19 12 19c1.5 0 2.9-.4 4.1-1" />
+                <path d="M10 10a2.8 2.8 0 0 0 4 4" />
+              </svg>
+            ) : (
+              <svg
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2.5 12S6.5 5 12 5s9.5 7 9.5 7-4 7-9.5 7-9.5-7-9.5-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
     </label>
   );
 }
@@ -10392,6 +10472,53 @@ button:disabled {
 /* =========================================================
    FIELDS
 ========================================================= */
+
+/* =========================================
+   MOSTRAR / OCULTAR CONTRASEÑA
+========================================= */
+
+.passwordFieldWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.passwordFieldWrapper input {
+  width: 100%;
+  padding-right: 55px;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+
+  width: 39px;
+  height: 39px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: transparent;
+  color: #667489;
+
+  cursor: pointer;
+}
+
+.passwordToggle:hover {
+  background: #f1f3f6;
+  color: #111a2a;
+  transform: translateY(-50%);
+}
+
+.passwordToggle:focus-visible {
+  outline: 2px solid #9c7427;
+  outline-offset: 2px;
+}
 
 .field {
   display: flex;
