@@ -12293,18 +12293,17 @@ button:disabled {
    MI CREDITO - VISTA EJECUTIVA
 ========================================= */
 
+
 .creditCompactPage .page {
-  padding-top: 16px;
+  padding-top: 0 !important;
+}
+
+.creditCompactPage {
+  margin-top: -55px;
 }
 
 .creditCompactPage .pageTitle {
-  margin-bottom: 16px;
-}
-
-.creditCompactPage .pageTitle h1 {
-  font-size: clamp(25px, 3vw, 32px);
-  line-height: 1.12;
-  margin-bottom: 4px;
+  margin-bottom: 12px !important;
 }
 
 .creditCompactPage .pageTitle p {
@@ -12433,6 +12432,15 @@ button:disabled {
   .creditCompactPage .page {
     padding-top: 10px;
   }
+
+  
+.creditCompactPage {
+  margin-top: -20px;
+}
+
+.creditCompactPage .page {
+  padding-top: 0 !important;
+}
 
   .creditCompactPage .pageTitle {
     margin-bottom: 12px;
