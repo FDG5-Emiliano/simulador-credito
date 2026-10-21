@@ -7895,8 +7895,11 @@ function CreditoActivo({
   documentosContractuales,
   abrirDocumento,
 }) {
-  const [seccion, setSeccion] =
-    useState("resumen");
+
+const [seccion, setSeccion] = useState("resumen");
+
+const [pestanaFinanciera, setPestanaFinanciera] =
+  useState("estado_cuenta");
 
     const credito =
   creditoActivoInfo?.credito ||
@@ -8269,181 +8272,249 @@ valor={
   </div>
 )}
 
-      {seccion === "pagos" && (
-        <div
-          className="card"
-          style={{
-            marginTop: "24px",
-          }}
-        >
-          <SectionDivider
-            titulo="Historial de pagos"
-          />
 
-          {proximoPago && (
-            <div
-              className="importantNotice"
-            >
-              <strong>
-                Próximo pago:{" "}
-                {fechaMX(
-                  proximoPago.fecha_vencimiento
-                )}
-              </strong>
+<div
+  className="card"
+  style={{ marginTop: 24 }}
+>
+  <SectionDivider titulo="Información financiera" />
 
-<div>
-  {moneda(
-    montoProximoPago
-  )}
-</div>
-            </div>
-          )}
-
-          {pagos.length === 0 ? (
-            <div className="notice">
-              Todavía no hay pagos
-              registrados para este
-              crédito.
-            </div>
-          ) : (
-pagos.map((pago) => (
   <div
-    className="summaryRow"
-    key={pago.id}
-  >
-    <div>
-      <strong>
-        {fechaMX(
-          pago.fecha_pago
-        )}
-      </strong>
-
-      <div
-        style={{
-          color: "var(--green)",
-          marginTop: "4px",
-          fontWeight: 750,
-        }}
-      >
-        Pago recibido
-      </div>
-    </div>
-
-    <div
-      style={{
-        textAlign: "right",
-      }}
-    >
-      <strong>
-        {moneda(
-          pago.monto
-        )}
-      </strong>
-
-      <div
-        style={{
-          color: "var(--muted)",
-          marginTop: "4px",
-        }}
-      >
-        Pagado
-      </div>
-    </div>
-  </div>
-))
-          )}
-        </div>
-      )}
-
-      {seccion === "calendario" && (
-  <div
-    className="card"
     style={{
-      marginTop: "24px",
+      display: "flex",
+      gap: 10,
+      marginBottom: 24,
+      flexWrap: "wrap",
     }}
   >
-    <SectionDivider
-      titulo="Calendario de pagos"
-    />
+    <button
+      type="button"
+      onClick={() =>
+        setPestanaFinanciera("estado_cuenta")
+      }
+      style={{
+        padding: "12px 18px",
+        borderRadius: 10,
+        border: "1px solid #dce2ea",
+        background:
+          pestanaFinanciera === "estado_cuenta"
+            ? "#142033"
+            : "#fff",
+        color:
+          pestanaFinanciera === "estado_cuenta"
+            ? "#fff"
+            : "#142033",
+        fontWeight: 750,
+        cursor: "pointer",
+      }}
+    >
+      Estado de cuenta
+    </button>
 
-    {calendario.length === 0 ? (
-      <div className="notice">
-        No encontramos el calendario
-        de pagos de este crédito.
+    <button
+      type="button"
+      onClick={() =>
+        setPestanaFinanciera("calendario")
+      }
+      style={{
+        padding: "12px 18px",
+        borderRadius: 10,
+        border: "1px solid #dce2ea",
+        background:
+          pestanaFinanciera === "calendario"
+            ? "#142033"
+            : "#fff",
+        color:
+          pestanaFinanciera === "calendario"
+            ? "#fff"
+            : "#142033",
+        fontWeight: 750,
+        cursor: "pointer",
+      }}
+    >
+      Calendario de pagos
+    </button>
+  </div>
+
+  {pestanaFinanciera === "estado_cuenta" && (
+    <div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(190px, 1fr))",
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <div className="card">
+          <div style={{ color: "var(--muted)" }}>
+            Capital pendiente
+          </div>
+
+          <h2 style={{ marginBottom: 0 }}>
+            {moneda(credito?.saldo_capital)}
+          </h2>
+        </div>
+
+        <div className="card">
+          <div style={{ color: "var(--muted)" }}>
+            Próximo pago
+          </div>
+
+          <h2 style={{ marginBottom: 0 }}>
+            {proximoPago
+              ? moneda(montoProximoPago)
+              : "Sin pago pendiente"}
+          </h2>
+        </div>
       </div>
-    ) : (
-      calendario.map(
-        (cuota) => {
-          const total =
-            Number(
+
+      <SectionDivider titulo="Movimientos registrados" />
+
+      {pagos.length === 0 ? (
+        <div className="notice">
+          Todavía no hay pagos registrados
+          para este crédito.
+        </div>
+      ) : (
+        [...pagos]
+          .sort(
+            (a, b) =>
+              new Date(b.fecha_pago) -
+              new Date(a.fecha_pago)
+          )
+          .map((pago) => (
+            <div
+              className="summaryRow"
+              key={pago.id}
+            >
+              <div>
+                <strong>
+                  {fechaMX(pago.fecha_pago)}
+                </strong>
+
+                <div
+                  style={{
+                    color: "var(--green)",
+                    marginTop: 5,
+                    fontWeight: 700,
+                  }}
+                >
+                  Pago recibido
+                </div>
+              </div>
+
+              <div style={{ textAlign: "right" }}>
+                <strong>
+                  {moneda(pago.monto)}
+                </strong>
+
+                <div
+                  style={{
+                    color: "var(--muted)",
+                    marginTop: 5,
+                  }}
+                >
+                  Movimiento registrado
+                </div>
+              </div>
+            </div>
+          ))
+      )}
+
+      <p
+        style={{
+          marginTop: 20,
+          fontSize: 12,
+          color: "var(--muted)",
+        }}
+      >
+        Información de consulta basada en los
+        movimientos registrados del crédito.
+        El capital pendiente no incluye
+        necesariamente todos los intereses,
+        impuestos o cargos exigibles.
+      </p>
+    </div>
+  )}
+
+  {pestanaFinanciera === "calendario" && (
+    <div>
+      <SectionDivider titulo="Calendario de pagos" />
+
+      {calendario.length === 0 ? (
+        <div className="notice">
+          No encontramos el calendario
+          de pagos de este crédito.
+        </div>
+      ) : (
+        [...calendario]
+          .sort(
+            (a, b) =>
+              Number(a.numero_pago) -
+              Number(b.numero_pago)
+          )
+          .map((cuota) => {
+            const total = Number(
               cuota.pago_total || 0
             );
 
-          const pagado =
-            Number(
+            const pagado = Number(
               cuota.monto_pagado || 0
             );
 
-          const pendiente =
-            Math.max(
+            const pendiente = Math.max(
               0,
               total - pagado
             );
 
-          return (
-            <div
-              className="summaryRow"
-              key={cuota.id}
-            >
-              <div>
-                <strong>
-                  Pago #{cuota.numero_pago}
-                </strong>
-
-                <div
-                  style={{
-                    marginTop: "5px",
-                    color:
-                      "var(--muted)",
-                  }}
-                >
-                  {fechaMX(
-                    cuota.fecha_vencimiento
-                  )}
-                </div>
-              </div>
-
+            return (
               <div
-                style={{
-                  textAlign: "right",
-                }}
+                className="summaryRow"
+                key={cuota.id}
               >
-                <strong>
-                  {moneda(
-                    pendiente
-                  )}
-                </strong>
+                <div>
+                  <strong>
+                    Pago #{cuota.numero_pago}
+                  </strong>
 
-                <div
-                  style={{
-                    marginTop: "5px",
-                    color:
-                      "var(--muted)",
-                  }}
-                >
-{estadoPagoCliente(
-  cuota.estado,
-  cuota
-)}
+                  <div
+                    style={{
+                      marginTop: 5,
+                      color: "var(--muted)",
+                    }}
+                  >
+                    {fechaMX(
+                      cuota.fecha_vencimiento
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ textAlign: "right" }}>
+                  <strong>
+                    {moneda(pendiente)}
+                  </strong>
+
+                  <div
+                    style={{
+                      marginTop: 5,
+                      color: "var(--muted)",
+                    }}
+                  >
+                    {estadoPagoCliente(
+                      cuota.estado,
+                      cuota
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        }
-      )
-    )}
-  </div>
-)}
+            );
+          })
+      )}
+    </div>
+  )}
+</div>
 
     </Pagina>
   );
