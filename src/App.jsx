@@ -12306,10 +12306,11 @@ button:disabled {
   margin-bottom: 8px !important;
 }
 
-.creditCompactPage .pageTitle p {
-  font-size: 13px;
-  line-height: 1.4;
-  margin-top: 0;
+.creditCompactPage .pageTitle h1 {
+  font-size: 26px !important;
+  line-height: 1.2;
+  font-weight: 750;
+  margin: 0 0 4px;
 }
 
 .creditIdentityCompact {
@@ -12446,9 +12447,10 @@ button:disabled {
     margin-bottom: 12px;
   }
 
-  .creditCompactPage .pageTitle h1 {
-    font-size: 25px;
-  }
+.creditCompactPage .pageTitle h1 {
+  font-size: 22px !important;
+  line-height: 1.2;
+}
 
   .creditIdentityCompact .creditIdentityTop {
     padding: 14px;
