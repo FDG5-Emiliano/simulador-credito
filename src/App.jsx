@@ -8026,12 +8026,15 @@ const calendario =
   }
 
   return (
-    <Pagina
-      titulo="Mi crédito"
-      subtitulo="Consulta el estado, próximos pagos, historial y documentos de tu crédito."
-    >
 
-      <div className="creditIdentityCard">
+<div className="creditCompactPage">
+  <Pagina
+    titulo="Mi crédito"
+    subtitulo="Saldo, movimientos y documentos de tu financiamiento."
+  >
+
+
+<div className="creditIdentityCard creditIdentityCompact">
   <div className="creditIdentityTop">
     <div>
       <span className="creditIdentityEyebrow">
@@ -8039,22 +8042,8 @@ const calendario =
       </span>
 
       <h2>
-        {credito?.folio_credito ||
-          "Crédito activo"}
+        {credito?.folio_credito || "Crédito activo"}
       </h2>
-
-      <p>
-        {datos.tipoPersona === "moral"
-          ? datos.razonSocial
-          : [
-              datos.nombre,
-              datos.apellidoPaterno,
-              datos.apellidoMaterno,
-            ]
-              .filter(Boolean)
-              .join(" ")
-              .toUpperCase()}
-      </p>
     </div>
 
     <span className="creditStatusBadge">
@@ -8062,89 +8051,80 @@ const calendario =
     </span>
   </div>
 
-  <div className="creditIdentityData">
+  <div className="creditExecutiveGrid">
+    <div className="creditExecutiveMain">
+      <span>Capital pendiente</span>
+      <strong>{moneda(credito?.saldo_capital)}</strong>
+    </div>
+
+    <div className="creditExecutiveMain">
+      <span>Próximo pago</span>
+      <strong>
+        {proximoPago
+          ? moneda(montoProximoPago)
+          : "Sin pago pendiente"}
+      </strong>
+    </div>
+
+    <div>
+      <span>Próximo vencimiento</span>
+      <strong>
+        {proximoPago
+          ? fechaMX(proximoPago.fecha_vencimiento)
+          : "Sin vencimientos"}
+      </strong>
+    </div>
+
     <div>
       <span>Monto original</span>
-      <strong>
-        {moneda(
-          credito?.monto_original
-        )}
-      </strong>
+      <strong>{moneda(credito?.monto_original)}</strong>
     </div>
 
     <div>
-      <span>Plazo</span>
-      <strong>
-        {credito?.plazo_meses || "-"} meses
-      </strong>
+      <span>Plazo contratado</span>
+      <strong>{credito?.plazo_meses || "-"} meses</strong>
     </div>
-
-<div
-  className="creditIdentityAction"
-  onClick={() =>
-    setSeccion("pagos")
-  }
->
-  <span>Pagos realizados</span>
-
-  <strong>
-    Ver historial →
-  </strong>
-</div>
-
-<div
-  className="creditIdentityAction"
-  onClick={() =>
-    setSeccion("calendario")
-  }
->
-  <span>Próximos pagos</span>
-
-  <strong>
-    Ver calendario →
-  </strong>
-</div>
   </div>
 
-  <div className="creditInstitution">
-    Crédito otorgado por{" "}
-    <strong>
-      FDG5 SERVICIOS, S.A. DE C.V.,
-      SOFOM, E.N.R.
-    </strong>
+  <div className="creditExecutiveFooter">
+    <span>
+      FDG5 SERVICIOS · SOFOM E.N.R.
+    </span>
+
+    <div className="creditExecutiveActions">
+      <button
+        type="button"
+        onClick={() => {
+          setPestanaFinanciera("estado_cuenta");
+          document
+            .getElementById("detalle-financiero")
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+        }}
+      >
+        Ver movimientos ↓
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setPestanaFinanciera("calendario");
+          document
+            .getElementById("detalle-financiero")
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+        }}
+      >
+        Ver calendario ↓
+      </button>
+    </div>
   </div>
 </div>
 
-      <div className="summaryGrid">
-<SummaryCard
-  titulo="Saldo actual"
-  valor={moneda(
-    credito?.saldo_capital
-  )}
-/>
-
-        <SummaryCard
-          titulo="Próximo pago"
-valor={
-  proximoPago
-    ? moneda(
-        montoProximoPago
-      )
-    : "Sin pago pendiente"
-}
-        />
-
-        <SummaryCard
-          titulo="Fecha del próximo pago"
-          valor={
-            proximoPago
-              ? fechaMX(
-                  proximoPago.fecha_vencimiento
-                )
-              : "-"
-          }
-        />
-      </div>
 
 <div className="creditDocumentsBar">
   <button
@@ -8516,7 +8496,8 @@ valor={
   )}
 </div>
 
-    </Pagina>
+  </Pagina>
+</div>
   );
 }
 
@@ -12305,6 +12286,208 @@ button:disabled {
 
 .creditInstitution strong {
   color: #d8dee8;
+}
+
+
+/* =========================================
+   MI CREDITO - VISTA EJECUTIVA
+========================================= */
+
+.creditCompactPage .page {
+  padding-top: 16px;
+}
+
+.creditCompactPage .pageTitle {
+  margin-bottom: 16px;
+}
+
+.creditCompactPage .pageTitle h1 {
+  font-size: clamp(25px, 3vw, 32px);
+  line-height: 1.12;
+  margin-bottom: 4px;
+}
+
+.creditCompactPage .pageTitle p {
+  font-size: 13px;
+  line-height: 1.4;
+  margin-top: 0;
+}
+
+.creditIdentityCompact {
+  margin-bottom: 12px;
+  border-radius: 14px;
+}
+
+.creditIdentityCompact .creditIdentityTop {
+  padding: 17px 22px 13px;
+  gap: 12px;
+  align-items: center;
+}
+
+.creditIdentityCompact .creditIdentityEyebrow {
+  font-size: 9px;
+  margin-bottom: 5px;
+}
+
+.creditIdentityCompact .creditIdentityTop h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.creditIdentityCompact .creditStatusBadge {
+  font-size: 10px;
+  padding: 6px 10px;
+}
+
+.creditExecutiveGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid rgba(255,255,255,.12);
+}
+
+.creditExecutiveGrid > div {
+  grid-column: span 2;
+  min-width: 0;
+  padding: 13px 20px;
+  border-right: 1px solid rgba(255,255,255,.1);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.creditExecutiveGrid > div:nth-child(-n+2) {
+  grid-column: span 3;
+}
+
+.creditExecutiveGrid > div:last-child {
+  border-right: 0;
+}
+
+.creditExecutiveGrid span {
+  font-size: 11px;
+  color: #b6c2d3;
+}
+
+.creditExecutiveGrid strong {
+  color: white;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.creditExecutiveMain strong {
+  font-size: clamp(19px, 2.3vw, 25px);
+}
+
+.creditExecutiveFooter {
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: rgba(255,255,255,.045);
+}
+
+.creditExecutiveFooter > span {
+  font-size: 10px;
+  color: #c1cad7;
+}
+
+.creditExecutiveActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.creditExecutiveActions button {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: #e1bd70;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.creditExecutiveActions button:hover {
+  color: #fff;
+}
+
+.creditCompactPage .creditDocumentsBar {
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.creditCompactPage .creditDocumentsButton {
+  padding: 12px 16px;
+}
+
+.creditCompactPage #detalle-financiero {
+  margin-top: 12px !important;
+  scroll-margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .creditCompactPage .page {
+    padding-top: 10px;
+  }
+
+  .creditCompactPage .pageTitle {
+    margin-bottom: 12px;
+  }
+
+  .creditCompactPage .pageTitle h1 {
+    font-size: 25px;
+  }
+
+  .creditIdentityCompact .creditIdentityTop {
+    padding: 14px;
+  }
+
+  .creditIdentityCompact .creditIdentityTop h2 {
+    font-size: 19px;
+  }
+
+  .creditExecutiveGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .creditExecutiveGrid > div,
+  .creditExecutiveGrid > div:nth-child(-n+2) {
+    grid-column: span 1;
+    padding: 12px;
+  }
+
+  .creditExecutiveGrid > div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .creditExecutiveGrid > div:last-child {
+    grid-column: span 2;
+  }
+
+  .creditExecutiveGrid strong {
+    font-size: 12px;
+  }
+
+  .creditExecutiveMain strong {
+    font-size: 19px;
+  }
+
+  .creditExecutiveFooter {
+    padding: 10px 14px;
+  }
+
+  .creditExecutiveActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .creditCompactPage #detalle-financiero {
+    padding: 14px;
+  }
 }
 
 /* =========================================================
