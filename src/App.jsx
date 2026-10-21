@@ -12303,7 +12303,7 @@ button:disabled {
 }
 
 .creditCompactPage .pageTitle {
-  margin-bottom: 12px !important;
+  margin-bottom: 8px !important;
 }
 
 .creditCompactPage .pageTitle p {
