@@ -12307,7 +12307,7 @@ button:disabled {
 }
 
 .creditCompactPage .pageTitle h1 {
-  font-size: 26px !important;
+  font-size: 28px !important;
   line-height: 1.2;
   font-weight: 750;
   margin: 0 0 4px;
