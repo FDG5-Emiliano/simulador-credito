@@ -6027,8 +6027,8 @@ function RecuperarPasswordCliente({
     const codigoLimpio = String(codigo ?? "")
       .replace(/\D/g, "");
 
-    if (codigoLimpio.length !== 6) {
-      setError("Introduce un código válido de 6 dígitos.");
+    if (codigoLimpio.length !== 8) {
+      setError("Introduce un código válido de 8 dígitos.");
       return;
     }
 
@@ -6218,14 +6218,14 @@ if (signOutError) {
 
             <div style={{ marginTop: 18 }}>
               <label style={estiloLabel}>
-                Código de 6 dígitos
+                Código de 8 dígitos
               </label>
 
               <input
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                maxLength={6}
+                maxLength={8}
                 value={codigo}
                 onChange={(e) =>
                   setCodigo(
