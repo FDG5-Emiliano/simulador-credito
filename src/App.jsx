@@ -142,13 +142,58 @@ function limpiarMontoInput(valor) {
 }
 
 
+function identidadMinimaCompleta(datos) {
+  if (datos?.tipoPersona === "fisica") {
+    return Boolean(String(datos.nombre || "").trim() &&
+      String(datos.apellidoPaterno || "").trim());
+  }
+  if (datos?.tipoPersona === "moral") {
+    return Boolean(String(datos.razonSocial || "").trim() &&
+      String(datos.rfcEmpresa || "").trim());
+  }
+  return false;
+}
+
 export default function App() {
-  const [pantalla, setPantalla] = useState("inicio");
+
+const [pantalla, setPantalla] = useState(() => {
+  const recuperando =
+    sessionStorage.getItem(
+      "trisal_recuperando_password"
+    ) === "1";
+  return recuperando ? "loginCliente" : "inicio";
+});
 
   const [menuMovil, setMenuMovil] = useState(false);
   const [legalAbierto, setLegalAbierto] = useState(false);
 
   const [usuario, setUsuario] = useState(null);
+
+const recuperacionActivaRef = useRef(
+  sessionStorage.getItem("trisal_recuperando_password") === "1"
+);
+
+const [recuperacionActiva, setRecuperacionActiva] =
+  useState(
+    () =>
+      sessionStorage.getItem("trisal_recuperando_password") === "1"
+  );
+
+function cambiarEstadoRecuperacion(activa) {
+  recuperacionActivaRef.current = activa;
+  setRecuperacionActiva(activa);
+
+  if (activa) {
+    sessionStorage.setItem(
+      "trisal_recuperando_password",
+      "1"
+    );
+  } else {
+    sessionStorage.removeItem(
+      "trisal_recuperando_password"
+    );
+  }
+}
 
   const [
   perfilUsuario,
@@ -416,9 +461,13 @@ const producto = {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        const user = session?.user || null;
 
-        setUsuario(user);
+const user = session?.user || null;
+if (recuperacionActivaRef.current) {
+  return;
+}
+
+setUsuario(user);
 
         if (user) {
           setDatos((prev) => ({
@@ -435,46 +484,51 @@ const producto = {
     };
   }, []);
 
-  async function iniciarSesionPersistente() {
-    try {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+async function iniciarSesionPersistente() {
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
 
-      if (error) {
-        throw error;
-      }
-
-      if (session?.user) {
-        setUsuario(session.user);
-
-        setDatos((prev) => ({
-          ...prev,
-          correo: session.user.email || "",
-          password: "",
-        }));
-
-await entrarPortalCliente(
-  session.user.id
-);
-      } else {
-        setUsuario(null);
-
-        localStorage.removeItem(
-          "trisal_solicitud_borrador"
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Error recuperando sesión:",
-        error
-      );
-    } finally {
-      yaRecuperoRef.current = true;
-      setCargandoSesion(false);
+    if (error) {
+      throw error;
     }
+
+    // Evitar abrir el portal durante recuperación
+    if (recuperacionActivaRef.current) {
+      return;
+    }
+
+    if (session?.user) {
+      setUsuario(session.user);
+
+      setDatos((prev) => ({
+        ...prev,
+        correo: session.user.email || "",
+        password: "",
+      }));
+
+      await entrarPortalCliente(session.user.id);
+
+    } else {
+      setUsuario(null);
+
+      localStorage.removeItem(
+        "trisal_solicitud_borrador"
+      );
+    }
+
+  } catch (error) {
+    console.error(
+      "Error recuperando sesión:",
+      error
+    );
+  } finally {
+    yaRecuperoRef.current = true;
+    setCargandoSesion(false);
   }
+}
 
 
   /* =========================================================
@@ -674,7 +728,7 @@ useEffect(() => {
   const intervalo = setInterval(
     async () => {
       try {
-        await recuperarSolicitud();
+        await recuperarSolicitud(usuario.id);
       } catch (error) {
         console.error(
           "Error actualizando estado de la solicitud:",
@@ -694,7 +748,10 @@ useEffect(() => {
      AUTO-GUARDADO SUPABASE
   ========================================================= */
 
-  useEffect(() => {
+  useEffect(() => {   
+if (recuperacionActivaRef.current) {
+  return;
+}
     if (
       !usuario ||
       cargandoSesion ||
@@ -704,6 +761,11 @@ useEffect(() => {
     }
 
     if (PANTALLAS_PUBLICAS.includes(pantalla)) {
+      return;
+    }
+
+    // No crear aplicaciones sin identidad del solicitante.
+    if (!solicitudId && !identidadMinimaCompleta(datos)) {
       return;
     }
 
@@ -736,9 +798,15 @@ const timer = setTimeout(() => {
     pasoMaximo,
     ultimaPantallaPorPaso,
     estadoSolicitud,
+    recuperacionActiva,
+    solicitudId,
   ]);
 
-useEffect(() => {
+
+useEffect(() => {  
+if (recuperacionActivaRef.current) {
+  return;
+}
   if (!usuario?.id) {
     setCreditosContratados([]);
     setSolicitudViva(null);
@@ -760,6 +828,7 @@ useEffect(() => {
 }, [
   usuario?.id,
   estadoSolicitud,
+  recuperacionActiva,
 ]);
 
 async function obtenerOCrearDraft(userId) {
@@ -892,6 +961,10 @@ if (solicitudViva?.id) {
 
     Entonces sí podemos crear una nueva.
   */
+  if (!identidadMinimaCompleta(datos)) {
+    return null;
+  }
+
   const ahora =
     new Date().toISOString();
 
@@ -4143,6 +4216,10 @@ async function guardarSolicitudSupabase() {
     /* =====================================================
        VALIDACIONES
     ===================================================== */
+    if (!identidadMinimaCompleta(datos)) {
+      mostrarError("Completa los datos de identidad del solicitante antes de enviar.");
+      return;
+    }
 
     if (
       !esNumeroPositivo(
@@ -4717,6 +4794,7 @@ regresar={() => regresarA("simulacion")}
   <LoginCliente
     ir={ir}
     entrarPortalCliente={entrarPortalCliente}
+    cambiarEstadoRecuperacion={cambiarEstadoRecuperacion}
   />
 )}
 
@@ -5817,14 +5895,469 @@ function Registro({
   );
 }
 
+function CampoPasswordRecuperacion({
+  titulo,
+  valor,
+  cambiar,
+  visible,
+  alternar,
+}) {
+  return (
+    <div style={{ marginTop: 15 }}>
+      <label
+        style={{
+          display: "block",
+          fontSize: 13,
+          fontWeight: 700,
+          color: "#334155",
+          marginBottom: 7,
+        }}
+      >
+        {titulo}
+      </label>
+
+      <div style={{ position: "relative" }}>
+        <input
+          type={visible ? "text" : "password"}
+          value={valor}
+          autoComplete="new-password"
+          onChange={(e) => cambiar(e.target.value)}
+          style={{
+            width: "100%",
+            minHeight: 46,
+            border: "1px solid #d5deea",
+            borderRadius: 9,
+            padding: "10px 85px 10px 13px",
+            fontSize: 15,
+            boxSizing: "border-box",
+            background: "#fff",
+            color: "#111827",
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={alternar}
+          aria-label={
+            visible
+              ? "Ocultar contraseña"
+              : "Mostrar contraseña"
+          }
+          style={{
+            position: "absolute",
+            right: 9,
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "transparent",
+            border: 0,
+            color: "#64748b",
+            fontWeight: 700,
+            cursor: "pointer",
+            padding: 8,
+          }}
+        >
+          {visible ? "Ocultar" : "Ver"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RecuperarPasswordCliente({
+  volver,
+  finalizarRecuperacion,
+}) {
+  const [correo, setCorreo] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmacion, setConfirmacion] = useState("");
+
+  const [paso, setPaso] = useState(1);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
+
+  const [mostrarPassword, setMostrarPassword] =
+    useState(false);
+  const [mostrarConfirmacion, setMostrarConfirmacion] =
+    useState(false);
+
+  async function enviarCodigo() {
+    if (cargando) return;
+
+    setError("");
+    setMensaje("");
+
+    const email = correo.trim().toLowerCase();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Introduce un correo electrónico válido.");
+      return;
+    }
+
+    setCargando(true);
+
+    try {
+      const { error: authError } =
+        await supabase.auth.resetPasswordForEmail(email);
+
+      if (authError) throw authError;
+
+      setCorreo(email);
+      setPaso(2);
+      setMensaje(
+        "Si el correo está registrado, recibirás un código de recuperación."
+      );
+    } catch (err) {
+      console.error("Error solicitando recuperación:", err);
+      setError(
+        "No fue posible enviar la solicitud. Intenta más tarde."
+      );
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  async function cambiarPassword() {
+    if (cargando) return;
+
+    setError("");
+    setMensaje("");
+
+    const codigoLimpio = String(codigo ?? "")
+      .replace(/\D/g, "");
+
+    if (codigoLimpio.length !== 6) {
+      setError("Introduce un código válido de 6 dígitos.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError(
+        "La contraseña debe tener al menos 8 caracteres."
+      );
+      return;
+    }
+
+    if (password !== confirmacion) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setCargando(true);
+
+    try {
+      const { error: otpError } =
+        await supabase.auth.verifyOtp({
+          email: correo,
+          token: codigoLimpio,
+          type: "recovery",
+        });
+
+      if (otpError) {
+        throw new Error(
+          "El código es incorrecto o ha expirado."
+        );
+      }
+
+      const { error: updateError } =
+        await supabase.auth.updateUser({
+          password,
+        });
+
+      if (updateError) throw updateError;
+
+const { error: signOutError } =
+  await supabase.auth.signOut();
+
+if (signOutError) {
+  console.warn("Contraseña actualizada; no se pudo cerrar sesión:", signOutError);
+  setMensaje("Contraseña actualizada. Por seguridad, cierra tu sesión antes de volver a ingresar.");
+}
+
+      setPassword("");
+      setConfirmacion("");
+      setCodigo("");
+      setPaso(3);
+      finalizarRecuperacion();
+
+      setMensaje(
+        "Contraseña actualizada correctamente. Ya puedes iniciar sesión."
+      );
+    } catch (err) {
+      console.error("Error actualizando contraseña:", err);
+      setError(
+        err?.message ||
+        "No fue posible actualizar la contraseña."
+      );
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  const estiloInput = {
+    width: "100%",
+    minHeight: 46,
+    border: "1px solid #d5deea",
+    borderRadius: 9,
+    padding: "10px 13px",
+    fontSize: 15,
+    boxSizing: "border-box",
+    background: "#fff",
+    color: "#111827",
+  };
+
+  const estiloLabel = {
+    display: "block",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#334155",
+    marginBottom: 7,
+  };
+
+  const estiloBoton = {
+    width: "100%",
+    minHeight: 46,
+    border: 0,
+    borderRadius: 9,
+    background: "#111b2e",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: cargando ? "wait" : "pointer",
+    marginTop: 12,
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "75vh",
+        padding: "35px 16px",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        background: "#f7f7f5",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          padding: "30px",
+          background: "#fff",
+          border: "1px solid #e2e8f0",
+          borderRadius: 16,
+          boxShadow: "0 12px 30px rgba(15,23,42,.06)",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            color: "#09275a",
+            fontSize: 27,
+            fontWeight: 800,
+            letterSpacing: 2,
+            marginBottom: 24,
+          }}
+        >
+          TRISAL
+        </div>
+
+        <h2
+          style={{
+            fontSize: 25,
+            color: "#111827",
+            margin: "0 0 8px",
+          }}
+        >
+          {paso === 3
+            ? "Contraseña actualizada"
+            : "Recuperar contraseña"}
+        </h2>
+
+        {paso === 1 && (
+          <>
+            <p style={{ color: "#64748b", lineHeight: 1.5 }}>
+              Introduce tu correo y te enviaremos un
+              código de verificación.
+            </p>
+
+            <div style={{ marginTop: 20 }}>
+              <label style={estiloLabel}>
+                Correo electrónico
+              </label>
+
+              <input
+                type="email"
+                autoComplete="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                style={estiloInput}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") enviarCodigo();
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              disabled={cargando}
+              onClick={enviarCodigo}
+              style={estiloBoton}
+            >
+              {cargando ? "Enviando..." : "Enviar código"}
+            </button>
+          </>
+        )}
+
+        {paso === 2 && (
+          <>
+            <p style={{ color: "#64748b", lineHeight: 1.5 }}>
+              Introduce el código recibido en tu correo
+              y establece tu nueva contraseña.
+            </p>
+
+            <div style={{ marginTop: 18 }}>
+              <label style={estiloLabel}>
+                Código de 6 dígitos
+              </label>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={codigo}
+                onChange={(e) =>
+                  setCodigo(
+                    e.target.value.replace(/\D/g, "")
+                  )
+                }
+                style={estiloInput}
+              />
+            </div>
+
+<CampoPasswordRecuperacion
+  titulo="Nueva contraseña"
+              valor={password}
+              cambiar={setPassword}
+              visible={mostrarPassword}
+              alternar={() =>
+                setMostrarPassword((v) => !v)
+              }
+            />
+
+<CampoPasswordRecuperacion
+              titulo="Confirmar contraseña"
+              valor={confirmacion}
+              cambiar={setConfirmacion}
+              visible={mostrarConfirmacion}
+              alternar={() =>
+                setMostrarConfirmacion((v) => !v)
+              }
+            />
+
+            <button
+              type="button"
+              disabled={cargando}
+              onClick={cambiarPassword}
+              style={estiloBoton}
+            >
+              {cargando
+                ? "Actualizando..."
+                : "Cambiar contraseña"}
+            </button>
+
+            <button
+              type="button"
+              disabled={cargando}
+              onClick={enviarCodigo}
+              style={{
+                display: "block",
+                margin: "18px auto 0",
+                border: 0,
+                background: "transparent",
+                color: "#a57927",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Reenviar código
+            </button>
+          </>
+        )}
+
+        {mensaje && (
+          <div
+            role="status"
+            style={{
+              marginTop: 18,
+              padding: 12,
+              background: "#ecfdf5",
+              color: "#065f46",
+              border: "1px solid #a7f3d0",
+              borderRadius: 9,
+              lineHeight: 1.5,
+              fontSize: 13,
+            }}
+          >
+            {mensaje}
+          </div>
+        )}
+
+        {error && (
+          <div
+            role="alert"
+            style={{
+              marginTop: 18,
+              padding: 12,
+              background: "#fef2f2",
+              color: "#b91c1c",
+              borderRadius: 9,
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={volver}
+          style={{
+            display: "block",
+            margin: "22px auto 0",
+            border: 0,
+            background: "transparent",
+            color: "#a57927",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          ← Volver al inicio de sesión
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 function LoginCliente({
   ir,
   entrarPortalCliente,
+  cambiarEstadoRecuperacion,
 }) {
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
   const [errorLogin, setErrorLogin] = useState("");
   const [cargando, setCargando] = useState(false);
+  
+const [recuperandoPassword, setRecuperandoPassword] =
+  useState(
+    () =>
+      sessionStorage.getItem(
+        "trisal_recuperando_password"
+      ) === "1"
+  );
 
   async function login() {
     setErrorLogin("");
@@ -5850,9 +6383,22 @@ if (data?.user) {
     data.user.id
   );
 }
-
     setCargando(false);
   }
+
+if (recuperandoPassword) {
+  return (
+    <RecuperarPasswordCliente
+      volver={() => {
+        cambiarEstadoRecuperacion(false);
+        setRecuperandoPassword(false);
+      }}
+      finalizarRecuperacion={() => {
+        cambiarEstadoRecuperacion(false);
+      }}
+    />
+  );
+}
 
   return (
     <Pagina
@@ -5887,6 +6433,27 @@ if (data?.user) {
         >
           {cargando ? "Ingresando..." : "Iniciar sesión"}
         </button>
+
+<button
+  type="button"
+onClick={() => {
+  cambiarEstadoRecuperacion(true);
+  setRecuperandoPassword(true);
+}}
+  style={{
+    display: "block",
+    margin: "12px 0",
+    padding: "6px 0",
+    background: "transparent",
+    border: 0,
+    color: "#a57927",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  }}
+>
+  ¿Olvidaste tu contraseña?
+</button>
 
 <div className="loginPrompt">
   <span>¿No tienes cuenta?</span>
