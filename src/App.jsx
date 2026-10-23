@@ -256,6 +256,9 @@ const [
 ] = useState(null);
 
 const yaRecuperoRef = useRef(false);
+  const creandoDraftRef = useRef(null);
+  const guardandoDraftRef = useRef(false);
+  const hidratandoSolicitudRef = useRef(false);
 
   const [consentimientos, setConsentimientos] = useState({
     privacidad: false,
@@ -765,6 +768,7 @@ if (recuperacionActivaRef.current) {
     }
 
     // No crear aplicaciones sin identidad del solicitante.
+    if (hidratandoSolicitudRef.current || guardandoDraftRef.current) return;
     if (!solicitudId && !identidadMinimaCompleta(datos)) {
       return;
     }
@@ -832,6 +836,13 @@ if (recuperacionActivaRef.current) {
 ]);
 
 async function obtenerOCrearDraft(userId) {
+  if (creandoDraftRef.current) return creandoDraftRef.current;
+  const tarea = obtenerOCrearDraftInterno(userId);
+  creandoDraftRef.current = tarea;
+  try { return await tarea; } finally { creandoDraftRef.current = null; }
+}
+
+async function obtenerOCrearDraftInterno(userId) {
   if (!userId) {
     throw new Error(
       "No hay un usuario autenticado."
@@ -975,6 +986,13 @@ if (solicitudViva?.id) {
 
   const payload = {
     user_id: userId,
+    tipo_persona: datos.tipoPersona,
+    nombre: obtenerNombreSolicitud() || null,
+    correo: datos.correo || usuario?.email || null,
+    celular: datos.celular || null,
+    monto: numeroONull(datos.montoSolicitado),
+    plazo: numeroONull(datos.plazoSolicitado),
+    destino: datos.destino || null,
 
     estado: "DRAFT",
 
@@ -1203,21 +1221,17 @@ async function guardarBorradorSupabase(
         ahora,
     };
 
-    const {
-      error,
-    } = await supabase
+    const { data: confirmado, error } = await supabase
       .from("Aplicaciones")
       .update(payload)
       .eq("id", id)
-      .eq(
-        "user_id",
-        usuario.id
-      );
+      .eq("user_id", usuario.id)
+      .eq("estado", "DRAFT")
+      .select("id")
+      .maybeSingle();
 
-    if (error) {
-      throw error;
-    }
-
+    if (error) throw error;
+    if (!confirmado?.id) throw new Error("No se confirmó el guardado del borrador DRAFT.");
     return id;
   } catch (error) {
     console.error(
@@ -1225,6 +1239,7 @@ async function guardarBorradorSupabase(
       error
     );
 
+    setMensajeError("No se guardaron los últimos cambios. Revisa tu conexión e inténtalo nuevamente.");
     return null;
   }
 }
@@ -2075,6 +2090,7 @@ async function abrirCredito(credito) {
   ========================================================= */
 
   async function recuperarSolicitud(userId) {
+    hidratandoSolicitudRef.current = true;
     try {
       const { data, error } = await supabase
         .from("Aplicaciones")
@@ -2528,41 +2544,9 @@ async function iniciarNuevaSolicitud() {
       return;
     }
 
-    /*
-      Sólo llegamos aquí cuando NO existe
-      ningún DRAFT.
-
-      Ahora sí limpiamos el crédito/solicitud
-      anterior de la memoria de React.
-    */
+    // No crear una solicitud hasta que se capturen datos personales.
+    // Evitamos usar el estado anterior de React inmediatamente después de limpiarlo.
     limpiarSolicitudEnMemoria();
-
-    setPantalla("simulacion");
-
-    /*
-      obtenerOCrearDraft creará la nueva
-      solicitud porque ya comprobamos
-      que no existe ningún DRAFT.
-    */
-    const nuevaSolicitudId =
-      await obtenerOCrearDraft(
-        session.user.id
-      );
-
-    if (!nuevaSolicitudId) {
-      throw new Error(
-        "No pudimos preparar la nueva solicitud."
-      );
-    }
-
-    setSolicitudId(
-      nuevaSolicitudId
-    );
-
-    setEstadoSolicitud(
-      "DRAFT"
-    );
-
     ir("simulacion");
   } catch (error) {
     console.error(
@@ -6027,7 +6011,7 @@ function RecuperarPasswordCliente({
     const codigoLimpio = String(codigo ?? "")
       .replace(/\D/g, "");
 
-    if (codigoLimpio.length !== 8) {
+    if (!/^\d{8}$/.test(codigoLimpio)) {
       setError("Introduce un código válido de 8 dígitos.");
       return;
     }
@@ -6079,9 +6063,9 @@ if (signOutError) {
       setConfirmacion("");
       setCodigo("");
       setPaso(3);
-      finalizarRecuperacion();
+      if (!signOutError) finalizarRecuperacion();
 
-      setMensaje(
+      if (!signOutError) setMensaje(
         "Contraseña actualizada correctamente. Ya puedes iniciar sesión."
       );
     } catch (err) {
@@ -6229,7 +6213,7 @@ if (signOutError) {
                 value={codigo}
                 onChange={(e) =>
                   setCodigo(
-                    e.target.value.replace(/\D/g, "")
+                    e.target.value.replace(/\D/g, "").slice(0, 8)
                   )
                 }
                 style={estiloInput}
