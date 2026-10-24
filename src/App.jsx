@@ -6038,11 +6038,17 @@ function RecuperarPasswordCliente({
           type: "recovery",
         });
 
-      if (otpError) {
-        throw new Error(
-          "El código es incorrecto o ha expirado."
-        );
-      }
+if (otpError) {
+  console.error("Error verificando OTP:", {
+    message: otpError.message,
+    status: otpError.status,
+    code: otpError.code,
+  });
+
+  throw new Error(
+    `No se pudo verificar el código: ${otpError.message}`
+  );
+}
 
       const { error: updateError } =
         await supabase.auth.updateUser({
