@@ -257,6 +257,9 @@ const [
 
 const yaRecuperoRef = useRef(false);
   const creandoDraftRef = useRef(null);
+
+  const colaGuardadoRef = useRef(Promise.resolve());
+
   const guardandoDraftRef = useRef(false);
   const hidratandoSolicitudRef = useRef(false);
 
@@ -789,7 +792,22 @@ if (
 }
 
 const timer = setTimeout(() => {
-  guardarBorradorSupabase();
+  if (
+    recuperacionActivaRef.current ||
+    !usuario?.id ||
+    estadoSolicitud !== "DRAFT"
+  ) {
+    return;
+  }
+
+  guardarBorradorSupabase().catch(
+    (error) => {
+      console.error(
+        "Error en autoguardado:",
+        error
+      );
+    }
+  );
 }, 1400);
 
     return () => clearTimeout(timer);
@@ -1095,7 +1113,7 @@ return creada.id;
 } // ← ESTE CIERRA obtenerOCrearDraft()
 
 
-async function guardarBorradorSupabase(
+async function ejecutarGuardadoBorrador(
   pantallaDestino = pantalla
 ) {
   if (!usuario?.id) {
@@ -1109,11 +1127,25 @@ async function guardarBorradorSupabase(
 
       Esta función solamente guarda cambios.
     */
-    const id =
-      await obtenerOCrearDraft(
-        usuario.id
-      );
+    const id = await obtenerOCrearDraft( usuario.id );
 
+    const { data: solicitudEstado, error: estadoError } =
+  await supabase
+    .from("Aplicaciones")
+    .select("estado")
+    .eq("id", id)
+    .eq("user_id", usuario.id)
+    .single();
+
+if (estadoError) {
+  throw estadoError;
+}
+
+if (solicitudEstado.estado !== "DRAFT") {
+  // La solicitud ya avanzó.
+  // No sobrescribimos sus datos.
+  return id;
+}
     if (!id) {
       throw new Error(
         "No se pudo obtener la solicitud."
@@ -1242,6 +1274,29 @@ async function guardarBorradorSupabase(
     setMensajeError("No se guardaron los últimos cambios. Revisa tu conexión e inténtalo nuevamente.");
     return null;
   }
+}
+
+function guardarBorradorSupabase(
+  pantallaDestino = pantalla
+) {
+  const ejecutar = () =>
+    ejecutarGuardadoBorrador(pantallaDestino);
+
+  const tarea = colaGuardadoRef.current.then(
+    ejecutar,
+    ejecutar
+  );
+
+  colaGuardadoRef.current = tarea.catch(
+    (error) => {
+      console.error(
+        "Error en cola de guardado:",
+        error
+      );
+    }
+  );
+
+  return tarea;
 }
 
   async function cargarDocumentos(aplicacionId) {
@@ -4236,11 +4291,11 @@ async function guardarSolicitudSupabase() {
         session.user.id
       );
 
-    if (!aplicacionId) {
-      throw new Error(
-        "No se pudo obtener la solicitud."
-      );
-    }
+if (!id) {
+  // Todavía no hay identidad mínima.
+  // No creamos solicitud ni generamos folio.
+  return null;
+}
 
     const datosSeguros = {
       ...datos,
