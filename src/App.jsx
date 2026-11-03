@@ -4286,15 +4286,15 @@ async function guardarSolicitudSupabase() {
       autorizado para buscar/crear el DRAFT.
     */
 
-    const aplicacionId =
-      await obtenerOCrearDraft(
-        session.user.id
-      );
+const aplicacionId =
+  await obtenerOCrearDraft(
+    session.user.id
+  );
 
-if (!id) {
-  // Todavía no hay identidad mínima.
-  // No creamos solicitud ni generamos folio.
-  return null;
+if (!aplicacionId) {
+  throw new Error(
+    "No se pudo obtener la solicitud."
+  );
 }
 
     const datosSeguros = {
