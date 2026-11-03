@@ -1002,9 +1002,10 @@ if (solicitudViva?.id) {
     password: "",
   };
 
-  const payload = {
-    user_id: userId,
-    tipo_persona: datos.tipoPersona,
+const payload = {
+  sofom_id: "22cb6baf-0292-4ee3-80cd-3dc8f1fdfe37",
+  user_id: userId,
+  tipo_persona: datos.tipoPersona,
     nombre: obtenerNombreSolicitud() || null,
     correo: datos.correo || usuario?.email || null,
     celular: datos.celular || null,
